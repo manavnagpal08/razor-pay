@@ -1,17 +1,16 @@
-﻿"use client";
+"use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { 
-  User as FirebaseUser, 
-  onAuthStateChanged, 
-  signOut,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword
-} from "firebase/auth";
-import { auth } from "@/lib/firebase";
+
+interface UserProfile {
+  uid?: string;
+  id?: string;
+  email: string;
+  displayName: string;
+}
 
 interface AuthContextType {
-  user: FirebaseUser | null;
+  user: UserProfile | null;
   token: string | null;
   role: "customer" | "merchant" | null;
   merchantId: string;
@@ -39,7 +38,7 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [role, setRole] = useState<"customer" | "merchant" | null>(null);
   const [merchantId, setMerchantId] = useState<string>("demo_merchant");
@@ -67,124 +66,98 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    const savedRole = (typeof window !== "undefined" ? localStorage.getItem("user_role") : null) as "customer" | "merchant" | null;
-    if (savedRole) setRole(savedRole);
+    if (typeof window !== "undefined") {
+      const savedToken = localStorage.getItem("token");
+      const savedEmail = localStorage.getItem("user_email");
+      const savedName = localStorage.getItem("user_name");
+      const savedRole = localStorage.getItem("user_role") as "customer" | "merchant" | null;
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        try {
-          const idToken = await currentUser.getIdToken();
-          setToken(idToken);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("token", idToken);
-          }
-          
-          // Auto-sync with backend
-          const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-          const currentRole = savedRole || "customer";
-          const res = await fetch(`${apiUrl}/api/auth/sync`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              firebase_token: idToken,
-              role: currentRole,
-              name: currentUser.displayName || currentUser.email?.split("@")[0] || "User"
-            })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.role) {
-              setRole(data.role);
-              if (typeof window !== "undefined") {
-                localStorage.setItem("user_role", data.role);
-              }
-            }
-          }
-          
-          if (currentRole === "customer") {
-            await fetchCartCount(idToken);
-          }
-        } catch (err) {
-          console.error("Error setting up auth token:", err);
-        }
-      } else {
-        setToken(null);
-        setRole(null);
-        setCartCount(0);
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("token");
-          localStorage.removeItem("user_role");
-        }
+      if (savedToken && savedEmail) {
+        setToken(savedToken);
+        setRole(savedRole || "customer");
+        setUser({ email: savedEmail, displayName: savedName || savedEmail.split("@")[0] });
+        fetchCartCount(savedToken);
       }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    }
+    setLoading(false);
   }, []);
 
   const login = async (email: string, pass: string) => {
-    const cred = await signInWithEmailAndPassword(auth, email, pass);
-    const idToken = await cred.user.getIdToken();
-    setToken(idToken);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("token", idToken);
-    }
-    
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    const res = await fetch(`${apiUrl}/api/auth/sync`, {
+    const res = await fetch(`${apiUrl}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        firebase_token: idToken,
-        role: "customer",
-        name: cred.user.displayName || cred.user.email?.split("@")[0] || "Customer"
-      })
+      body: JSON.stringify({ email, password: pass })
     });
-    if (res.ok) {
-      const data = await res.json();
-      setRole(data.role || "customer");
-      if (typeof window !== "undefined") {
-        localStorage.setItem("user_role", data.role || "customer");
-      }
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || "Invalid email or password");
     }
+
+    const jwtToken = data.access_token;
+    const userRole = data.role || "customer";
+    const userName = data.name || email.split("@")[0];
+
+    setToken(jwtToken);
+    setRole(userRole);
+    setUser({ email, displayName: userName });
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("token", jwtToken);
+      localStorage.setItem("user_email", email);
+      localStorage.setItem("user_name", userName);
+      localStorage.setItem("user_role", userRole);
+    }
+
+    await fetchCartCount(jwtToken);
   };
 
   const register = async (email: string, pass: string, userRole: string, name: string) => {
-    const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    const idToken = await cred.user.getIdToken();
-    setToken(idToken);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("token", idToken);
-    }
-    
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    const res = await fetch(`${apiUrl}/api/auth/sync`, {
+    const res = await fetch(`${apiUrl}/api/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        firebase_token: idToken,
+        email,
+        password: pass,
         role: userRole,
         name: name || email.split("@")[0]
       })
     });
-    if (res.ok) {
-      const data = await res.json();
-      setRole(data.role || (userRole as "customer" | "merchant"));
-      if (typeof window !== "undefined") {
-        localStorage.setItem("user_role", data.role || userRole);
-      }
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || "Registration failed. Email may already be registered.");
     }
+
+    const jwtToken = data.access_token;
+    const assignedRole = data.role || (userRole as "customer" | "merchant");
+    const assignedName = data.name || name || email.split("@")[0];
+
+    setToken(jwtToken);
+    setRole(assignedRole);
+    setUser({ email, displayName: assignedName });
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("token", jwtToken);
+      localStorage.setItem("user_email", email);
+      localStorage.setItem("user_name", assignedName);
+      localStorage.setItem("user_role", assignedRole);
+    }
+
+    await fetchCartCount(jwtToken);
   };
 
   const logout = async () => {
-    await signOut(auth);
     setUser(null);
     setToken(null);
     setRole(null);
     setCartCount(0);
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
+      localStorage.removeItem("user_email");
+      localStorage.removeItem("user_name");
       localStorage.removeItem("user_role");
     }
   };
