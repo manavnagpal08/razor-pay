@@ -11,7 +11,11 @@ class ProductBase(BaseModel):
     inventory: int = 0
     features: Dict[str, Any] = Field(default_factory=dict)
     use_cases: List[str] = Field(default_factory=list)
-    metadata_: Dict[str, Any] = Field(default_factory=dict, alias="metadata")
+    metadata_: Dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True
 
 class ProductCreate(ProductBase):
     merchant_id: str
@@ -21,7 +25,7 @@ class ProductRelationshipResponse(BaseModel):
     target_product_id: str
     relationship_type: str
     priority: int
-    metadata_: Dict[str, Any] = Field(default_factory=dict, alias="metadata")
+    metadata_: Dict[str, Any] = Field(default_factory=dict)
     
     class Config:
         from_attributes = True

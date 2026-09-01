@@ -28,6 +28,7 @@ class Customer(Base):
     preferences = Column(JSONType, default=dict)
     lifetime_value = Column(Numeric(10, 2), default=0.0)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    user = relationship("User")
 
 class Merchant(Base):
     __tablename__ = "merchants"

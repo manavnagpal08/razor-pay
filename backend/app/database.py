@@ -1,12 +1,11 @@
-from sqlalchemy import create_engine
+﻿from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-import os
+from app.core.config import settings
+import logging
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/razorpay_ai_commerce")
+logger = logging.getLogger(__name__)
 
-# For asyncpg or psycopg2, ensure the URL format matches the driver.
-# We'll use sync SQLAlchemy for the MVP to keep it simple, or async if required.
-# Assuming standard postgresql:// URL format which uses psycopg2 by default in SQLAlchemy.
+DATABASE_URL = settings.database_url
 
 if "sqlite" in DATABASE_URL:
     engine = create_engine(
@@ -22,8 +21,8 @@ else:
         max_overflow=10,
         pool_pre_ping=True
     )
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def get_db():

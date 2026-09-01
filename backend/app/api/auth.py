@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
@@ -59,28 +59,26 @@ def register_user(req: UserCreate, db: Session = Depends(get_db)):
         role=req.role
     )
     db.add(user)
+    db.flush()
 
     if req.role == "customer":
         customer = Customer(
             id=str(uuid.uuid4()),
-            user_id=user_id,
+            user_id=user.id,
             segment="new"
         )
         db.add(customer)
     elif req.role == "merchant":
         merchant = Merchant(
-            id=user_id,
+            id=user.id,
             name=req.name,
             currency="INR"
         )
         db.add(merchant)
 
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
+    db.commit()
 
-    token = create_access_token(subject=user_id)
+    token = create_access_token(subject=user.id)
     return {
         "access_token": token,
         "token_type": "bearer",
