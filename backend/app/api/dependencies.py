@@ -1,4 +1,4 @@
-﻿from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -7,7 +7,7 @@ import jwt
 
 from app.database import get_db
 from app.models import User, Customer, Merchant
-from app.main import settings
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 

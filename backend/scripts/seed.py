@@ -1,9 +1,9 @@
-﻿import uuid
+import uuid
 import json
 import logging
 from app.database import SessionLocal
 from app.models import Merchant, Product, ProductRelationship, MerchantPolicy
-from app.main import settings
+from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

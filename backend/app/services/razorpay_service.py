@@ -8,7 +8,7 @@ class RazorpayService:
     Falls back to a MOCK provider if no real credentials are set.
     """
     def __init__(self):
-        from app.main import settings
+        from app.core.config import settings
         self.key_id = settings.razorpay_key_id
         self.key_secret = settings.razorpay_key_secret
         self.is_mock = self.key_id == "test" or not self.key_id
