@@ -394,6 +394,7 @@ class SMTPConfigRequest(BaseModel):
     gmail_app_password: str
     smtp_host: str | None = "smtp.gmail.com"
     smtp_port: int | None = 587
+    resend_api_key: str | None = None
 
 @router.get("/smtp-config")
 def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
@@ -403,11 +404,13 @@ def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(ge
     rules = policy.approval_rules if policy and isinstance(policy.approval_rules, dict) else {}
     smtp = rules.get("smtp_config", {})
     user = smtp.get("user") or os.getenv("SMTP_USER") or os.getenv("GMAIL_USER") or ""
+    resend_key = smtp.get("resend_api_key") or os.getenv("RESEND_API_KEY") or ""
     return {
         "gmail_user": user,
-        "is_configured": bool(user),
+        "is_configured": bool(user or resend_key),
         "smtp_host": smtp.get("host") or os.getenv("SMTP_HOST") or "smtp.gmail.com",
-        "smtp_port": smtp.get("port") or int(os.getenv("SMTP_PORT") or 587)
+        "smtp_port": smtp.get("port") or int(os.getenv("SMTP_PORT") or 587),
+        "has_resend_key": bool(resend_key)
     }
 
 @router.post("/smtp-config")
@@ -424,11 +427,12 @@ def update_smtp_config(req: SMTPConfigRequest, db: Session = Depends(get_db), me
         "user": req.gmail_user.strip(),
         "password": req.gmail_app_password.strip().replace(" ", ""),
         "host": req.smtp_host or "smtp.gmail.com",
-        "port": req.smtp_port or 587
+        "port": req.smtp_port or 587,
+        "resend_api_key": req.resend_api_key.strip() if req.resend_api_key else None
     }
     policy.approval_rules = rules
     db.commit()
-    return {"success": True, "message": "Gmail SMTP configuration saved successfully!"}
+    return {"success": True, "message": "Email delivery configuration saved successfully!"}
 
 class TestEmailRequest(BaseModel):
     recipient_email: str
@@ -448,3 +452,47 @@ def test_smtp_delivery(req: TestEmailRequest, db: Session = Depends(get_db), mer
         smtp_override=smtp_override
     )
     return result
+
+@router.get("/customers")
+def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
+    """
+    Returns all customers scoped to this specific merchant store.
+    """
+    from app.models import Customer, User, Order
+    # 1. Direct merchant-scoped customers
+    customers = db.query(Customer).filter(Customer.merchant_id == merchant_id).all()
+    
+    # 2. Customers who placed orders with this merchant
+    merchant_orders = db.query(Order).filter(Order.merchant_id == merchant_id).all()
+    order_customer_ids = {o.customer_id for o in merchant_orders if o.customer_id}
+    
+    existing_ids = {c.id for c in customers}
+    for cid in order_customer_ids:
+        if cid not in existing_ids:
+            cust = db.query(Customer).filter(Customer.id == cid).first()
+            if cust:
+                customers.append(cust)
+                existing_ids.add(cid)
+
+    # 3. Format customer profile response
+    result = []
+    for c in customers:
+        user = db.query(User).filter(User.id == c.user_id).first() if c.user_id else None
+        cust_orders = [o for o in merchant_orders if o.customer_id == c.id]
+        total_spent = sum(float(o.total_amount or 0) for o in cust_orders)
+        
+        prefs = c.preferences if isinstance(c.preferences, dict) else {}
+        phone = prefs.get("phone")
+
+        result.append({
+            "id": c.id,
+            "name": user.name if user and user.name else "Verified Shopper",
+            "email": user.email if user and user.email else "conversational.shopper@storefront",
+            "phone": phone,
+            "segment": c.segment or "conversational_buyer",
+            "orders_count": len(cust_orders),
+            "total_spend": total_spent,
+            "joined_at": c.created_at.isoformat() if hasattr(c, "created_at") and c.created_at else None
+        })
+
+    return sorted(result, key=lambda x: x["total_spend"], reverse=True)

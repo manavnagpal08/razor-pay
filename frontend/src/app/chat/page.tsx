@@ -5,9 +5,9 @@ import { useSearchParams } from "next/navigation";
 import Script from "next/script";
 import Link from "next/link";
 import { 
-  Send, Loader2, Bot, User as UserIcon, Sparkles, LogIn, ArrowRight, 
+  Send, Loader2, Bot, User, User as UserIcon, Sparkles, LogIn, ArrowRight, 
   ShieldCheck, CheckCircle2, ShoppingCart, Zap, Check, ChevronDown, ChevronUp, Store, ExternalLink,
-  Mic, MicOff, Volume2, VolumeX, Radio, Truck, Package, MapPin, Calendar, KeyRound, X, Search
+  Mic, MicOff, Volume2, VolumeX, Radio, Truck, Package, MapPin, Calendar, KeyRound, X, Search, Mail, Phone
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
@@ -957,99 +957,127 @@ function ChatContent() {
       </div>
 
       {/* In-Chat OTP Verification Modal */}
+      {/* In-Chat OTP Verification Modal */}
       {showOtpModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 relative text-slate-900">
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full p-6 sm:p-7 relative text-slate-900 animate-in zoom-in-95 duration-200 overflow-hidden">
+            {/* Background Glow */}
+            <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
+            <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
             <button
               onClick={() => {
                 setShowOtpModal(false);
                 setPendingProductToBuy(null);
               }}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-xl"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-xs">
-              <KeyRound className="w-6 h-6" />
+            {/* Glowing Icon Header */}
+            <div className="text-center mb-5">
+              <div className="w-14 h-14 bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-lg shadow-blue-500/25 ring-4 ring-blue-50">
+                <KeyRound className="w-7 h-7" />
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-extrabold uppercase tracking-wider mb-1 border border-blue-100">
+                <Sparkles className="w-3 h-3 text-blue-600" />
+                <span>Verified Shopper Access</span>
+              </div>
+
+              <h3 className="font-black text-slate-900 text-xl tracking-tight">
+                {merchantInfo?.name || "BuyFlow Store"}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto font-medium">
+                Enter your details to receive an instant verification code and unlock your AI shopping concierge.
+              </p>
             </div>
 
-            <h3 className="font-extrabold text-slate-900 text-lg text-center">
-              Welcome to {merchantInfo?.name || "BuyFlow Store"}
-            </h3>
-            <p className="text-xs text-slate-500 text-center mb-4">
-              Enter your name and email to receive your OTP code and unlock personalized AI shopping concierge access.
-            </p>
-
             {otpError && (
-              <div className="mb-3 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium text-center">
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200/80 rounded-2xl text-xs text-rose-700 font-semibold text-center animate-in shake">
                 {otpError}
               </div>
             )}
 
             {!otpSent ? (
-              <div className="space-y-3">
+              <div className="space-y-3.5">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Your Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Manav Nagpal"
-                    value={otpName}
-                    onChange={(e) => setOtpName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
-                  />
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Full Name</label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Manav Nagpal"
+                      value={otpName}
+                      onChange={(e) => setOtpName(e.target.value)}
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Email Address (for OTP)</label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="e.g. customer@gmail.com"
-                    value={otpEmail}
-                    onChange={(e) => setOtpEmail(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
-                  />
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Email Address (for OTP)</label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="e.g. customer@gmail.com"
+                      value={otpEmail}
+                      onChange={(e) => setOtpEmail(e.target.value)}
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Phone Number (Optional)</label>
-                  <input
-                    type="tel"
-                    placeholder="e.g. 9876543210"
-                    value={otpPhone}
-                    onChange={(e) => setOtpPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
-                  />
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Phone Number (Optional)</label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type="tel"
+                      placeholder="e.g. 09896817707"
+                      value={otpPhone}
+                      onChange={(e) => setOtpPhone(e.target.value)}
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
+                    />
+                  </div>
                 </div>
 
                 <button
                   type="button"
                   disabled={otpLoading || !otpEmail.trim() || !otpName.trim()}
                   onClick={handleSendOtp}
-                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 mt-2 shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
+                  className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 mt-2 disabled:opacity-50 cursor-pointer active:scale-[0.99]"
                 >
                   {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-                  <span>Send Verification OTP</span>
+                  <span>Send Verification Code</span>
                 </button>
+
+                <p className="text-[10px] text-slate-400 text-center font-medium pt-1">
+                  🔒 Encrypted authentication • Instant order tracking enabled
+                </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                <div className="text-center p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                  <p className="text-xs text-slate-600">Enter the 6-digit code sent to</p>
-                  <p className="text-xs font-bold text-blue-600 font-mono mt-0.5">{otpEmail}</p>
+              <div className="space-y-4 animate-in fade-in duration-200">
+                <div className="text-center p-3.5 bg-blue-50/70 rounded-2xl border border-blue-200/80">
+                  <p className="text-xs text-slate-600">Verification code sent to</p>
+                  <p className="text-xs font-bold text-blue-700 font-mono mt-0.5">{otpEmail}</p>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1 text-center">6-Digit Verification Code</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-2 text-center tracking-wider">
+                    Enter 6-Digit Verification Code
+                  </label>
                   <input
                     type="text"
                     maxLength={6}
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.trim())}
                     placeholder="• • • • • •"
-                    className="w-full text-center tracking-[0.4em] text-xl font-mono py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-blue-600 focus:outline-none focus:border-blue-500 focus:bg-white transition-all font-black"
+                    className="w-full text-center tracking-[0.5em] text-2xl font-mono py-3 bg-slate-50 border border-slate-200 rounded-2xl text-blue-600 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-black"
                   />
                 </div>
 
@@ -1057,20 +1085,20 @@ function ChatContent() {
                   type="button"
                   disabled={otpLoading || otpCode.length < 6}
                   onClick={handleVerifyOtp}
-                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
+                  className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-[0.99]"
                 >
                   {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                   <span>Verify & Start Shopping</span>
                 </button>
 
-                <div className="flex items-center justify-between pt-2 text-[11px]">
+                <div className="flex items-center justify-between pt-1 text-[11px]">
                   <button
                     type="button"
                     onClick={() => {
                       setOtpSent(false);
                       setOtpCode("");
                     }}
-                    className="text-slate-500 hover:text-blue-600 font-medium"
+                    className="text-slate-500 hover:text-blue-600 font-medium cursor-pointer"
                   >
                     ← Edit email
                   </button>
@@ -1079,7 +1107,7 @@ function ChatContent() {
                     type="button"
                     disabled={otpLoading}
                     onClick={handleSendOtp}
-                    className="text-blue-600 hover:underline font-bold"
+                    className="text-blue-600 hover:underline font-bold cursor-pointer"
                   >
                     Resend Code
                   </button>

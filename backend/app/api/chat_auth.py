@@ -49,24 +49,34 @@ def send_chat_otp(req: SendOtpRequest, db: Session = Depends(get_db)):
 
     store_name = "BuyFlow Store"
     smtp_override = None
+    email_dispatch = {"sent": False, "mode": "SIMULATION_LOGGED", "message": ""}
 
-    if req.merchant_id:
-        from app.models import Merchant, MerchantPolicy
-        merchant = db.query(Merchant).filter(Merchant.id == req.merchant_id).first()
-        if merchant and merchant.business_name:
-            store_name = merchant.business_name
-        policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == req.merchant_id).first()
-        if policy and isinstance(policy.approval_rules, dict):
-            smtp_override = policy.approval_rules.get("smtp_config")
+    try:
+        if req.merchant_id:
+            from app.models import Merchant, MerchantPolicy
+            merchant = db.query(Merchant).filter(Merchant.id == req.merchant_id).first()
+            if merchant and hasattr(merchant, "name") and merchant.name:
+                store_name = merchant.name
+            policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == req.merchant_id).first()
+            if policy and isinstance(policy.approval_rules, dict):
+                smtp_override = policy.approval_rules.get("smtp_config")
 
-    # Dispatch email via EmailService
-    from app.services.email_service import EmailService
-    email_dispatch = EmailService.send_otp_email(
-        to_email=email, 
-        otp_code=otp,
-        store_name=store_name,
-        smtp_override=smtp_override
-    )
+        # Dispatch email via EmailService
+        from app.services.email_service import EmailService
+        email_dispatch = EmailService.send_otp_email(
+            to_email=email, 
+            otp_code=otp,
+            store_name=store_name,
+            smtp_override=smtp_override
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Error preparing OTP email dispatch: {e}")
+        email_dispatch = {
+            "sent": False,
+            "mode": "FALLBACK_HINT",
+            "message": "Verification code generated for instant access."
+        }
 
     return {
         "success": True,
@@ -114,6 +124,9 @@ def verify_chat_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
         db.add(customer)
         db.commit()
     else:
+        if req.name and req.name.strip():
+            user.name = req.name.strip()
+            db.commit()
         customer = db.query(Customer).filter(Customer.user_id == user.id).first()
         if not customer:
             customer = Customer(
@@ -125,11 +138,13 @@ def verify_chat_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
             )
             db.add(customer)
             db.commit()
-        elif req.merchant_id and not customer.merchant_id:
-            customer.merchant_id = req.merchant_id
-            db.commit()
-            customer = Customer(id=str(uuid.uuid4()), user_id=user.id, segment="conversational_buyer")
-            db.add(customer)
+        else:
+            if req.merchant_id and not customer.merchant_id:
+                customer.merchant_id = req.merchant_id
+            if req.phone:
+                prefs = dict(customer.preferences or {})
+                prefs["phone"] = req.phone
+                customer.preferences = prefs
             db.commit()
 
     # Generate JWT Token for seamless 1-click execution
