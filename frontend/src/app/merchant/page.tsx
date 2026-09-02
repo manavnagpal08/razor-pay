@@ -577,7 +577,7 @@ export default function MerchantDashboard() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="space-y-6 w-full pb-12">
       {/* Title & Tenant Status */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -803,46 +803,83 @@ export default function MerchantDashboard() {
 
           {activeTab === 'overview' && (
             <div className="space-y-6 animate-in fade-in">
-              {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center gap-2.5 text-slate-600 mb-2">
-            <TrendingUp className="w-5 h-5 text-indigo-600" />
-            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">Gross Revenue</h3>
-          </div>
-          <p className="text-3xl font-extrabold text-slate-900">₹{Number(metrics?.revenue || 0).toLocaleString()}</p>
-          <p className="text-[11px] text-emerald-600 font-bold mt-1">↑ Verified Razorpay Captures</p>
-        </div>
-        
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center gap-2.5 text-slate-600 mb-2">
-            <ShoppingBag className="w-5 h-5 text-blue-600" />
-            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">Paid Orders</h3>
-          </div>
-          <p className="text-3xl font-extrabold text-slate-900">{metrics?.orders || 0}</p>
-          <p className="text-[11px] text-slate-500 mt-1 font-medium">AOV: ₹{Number(metrics?.average_order_value || 0).toLocaleString()}</p>
-        </div>
-        
-        <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 rounded-3xl shadow-md shadow-indigo-500/20 text-white">
-          <div className="flex items-center gap-2.5 text-indigo-100 mb-2">
-            <BrainCircuit className="w-5 h-5" />
-            <h3 className="font-bold text-xs uppercase tracking-wider text-indigo-100">AI Recommendations</h3>
-          </div>
-          <p className="text-3xl font-extrabold">{metrics?.ai_recommendations || 0}</p>
-          <p className="text-[11px] text-indigo-200 mt-1 font-medium">
-            <span className="text-white font-bold">{metrics?.upsell_proposals || 0}</span> Upsells | <span className="text-white font-bold">{metrics?.cross_sell_proposals || 0}</span> Cross-sells
-          </p>
-        </div>
+              {/* Sleek, Modern, Uniform KPI Metric Strip */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                {/* 1. Gross Revenue */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gross Revenue</span>
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-black text-slate-900 tracking-tight">
+                      ₹{Number(metrics?.revenue || 0).toLocaleString("en-IN")}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 mt-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Verified Razorpay Captures</span>
+                    </div>
+                  </div>
+                </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center gap-2.5 text-slate-600 mb-2">
-            <ShieldAlert className="w-5 h-5 text-amber-500" />
-            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">Policy Blocks</h3>
-          </div>
-          <p className="text-3xl font-extrabold text-slate-900">{metrics?.policy_blocks || 0}</p>
-          <p className="text-[11px] text-amber-600 font-semibold mt-1">Autonomous violations prevented</p>
-        </div>
-      </div>
+                {/* 2. Paid Orders */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Paid Orders</span>
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                      <ShoppingBag className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-black text-slate-900 tracking-tight">
+                      {metrics?.orders || 0}
+                    </div>
+                    <div className="text-[11px] font-semibold text-slate-500 mt-1.5">
+                      AOV: <span className="text-slate-800 font-bold">₹{Number(metrics?.average_order_value || 0).toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. AI Recommendations (Clean White, Balanced) */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">AI Recommendations</span>
+                    <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                      <BrainCircuit className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-black text-slate-900 tracking-tight">
+                      {metrics?.ai_recommendations || 0}
+                    </div>
+                    <div className="text-[11px] font-semibold text-indigo-600 mt-1.5 flex items-center gap-1">
+                      <span>{metrics?.upsell_proposals || 0} Upsells</span>
+                      <span className="text-slate-300">•</span>
+                      <span>{metrics?.cross_sell_proposals || 0} Cross-sells</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Policy Blocks */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Policy Blocks</span>
+                    <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                      <ShieldAlert className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-black text-slate-900 tracking-tight">
+                      {metrics?.policy_blocks || 0}
+                    </div>
+                    <div className="text-[11px] font-semibold text-amber-600 mt-1.5">
+                      Autonomous violations prevented
+                    </div>
+                  </div>
+                </div>
+              </div>
               {/* Shareable AI Storefront Agent Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-indigo-500/30 relative overflow-hidden">
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">

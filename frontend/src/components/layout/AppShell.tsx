@@ -19,9 +19,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col justify-between">
+    <div className="min-h-screen flex flex-col justify-between bg-slate-50">
       <Navbar />
-      <main className="container mx-auto px-4 py-6 flex-1">
+      <main className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-5 flex-1">
         {children}
       </main>
       <Footer />

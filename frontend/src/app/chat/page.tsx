@@ -637,7 +637,7 @@ function ChatContent() {
                         {prod.category}
                       </span>
                     </div>
-                    <h5 className="font-bold text-slate-900 text-xs mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors">{prod.title}</h5>
+                    <h5 className="font-bold text-slate-900 text-xs mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors">{prod.title || prod.name}</h5>
                     <p className="text-[11px] text-slate-500 line-clamp-2 mb-2 leading-relaxed">{prod.description || "High-performance tech item."}</p>
                   </div>
 
@@ -649,7 +649,7 @@ function ChatContent() {
                       <button
                         onClick={() => {
                           setViewMode("chat");
-                          handleSend(`Tell me more about the ${prod.title} and why I should buy it.`);
+                          handleSend(`Tell me more about the ${prod.title || prod.name} and why I should buy it.`);
                         }}
                         className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors"
                       >
