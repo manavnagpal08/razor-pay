@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Trash2, ShieldCheck, ArrowRight, Loader2, LogIn } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/utils/api";
 
 export default function CartPage() {
   const [cart, setCart] = useState<any>(null);
@@ -23,7 +24,7 @@ export default function CartPage() {
 
   const fetchCart = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/cart/`, {
         method: "POST",
         headers: {
@@ -46,7 +47,7 @@ export default function CartPage() {
     if (!cart || !token) return;
     setUpdatingId(itemId);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/cart/${cart.id}/items/${itemId}`, {
         method: "PATCH",
         headers: { 
@@ -71,7 +72,7 @@ export default function CartPage() {
     if (!cart || !token) return;
     setUpdatingId(itemId);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/cart/${cart.id}/items/${itemId}`, {
         method: "DELETE",
         headers: {

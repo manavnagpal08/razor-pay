@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 
@@ -29,17 +29,6 @@ app.include_router(ai.router)
 app.include_router(cart.router, prefix="/api")
 app.include_router(orders.router, prefix="/api")
 app.include_router(merchant.router, prefix="/api")
-
-@app.on_event("startup")
-def on_startup():
-    from app.database import engine, Base
-    try:
-        Base.metadata.create_all(bind=engine)
-        from scripts.seed import seed_database
-        seed_database()
-    except Exception as e:
-        import logging
-        logging.warning(f"Database auto-init on startup skipped or failed: {e}")
 
 @app.get("/api/health")
 def health_check():

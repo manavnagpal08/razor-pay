@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -6,6 +6,7 @@ import Script from "next/script";
 import { ShieldCheck, Lock, ArrowLeft, Loader2, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/utils/api";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function CheckoutPage() {
 
   const fetchCart = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/cart/`, {
         method: "POST",
         headers: {
@@ -53,7 +54,7 @@ export default function CheckoutPage() {
     setOrderProcessing(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       
       // 1. Create Order Server-Side
       const orderRes = await fetch(`${apiUrl}/api/orders/`, {
@@ -68,17 +69,17 @@ export default function CheckoutPage() {
       const orderData = await orderRes.json();
 
       if (!orderRes.ok) {
-        alert("Order creation rejected by policy engine: " + (orderData.detail || "Unknown error"));
+        alert("Payment initialization error: " + (orderData.detail || "Unable to create order. Please try again."));
         setOrderProcessing(false);
         return;
       }
 
       // 2. Launch Razorpay Standard Checkout
       const options = {
-        key: orderData.key_id,
+        key: orderData.key_id || "rzp_test_TWpQWcihNk3rD9",
         amount: Math.round(Number(orderData.amount) * 100),
         currency: orderData.currency || "INR",
-        name: "Razorpay AI Commerce",
+        name: "Razorpay Store",
         description: "Order #" + orderData.internal_order_id.substring(0, 8),
         order_id: orderData.razorpay_order_id,
         handler: async function (response: any) {
@@ -90,7 +91,7 @@ export default function CheckoutPage() {
           );
         },
         prefill: {
-          name: user?.displayName || "Valued Customer",
+          name: user?.displayName || "Customer",
           email: user?.email || "customer@example.com",
           contact: "9999999999"
         },
@@ -113,20 +114,20 @@ export default function CheckoutPage() {
         });
         rzp.open();
       } else {
-        alert("Razorpay checkout SDK is loading. Please try again in a moment.");
+        alert("Razorpay checkout modal is initializing. Please click again in 2 seconds.");
         setOrderProcessing(false);
       }
 
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setOrderProcessing(false);
-      alert("Failed to initiate payment. Please try again.");
+      alert(e.message || "Failed to initiate payment. Please try again.");
     }
   };
 
   const verifyPayment = async (internal_order_id: string, rzp_order_id: string, rzp_payment_id: string, signature: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/orders/verify`, {
         method: "POST",
         headers: { 

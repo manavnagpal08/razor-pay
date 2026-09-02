@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ShoppingCart, CheckCircle, ShieldCheck, Loader2, Check, Sparkles, Star, Zap, Truck } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/utils/api";
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -20,7 +21,7 @@ export default function ProductDetailPage() {
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/api/products/${params.id}`, { cache: "no-store" });
         if (res.ok) {
           setProduct(await res.json());
@@ -43,7 +44,7 @@ export default function ProductDetailPage() {
 
     setAddingToCart(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/cart/items`, {
         method: "POST",
         headers: {

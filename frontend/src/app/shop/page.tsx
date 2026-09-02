@@ -1,8 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { ProductCard } from "@/components/product/ProductCard";
 import { Search, Sparkles, Filter, Bot, Loader2 } from "lucide-react";
+import { getApiUrl } from "@/utils/api";
 import Link from "next/link";
 
 const FALLBACK_PRODUCTS = [
@@ -65,7 +66,7 @@ export default function ShopPage() {
 
   const fetchProducts = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/products`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();

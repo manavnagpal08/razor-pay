@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import Link from "next/link";
 import { Send, Loader2, Bot, User as UserIcon, Sparkles, LogIn, ArrowRight, ShieldCheck, CheckCircle, ShoppingCart } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/utils/api";
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<any[]>([]);
@@ -60,7 +61,7 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/ai/chat/search`, {
         method: "POST",
         headers: { 

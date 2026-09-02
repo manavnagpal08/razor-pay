@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useState } from "react";
 import { ShoppingCart, Check, Loader2, Star, Sparkles } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/utils/api";
 
 export function ProductCard({ product }: { product: any }) {
   const { token, refreshCartCount } = useAuth();
@@ -25,7 +26,7 @@ export function ProductCard({ product }: { product: any }) {
 
     setAdding(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/cart/items`, {
         method: "POST",
         headers: {

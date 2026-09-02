@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useRef } from "react";
 import { TrendingUp, ShoppingBag, BrainCircuit, ShieldAlert, Bot, Sparkles, Send, Lock, LogIn, Sliders, CheckCircle2, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/utils/api";
 import Link from "next/link";
 
 export default function MerchantDashboard() {
@@ -44,7 +45,7 @@ export default function MerchantDashboard() {
 
   const fetchDashboard = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       
       const metricsRes = await fetch(`${apiUrl}/api/merchant/dashboard`, {
         headers: { "Authorization": `Bearer ${token}` }
@@ -82,7 +83,7 @@ export default function MerchantDashboard() {
     setSavingPolicy(true);
     setPolicyMessage("");
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/merchant/policies`, {
         method: "PATCH",
         headers: {
@@ -114,7 +115,7 @@ export default function MerchantDashboard() {
     setCopilotLoading(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/merchant/copilot`, {
         method: "POST",
         headers: { 

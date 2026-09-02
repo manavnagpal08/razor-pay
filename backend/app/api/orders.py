@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+﻿from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import os
 import json
+import logging
 from app.database import get_db
 from app.services.order import OrderService
 from app.api.dependencies import get_current_customer
-from app.models import Order
+from app.models import Order, Cart
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 class CreateOrderRequest(BaseModel):
@@ -21,15 +23,21 @@ class VerifyPaymentRequest(BaseModel):
 
 @router.post("/")
 def create_order(req: CreateOrderRequest, db: Session = Depends(get_db), customer_id: str = Depends(get_current_customer)):
+    cart_model = db.query(Cart).filter(Cart.id == req.cart_id).first()
+    if not cart_model:
+        raise HTTPException(status_code=404, detail="Cart not found")
+        
+    if cart_model.customer_id != customer_id:
+        raise HTTPException(status_code=403, detail="Not authorized to create order for this cart")
+        
     service = OrderService(db)
     try:
-        from app.services.cart import CartService
-        cart_resp = CartService(db).get_cart_response(req.cart_id)
-        if cart_resp.customer_id != customer_id:
-            raise HTTPException(status_code=403, detail="Not authorized to create order for this cart")
         return service.create_order_from_cart(req.cart_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating order from cart: {e}")
+        raise HTTPException(status_code=500, detail=f"Order creation failed: {str(e)}")
 
 @router.post("/verify")
 def verify_payment(req: VerifyPaymentRequest, db: Session = Depends(get_db), customer_id: str = Depends(get_current_customer)):
@@ -47,6 +55,9 @@ def verify_payment(req: VerifyPaymentRequest, db: Session = Depends(get_db), cus
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error verifying payment: {e}")
+        raise HTTPException(status_code=500, detail=f"Payment verification failed: {str(e)}")
 
 @router.post("/webhook")
 async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
@@ -60,7 +71,7 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
     rzp = RazorpayService()
     webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "mock_webhook_secret")
     
-    if not rzp.verify_webhook_signature(payload_body.decode('utf-8'), webhook_signature, webhook_secret):
+    if not rzp.verify_webhook_signature(payload_body.decode("utf-8"), webhook_signature, webhook_secret):
         raise HTTPException(status_code=400, detail="Invalid signature")
         
     payload = json.loads(payload_body)
@@ -75,7 +86,6 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
             order = db.query(Order).filter(Order.razorpay_order_id == rzp_order_id).first()
             if order and order.status != "COMPLETED":
                 order.status = "COMPLETED"
-                # Could log payment details here
                 db.commit()
                 
     return {"status": "ok"}
