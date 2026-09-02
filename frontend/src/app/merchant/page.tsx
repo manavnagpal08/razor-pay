@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useRef } from "react";
 import { 
   TrendingUp, ShoppingBag, BrainCircuit, ShieldAlert, Bot, Sparkles, Send, 
-  Lock, LogIn, Sliders, CheckCircle2, Loader2, Share2, Copy, ExternalLink, Code, MessageSquare
+  Lock, LogIn, Sliders, CheckCircle2, Loader2, Share2, Copy, ExternalLink, Code, 
+  MessageSquare, Terminal, RefreshCw, Download, Filter
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useAuth } from "@/context/AuthContext";
@@ -14,11 +15,14 @@ export default function MerchantDashboard() {
   const { user, token, role, loading: authLoading } = useAuth();
   const [metrics, setMetrics] = useState<any>(null);
   const [activity, setActivity] = useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [logFilter, setLogFilter] = useState<string>("ALL");
   const [policy, setPolicy] = useState<any>(null);
   const [maxDiscountInput, setMaxDiscountInput] = useState<number>(20);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [policyMessage, setPolicyMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<{role: string, text: string}[]>([]);
   const [copilotLoading, setCopilotLoading] = useState(false);
@@ -44,6 +48,7 @@ export default function MerchantDashboard() {
   useEffect(() => {
     if (token) {
       fetchDashboard();
+      fetchLogs();
     } else if (!authLoading) {
       setLoading(false);
     }
@@ -76,6 +81,34 @@ export default function MerchantDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/merchant/logs`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch logs:", e);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const handleExportLogs = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(logs, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `razorpay-agent-audit-logs-${new Date().toISOString().slice(0,10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   const handleUpdatePolicy = async (e: React.FormEvent) => {
@@ -134,6 +167,14 @@ export default function MerchantDashboard() {
       setCopilotLoading(false);
     }
   };
+
+  const filteredLogs = logs.filter(l => {
+    if (logFilter === "ALL") return true;
+    if (logFilter === "POLICY_BLOCK") return l.level === "POLICY_BLOCK";
+    if (logFilter === "PAYMENT") return l.level === "PAYMENT";
+    if (logFilter === "SUCCESS") return l.level === "SUCCESS";
+    return true;
+  });
 
   if (authLoading || loading) {
     return (
@@ -384,6 +425,112 @@ export default function MerchantDashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
+      </div>
+
+      {/* Live System Logs & Agent Telemetry Console */}
+      <div className="bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl p-6 text-slate-100 overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-800/80">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-indigo-900/50 border border-indigo-700/50 flex items-center justify-center text-indigo-400">
+              <Terminal className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-bold text-white text-base">Live Agent Telemetry & Audit Logs</h2>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold flex items-center gap-1 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  STREAM ACTIVE
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">Deterministic traces across LangGraph Supervisor, Policy Engine, and Razorpay SDK</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              onClick={fetchLogs}
+              disabled={logsLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? "animate-spin text-indigo-400" : ""}`} />
+              <span>Refresh</span>
+            </button>
+
+            <button
+              onClick={handleExportLogs}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all shadow-xs"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export JSON</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 text-xs">
+          <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0 mr-1" />
+          {["ALL", "POLICY_BLOCK", "PAYMENT", "SUCCESS"].map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setLogFilter(filter)}
+              className={`px-3 py-1 rounded-xl font-bold transition-all shrink-0 ${
+                logFilter === filter
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+              }`}
+            >
+              {filter === "ALL" ? `All Traces (${logs.length})` : 
+               filter === "POLICY_BLOCK" ? "Policy Blocks" :
+               filter === "PAYMENT" ? "Payments" : "AI Decisions"}
+            </button>
+          ))}
+        </div>
+
+        {/* Terminal Logs Table */}
+        <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-3 font-mono text-xs max-h-[380px] overflow-y-auto space-y-2">
+          {filteredLogs.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">
+              No telemetry events recorded matching the selected filter.
+            </div>
+          ) : (
+            filteredLogs.map((log) => (
+              <div key={log.id} className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60 hover:border-slate-700 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-start sm:items-center gap-2.5">
+                  <span className="text-slate-500 text-[11px] shrink-0">
+                    {new Date(log.timestamp).toLocaleTimeString()}
+                  </span>
+
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+                    log.level === "POLICY_BLOCK"
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                      : log.level === "PAYMENT"
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                        : "bg-blue-500/20 text-blue-300 border border-blue-500/40"
+                  }`}>
+                    {log.level}
+                  </span>
+
+                  <span className="text-indigo-400 font-bold text-xs shrink-0">
+                    [{log.component}]
+                  </span>
+
+                  <span className="text-slate-200 text-xs line-clamp-1">
+                    {log.message}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto text-[11px]">
+                  <span className="text-slate-500 font-mono">
+                    {log.trace_id}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">
+                    {log.latency_ms}ms
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
       

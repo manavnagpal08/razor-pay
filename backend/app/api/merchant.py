@@ -40,6 +40,11 @@ def update_policy(req: PolicyUpdateRequest, db: Session = Depends(get_db), merch
     service = AnalyticsService(db)
     return service.update_merchant_policy(merchant_id, req.max_discount_percent)
 
+@router.get("/logs")
+def get_logs(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
+    service = AnalyticsService(db)
+    return service.get_system_logs(merchant_id)
+
 class CopilotRequest(BaseModel):
     query: str
 
