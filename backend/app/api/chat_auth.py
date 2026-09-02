@@ -48,11 +48,16 @@ def send_chat_otp(req: SendOtpRequest):
         "purpose": req.purpose
     }
 
+    # Dispatch email via EmailService (live SMTP if configured or logged fallback)
+    from app.services.email_service import EmailService
+    email_dispatch = EmailService.send_otp_email(email, otp)
+
     return {
         "success": True,
         "email": email,
         "message": f"Verification code sent to {email}. Use test OTP: {otp}",
         "otp_hint": otp,
+        "email_delivery": email_dispatch.get("mode"),
         "expires_in_seconds": 600
     }
 

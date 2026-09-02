@@ -348,3 +348,63 @@ def test_webhook_dispatch(db: Session = Depends(get_db), merchant_id: str = Depe
         "message": "Sample order successfully synced to external software with 200 OK!",
         "payload_preview": sample_order_payload
     }
+
+class SMTPConfigRequest(BaseModel):
+    gmail_user: str
+    gmail_app_password: str
+    smtp_host: str | None = "smtp.gmail.com"
+    smtp_port: int | None = 587
+
+@router.get("/smtp-config")
+def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
+    from app.models import MerchantPolicy
+    import os
+    policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+    rules = policy.approval_rules if policy and isinstance(policy.approval_rules, dict) else {}
+    smtp = rules.get("smtp_config", {})
+    user = smtp.get("user") or os.getenv("SMTP_USER") or os.getenv("GMAIL_USER") or ""
+    return {
+        "gmail_user": user,
+        "is_configured": bool(user),
+        "smtp_host": smtp.get("host") or os.getenv("SMTP_HOST") or "smtp.gmail.com",
+        "smtp_port": smtp.get("port") or int(os.getenv("SMTP_PORT") or 587)
+    }
+
+@router.post("/smtp-config")
+def update_smtp_config(req: SMTPConfigRequest, db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
+    from app.models import MerchantPolicy
+    policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+    if not policy:
+        import uuid
+        policy = MerchantPolicy(id=str(uuid.uuid4()), merchant_id=merchant_id, max_discount_percent=20.0)
+        db.add(policy)
+
+    rules = policy.approval_rules if isinstance(policy.approval_rules, dict) else {}
+    rules["smtp_config"] = {
+        "user": req.gmail_user.strip(),
+        "password": req.gmail_app_password.strip().replace(" ", ""),
+        "host": req.smtp_host or "smtp.gmail.com",
+        "port": req.smtp_port or 587
+    }
+    policy.approval_rules = rules
+    db.commit()
+    return {"success": True, "message": "Gmail SMTP configuration saved successfully!"}
+
+class TestEmailRequest(BaseModel):
+    recipient_email: str
+
+@router.post("/smtp-test")
+def test_smtp_delivery(req: TestEmailRequest, db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
+    from app.models import MerchantPolicy
+    from app.services.email_service import EmailService
+    policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+    rules = policy.approval_rules if policy and isinstance(policy.approval_rules, dict) else {}
+    smtp_override = rules.get("smtp_config")
+
+    result = EmailService.send_otp_email(
+        to_email=req.recipient_email.strip(),
+        otp_code="938102",
+        store_name="Razorpay Merchant Store",
+        smtp_override=smtp_override
+    )
+    return result

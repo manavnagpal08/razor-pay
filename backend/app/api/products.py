@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
@@ -88,3 +88,57 @@ def search_products(request: schemas.ProductSearchRequest, db: Session = Depends
     # 3. Default fallback: return all available products in price range
     all_prods = base_query.limit(10).all()
     return all_prods
+
+class CreateProductPayload(schemas.BaseModel):
+    name: str
+    category: str
+    price: float
+    inventory: int = 10
+    description: str | None = ""
+    image_url: str | None = None
+    merchant_id: str | None = "demo_merchant"
+
+@router.get("/merchant/{merchant_id}", response_model=List[schemas.ProductResponse])
+def get_merchant_products(merchant_id: str, db: Session = Depends(get_db)):
+    """Retrieve all catalog items owned by a specific merchant."""
+    return db.query(models.Product).filter(models.Product.merchant_id == merchant_id).all()
+
+@router.post("/", response_model=schemas.ProductResponse)
+def create_merchant_product(req: CreateProductPayload, db: Session = Depends(get_db)):
+    """Add a new product to the merchant catalog."""
+    import uuid
+    merchant_id = req.merchant_id or "demo_merchant"
+    merchant = db.query(models.Merchant).filter(models.Merchant.id == merchant_id).first()
+    if not merchant:
+        merchant = models.Merchant(id=merchant_id, name="Storefront", currency="INR")
+        db.add(merchant)
+        db.flush()
+
+    prod_id = f"prod_{str(uuid.uuid4())[:8]}"
+    product = models.Product(
+        id=prod_id,
+        merchant_id=merchant_id,
+        name=req.name.strip(),
+        category=req.category.strip(),
+        price=req.price,
+        inventory=req.inventory,
+        description=req.description or f"High performance {req.name}",
+        currency="INR",
+        features={"verified": True},
+        use_cases=["Everyday", "Professional"],
+        metadata_={"image_url": req.image_url or "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80"}
+    )
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+    return product
+
+@router.delete("/{product_id}")
+def delete_merchant_product(product_id: str, db: Session = Depends(get_db)):
+    """Delete a product from the merchant catalog."""
+    prod = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not prod:
+        raise HTTPException(status_code=404, detail="Product not found")
+    db.delete(prod)
+    db.commit()
+    return {"success": True, "message": f"Product {product_id} deleted successfully"}

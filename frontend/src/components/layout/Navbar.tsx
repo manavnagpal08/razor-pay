@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -36,40 +36,67 @@ export function Navbar() {
         
         {/* Nav Links */}
         <div className="hidden md:flex items-center space-x-1 text-sm font-medium">
-          <Link 
-            href="/shop" 
-            className={`px-3.5 py-1.5 rounded-xl transition-colors ${
-              pathname === '/shop' ? 'bg-slate-100 text-blue-600 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-            }`}
-          >
-            Catalog
-          </Link>
+          {role === "merchant" ? (
+            <>
+              <Link 
+                href="/merchant" 
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition-all ${
+                  pathname === '/merchant' 
+                    ? 'bg-indigo-600 text-white font-bold shadow-xs' 
+                    : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 font-semibold'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                <span>Merchant Control Center</span>
+              </Link>
 
-          <Link 
-            href="/chat" 
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition-all ${
-              pathname === '/chat' 
-                ? 'bg-blue-600 text-white font-bold shadow-xs' 
-                : 'text-blue-600 bg-blue-50 hover:bg-blue-100 font-semibold'
-            }`}
-          >
-            <Bot className="w-4 h-4" />
-            <span>AI Shopping Assistant</span>
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
-          </Link>
+              <Link 
+                href="/merchant#catalog" 
+                className="px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors font-semibold"
+              >
+                Product Catalog
+              </Link>
 
-          {role === "merchant" && (
-            <Link 
-              href="/merchant" 
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition-all ${
-                pathname === '/merchant' 
-                  ? 'bg-indigo-600 text-white font-bold shadow-xs' 
-                  : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 font-semibold'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              <span>Merchant Dashboard</span>
-            </Link>
+              <Link 
+                href="/merchant#webhooks" 
+                className="px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors font-semibold"
+              >
+                OMS Webhooks
+              </Link>
+
+              <Link 
+                href="/chat" 
+                target="_blank"
+                className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors font-semibold text-xs border border-emerald-200/50"
+              >
+                <span>Live AI Storefront</span>
+                <Sparkles className="w-3 h-3 text-amber-500" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link 
+                href="/shop" 
+                className={`px-3.5 py-1.5 rounded-xl transition-colors ${
+                  pathname === '/shop' ? 'bg-slate-100 text-blue-600 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                Catalog
+              </Link>
+
+              <Link 
+                href="/chat" 
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition-all ${
+                  pathname === '/chat' 
+                    ? 'bg-blue-600 text-white font-bold shadow-xs' 
+                    : 'text-blue-600 bg-blue-50 hover:bg-blue-100 font-semibold'
+                }`}
+              >
+                <Bot className="w-4 h-4" />
+                <span>AI Shopping Assistant</span>
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
+              </Link>
+            </>
           )}
         </div>
         
