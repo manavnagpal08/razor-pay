@@ -12,6 +12,7 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 class ChatRequest(BaseModel):
     text: str
     thread_id: Optional[str] = "default_thread"
+    merchant_id: Optional[str] = "demo_merchant"
 
 @router.post("/intent", response_model=IntentResponse)
 def parse_intent(request: IntentRequest):
@@ -27,14 +28,18 @@ def parse_intent(request: IntentRequest):
 @router.post("/chat/search")
 def chat_search(request: ChatRequest, db: Session = Depends(get_db)):
     """
-    Orchestrates the Phase 05 AI workflow:
-    Intent -> Search -> Recommendation -> Upsell/Cross-sell
+    Orchestrates the multi-tenant AI workflow:
+    Intent -> Merchant Scoped Search -> Recommendation -> Upsell/Cross-sell
     """
     from app.services.ai_supervisor import AICommerceSupervisor
     supervisor = AICommerceSupervisor(db)
     
     try:
-        response_data = supervisor.process_chat_message(request.text, request.thread_id)
+        response_data = supervisor.process_chat_message(
+            request.text, 
+            request.thread_id, 
+            merchant_id=request.merchant_id
+        )
         return response_data
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

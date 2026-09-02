@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 class CommerceState(TypedDict):
     input_text: str
+    merchant_id: Optional[str]
     intent: Optional[Dict[str, Any]]
     raw_products: List[Any]
     ranked_products: List[Dict[str, Any]]
@@ -74,7 +75,11 @@ class AICommerceSupervisor:
         if intent_data.get("keywords"):
             search_req.query = " ".join(intent_data["keywords"])
             
-        raw_products = search_products(search_req, self.db)
+        merchant_id = state.get("merchant_id")
+        try:
+            raw_products = search_products(search_req, self.db, merchant_id=merchant_id)
+        except TypeError:
+            raw_products = search_products(search_req, self.db)
         return {"raw_products": raw_products}
 
     def _node_recommend(self, state: CommerceState) -> CommerceState:
@@ -99,9 +104,10 @@ class AICommerceSupervisor:
                 cross_sell_data = cross_sell.model_dump()
         return {"upsell": upsell_data, "cross_sell": cross_sell_data}
 
-    def process_chat_message(self, text: str, thread_id: str = "default_thread") -> Dict[str, Any]:
+    def process_chat_message(self, text: str, thread_id: str = "default_thread", merchant_id: Optional[str] = "demo_merchant") -> Dict[str, Any]:
         initial_state = CommerceState(
             input_text=text,
+            merchant_id=merchant_id,
             intent=None,
             raw_products=[],
             ranked_products=[],

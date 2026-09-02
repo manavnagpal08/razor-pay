@@ -1,21 +1,29 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import Script from "next/script";
 import Link from "next/link";
 import { 
   Send, Loader2, Bot, User as UserIcon, Sparkles, LogIn, ArrowRight, 
-  ShieldCheck, CheckCircle2, ShoppingCart, Zap, Check, ChevronDown, ChevronUp, Tag
+  ShieldCheck, CheckCircle2, ShoppingCart, Zap, Check, ChevronDown, ChevronUp, Store, ExternalLink
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
 
-export default function ChatPage() {
+function ChatContent() {
+  const searchParams = useSearchParams();
+  const merchantParam = searchParams.get("merchant") || "demo_merchant";
+
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [addedId, setAddedId] = useState<string | null>(null);
+  const [instantBuyingId, setInstantBuyingId] = useState<string | null>(null);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
   const [expandedReasoning, setExpandedReasoning] = useState<{ [key: number]: boolean }>({});
+  const [merchantInfo, setMerchantInfo] = useState<any>(null);
   const { user, token, refreshCartCount } = useAuth();
   
   const suggestedPrompts = [
@@ -24,6 +32,23 @@ export default function ChatPage() {
     "I need lightweight noise cancelling headphones for travel",
     "Find an essential student laptop under ₹60,000"
   ];
+
+  // Fetch Public Merchant Storefront Metadata
+  useEffect(() => {
+    const fetchMerchantData = async () => {
+      try {
+        const apiUrl = getApiUrl();
+        const res = await fetch(`${apiUrl}/api/merchant/public/${merchantParam}`);
+        if (res.ok) {
+          const data = await res.json();
+          setMerchantInfo(data);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch merchant profile:", err);
+      }
+    };
+    fetchMerchantData();
+  }, [merchantParam]);
 
   const toggleReasoning = (idx: number) => {
     setExpandedReasoning(prev => ({ ...prev, [idx]: !prev[idx] }));
@@ -62,6 +87,115 @@ export default function ChatPage() {
     }
   };
 
+  // 1-Click Conversational In-App Razorpay Checkout
+  const handleInstantBuy = async (product: any) => {
+    if (!token) {
+      alert("Please sign in to complete secure Razorpay checkout.");
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!scriptLoaded && !(window as any).Razorpay) {
+      alert("Razorpay payment gateway is loading. Please retry in a few seconds.");
+      return;
+    }
+
+    setInstantBuyingId(product.id);
+    try {
+      const apiUrl = getApiUrl();
+
+      // 1. Create temporary direct cart for this single item
+      const cartRes = await fetch(`${apiUrl}/api/cart/`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({})
+      });
+      if (!cartRes.ok) throw new Error("Failed to create checkout cart");
+      const cartData = await cartRes.json();
+
+      // 2. Add product to the checkout cart
+      await fetch(`${apiUrl}/api/cart/items`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ product_id: product.id, quantity: 1 })
+      });
+
+      // 3. Create Razorpay order
+      const orderRes = await fetch(`${apiUrl}/api/orders/`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ cart_id: cartData.id })
+      });
+      if (!orderRes.ok) throw new Error("Failed to create Razorpay order");
+      const orderData = await orderRes.json();
+
+      // 4. Launch Razorpay Checkout Modal directly in the chat!
+      const options = {
+        key: orderData.key_id,
+        amount: orderData.amount_paise,
+        currency: orderData.currency || "INR",
+        name: merchantInfo?.name || "OmniCommerce Store",
+        description: `Order for ${product.name}`,
+        order_id: orderData.razorpay_order_id,
+        handler: async function (response: any) {
+          try {
+            const verifyRes = await fetch(`${apiUrl}/api/orders/verify`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                signature: response.razorpay_signature
+              })
+            });
+            const verifyData = await verifyRes.json();
+            if (verifyData.success) {
+              await refreshCartCount();
+              setMessages(prev => [
+                ...prev,
+                {
+                  role: "assistant",
+                  text: `🎉 Payment Successful! Your order for "${product.name}" has been confirmed via Razorpay test-mode. Payment ID: ${response.razorpay_payment_id}. Your items are being prepared for shipping!`,
+                  isSuccess: true
+                }
+              ]);
+            } else {
+              alert("Payment verification failed.");
+            }
+          } catch (e) {
+            console.error(e);
+            alert("Payment verification failed.");
+          }
+        },
+        prefill: {
+          email: user?.email || "customer@example.com",
+          name: user?.displayName || "Valued Customer"
+        },
+        theme: { color: "#4f46e5" }
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to initiate instant payment. Please try again.");
+    } finally {
+      setInstantBuyingId(null);
+    }
+  };
+
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
     
@@ -80,7 +214,8 @@ export default function ChatPage() {
         },
         body: JSON.stringify({ 
           text,
-          thread_id: user?.uid || "guest_session"
+          thread_id: user?.uid || "guest_session",
+          merchant_id: merchantParam
         })
       });
       
@@ -113,33 +248,51 @@ export default function ChatPage() {
 
   return (
     <div className="max-w-6xl mx-auto flex flex-col h-[calc(100vh-130px)] bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-      
-      {/* Header */}
+      <Script 
+        src="https://checkout.razorpay.com/v1/checkout.js" 
+        strategy="lazyOnload"
+        onLoad={() => setScriptLoaded(true)}
+      />
+
+      {/* Header with Multi-Tenant Merchant Branding */}
       <div className="p-4 px-6 border-b border-slate-100 bg-slate-50/80 backdrop-blur-sm flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-sm shadow-blue-500/20">
+          <div className="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-blue-600 rounded-2xl flex items-center justify-center text-white shadow-sm shadow-indigo-500/20">
             <Bot className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
-              Razorpay AI Shopping Concierge
+            <div className="flex items-center gap-2">
+              <h2 className="font-bold text-slate-900 text-base">
+                {merchantInfo?.name || "OmniCommerce"} AI Shopping Concierge
+              </h2>
               <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Gemini 2.5 Active
+                Verified Merchant Store
               </span>
-            </h2>
-            <p className="text-xs text-slate-500">Autonomous intent parser, recommendation engine & policy guardrails</p>
+            </div>
+            <p className="text-xs text-slate-500 flex items-center gap-1.5">
+              <span>{merchantInfo?.product_count || 6} Catalog Items</span>
+              <span>•</span>
+              <span className="text-indigo-600 font-semibold">Razorpay Test Mode Active</span>
+              <span>•</span>
+              <span>Autonomous In-Chat Checkout</span>
+            </p>
           </div>
         </div>
 
-        {!user && (
+        {!user ? (
           <Link 
             href="/login"
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors border border-blue-200/50"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200/50"
           >
             <LogIn className="w-3.5 h-3.5" />
-            <span>Sign in for saved carts</span>
+            <span>Sign in for 1-Click Buy</span>
           </Link>
+        ) : (
+          <div className="text-right hidden sm:block">
+            <p className="text-xs font-bold text-slate-800">{user.email}</p>
+            <p className="text-[10px] text-emerald-600 font-bold">● Connected Customer</p>
+          </div>
         )}
       </div>
       
@@ -147,13 +300,15 @@ export default function ChatPage() {
       <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-slate-50/40">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-6 py-8">
-            <div className="w-16 h-16 bg-blue-50 border border-blue-100 rounded-3xl flex items-center justify-center text-blue-600 shadow-sm">
+            <div className="w-16 h-16 bg-indigo-50 border border-indigo-100 rounded-3xl flex items-center justify-center text-indigo-600 shadow-sm">
               <Sparkles className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-2xl font-extrabold text-slate-900 mb-2">How can I help you shop today?</h3>
+              <h3 className="text-2xl font-extrabold text-slate-900 mb-2">
+                {merchantInfo ? `Welcome to ${merchantInfo.name}!` : "How can I help you shop today?"}
+              </h3>
               <p className="text-slate-500 max-w-md mx-auto text-sm leading-relaxed">
-                Describe the products, specs, budget, or use case in plain language. The AI will curate, rank, and verify products server-side.
+                Describe the hardware specs, budget, or use case in plain language. The AI will curate, rank, and execute direct Razorpay checkout inside this chat.
               </p>
             </div>
             
@@ -162,10 +317,10 @@ export default function ChatPage() {
                 <button 
                   key={i} 
                   onClick={() => handleSend(prompt)}
-                  className="p-4 text-xs font-semibold text-left bg-white border border-slate-200 rounded-2xl hover:border-blue-400 hover:shadow-md transition-all text-slate-700 hover:text-blue-600 group flex items-center justify-between"
+                  className="p-4 text-xs font-semibold text-left bg-white border border-slate-200 rounded-2xl hover:border-indigo-400 hover:shadow-md transition-all text-slate-700 hover:text-indigo-600 group flex items-center justify-between"
                 >
                   <span>"{prompt}"</span>
-                  <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-blue-600 shrink-0 ml-2" />
+                  <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-600 shrink-0 ml-2" />
                 </button>
               ))}
             </div>
@@ -174,9 +329,9 @@ export default function ChatPage() {
           messages.map((msg, idx) => (
             <div key={idx} className={`flex gap-3.5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
               <div className={`w-8 h-8 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-xs ${
-                msg.role === 'user' ? 'bg-slate-900 text-white' : 'bg-blue-600 text-white'
+                msg.role === 'user' ? 'bg-slate-900 text-white' : msg.isSuccess ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'
               }`}>
-                {msg.role === 'user' ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                {msg.role === 'user' ? <UserIcon className="w-4 h-4" /> : msg.isSuccess ? <Check className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
               </div>
               
               <div className={`max-w-[92%] ${msg.role === 'user' ? 'flex flex-col items-end' : 'flex flex-col items-start w-full'}`}>
@@ -207,9 +362,11 @@ export default function ChatPage() {
                 <div className={`p-4 rounded-3xl ${
                   msg.role === 'user' 
                     ? 'bg-slate-900 text-white rounded-tr-none text-sm' 
-                    : msg.isError 
-                      ? 'bg-red-50 text-red-700 border border-red-100 rounded-tl-none text-sm' 
-                      : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none shadow-xs text-sm'
+                    : msg.isSuccess
+                      ? 'bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-tl-none text-sm font-semibold shadow-xs'
+                      : msg.isError 
+                        ? 'bg-red-50 text-red-700 border border-red-100 rounded-tl-none text-sm' 
+                        : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none shadow-xs text-sm'
                 }`}>
                   <p className="leading-relaxed font-medium">{msg.text}</p>
                 </div>
@@ -222,15 +379,16 @@ export default function ChatPage() {
                       const imageUrl = prod.metadata_?.image_url || prod.metadata?.image_url || prod.image_url;
                       const isAdded = addedId === prod.id;
                       const isAdding = addingId === prod.id;
+                      const isInstantBuying = instantBuyingId === prod.id;
 
                       return (
-                        <div key={prod.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs hover:shadow-lg hover:border-blue-400 transition-all duration-200 flex flex-col justify-between group">
+                        <div key={prod.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs hover:shadow-lg hover:border-indigo-400 transition-all duration-200 flex flex-col justify-between group">
                           {/* Image & Badges */}
                           <div className="relative aspect-[16/10] bg-slate-50 flex items-center justify-center p-3 border-b border-slate-100 overflow-hidden">
                             {imageUrl ? (
                               <img src={imageUrl} alt={prod.name} className="h-full object-contain group-hover:scale-105 transition-transform duration-300" />
                             ) : (
-                              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
                                 <Sparkles className="w-6 h-6" />
                               </div>
                             )}
@@ -240,7 +398,7 @@ export default function ChatPage() {
                                 <Sparkles className="w-2.5 h-2.5" /> Best Match
                               </span>
                             )}
-                            <span className="absolute top-2.5 left-2.5 bg-white/90 backdrop-blur-sm text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200 uppercase tracking-wide">
+                            <span className="absolute top-2.5 left-2.5 bg-white/90 backdrop-blur-sm text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200 uppercase tracking-wide">
                               {prod.category}
                             </span>
                           </div>
@@ -248,7 +406,7 @@ export default function ChatPage() {
                           {/* Content */}
                           <div className="p-4 flex-grow flex flex-col justify-between">
                             <div>
-                              <h4 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors">
+                              <h4 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1 group-hover:text-indigo-600 transition-colors">
                                 {prod.name}
                               </h4>
                               <p className="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed">
@@ -279,35 +437,39 @@ export default function ChatPage() {
                                 </div>
                               )}
 
-                              {/* Action Buttons */}
+                              {/* Action Buttons: Instant Buy & Add to Cart */}
                               <div className="flex items-center gap-2 pt-1">
-                                <Link 
-                                  href={`/products/${prod.id}`}
-                                  className="flex-1 text-center py-2 px-3 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                                <button
+                                  onClick={() => handleInstantBuy(prod)}
+                                  disabled={isInstantBuying}
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-50"
                                 >
-                                  View Specs
-                                </Link>
+                                  {isInstantBuying ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                                      <span>Buy Now</span>
+                                    </>
+                                  )}
+                                </button>
+
                                 <button
                                   onClick={() => handleAddToCart(prod)}
                                   disabled={isAdding}
-                                  className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                                  className={`p-2 rounded-xl text-xs font-bold transition-all ${
                                     isAdded 
                                       ? "bg-emerald-600 text-white" 
-                                      : "bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow"
+                                      : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                                   }`}
+                                  title="Add to Cart"
                                 >
                                   {isAdding ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    <Loader2 className="w-4 h-4 animate-spin" />
                                   ) : isAdded ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5" />
-                                      <span>Added</span>
-                                    </>
+                                    <Check className="w-4 h-4" />
                                   ) : (
-                                    <>
-                                      <ShoppingCart className="w-3.5 h-3.5" />
-                                      <span>Add to Cart</span>
-                                    </>
+                                    <ShoppingCart className="w-4 h-4" />
                                   )}
                                 </button>
                               </div>
@@ -349,21 +511,21 @@ export default function ChatPage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button 
                       onClick={() => handleSend("What discounts or offers apply to these items?")}
-                      className="px-3 py-1 bg-white border border-slate-200 hover:border-blue-400 hover:text-blue-600 rounded-full text-xs font-semibold text-slate-600 transition-all"
+                      className="px-3 py-1 bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 rounded-full text-xs font-semibold text-slate-600 transition-all"
                     >
                       🏷️ Check available offers
                     </button>
                     <button 
                       onClick={() => handleSend("Compare the top 2 products in detail")}
-                      className="px-3 py-1 bg-white border border-slate-200 hover:border-blue-400 hover:text-blue-600 rounded-full text-xs font-semibold text-slate-600 transition-all"
+                      className="px-3 py-1 bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 rounded-full text-xs font-semibold text-slate-600 transition-all"
                     >
                       ⚖️ Compare top 2 specs
                     </button>
                     <button 
-                      onClick={() => handleSend("Show budget-friendly alternatives under ₹5,000")}
-                      className="px-3 py-1 bg-white border border-slate-200 hover:border-blue-400 hover:text-blue-600 rounded-full text-xs font-semibold text-slate-600 transition-all"
+                      onClick={() => handleSend("Show budget-friendly alternatives under ₹10,000")}
+                      className="px-3 py-1 bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 rounded-full text-xs font-semibold text-slate-600 transition-all"
                     >
-                      💰 Under ₹5,000 options
+                      💰 Under ₹10,000 options
                     </button>
                   </div>
                 )}
@@ -375,14 +537,14 @@ export default function ChatPage() {
         
         {loading && (
           <div className="flex gap-3.5">
-            <div className="w-8 h-8 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xs">
+            <div className="w-8 h-8 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xs">
               <Bot className="w-4 h-4" />
             </div>
             <div className="bg-white border border-slate-200 rounded-3xl rounded-tl-none p-4 flex items-center gap-3 shadow-xs">
-              <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
               <div className="space-y-0.5">
                 <p className="text-xs font-bold text-slate-800">Agent Supervisor Reasoning...</p>
-                <p className="text-[11px] text-slate-500">Extracting intent, scanning catalog & validating policy guardrails</p>
+                <p className="text-[11px] text-slate-500">Extracting intent, scanning merchant catalog & validating policy guardrails</p>
               </div>
             </div>
           </div>
@@ -399,14 +561,14 @@ export default function ChatPage() {
             type="text" 
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type what you need (e.g. 'Show me accessories for my laptop setup' or 'MacBook under ₹90,000')..."
-            className="flex-grow bg-slate-50 border border-slate-200 rounded-2xl py-3.5 pl-4 pr-12 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
+            placeholder="Type what you need (e.g. 'Show me accessories for my laptop setup' or 'Gaming laptop under ₹150,000')..."
+            className="flex-grow bg-slate-50 border border-slate-200 rounded-2xl py-3.5 pl-4 pr-12 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all placeholder:text-slate-400"
             disabled={loading}
           />
           <button 
             type="submit"
             disabled={loading || !input.trim()}
-            className="absolute right-2 top-2 bottom-2 aspect-square bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition-colors disabled:opacity-50 disabled:hover:bg-blue-600 shadow-sm"
+            className="absolute right-2 top-2 bottom-2 aspect-square bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center transition-colors disabled:opacity-50 disabled:hover:bg-indigo-600 shadow-sm"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
@@ -414,5 +576,17 @@ export default function ChatPage() {
       </div>
 
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center h-[70vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
+    }>
+      <ChatContent />
+    </Suspense>
   );
 }

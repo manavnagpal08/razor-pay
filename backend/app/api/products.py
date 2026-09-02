@@ -1,7 +1,7 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from typing import List
+from typing import List, Optional
 import logging
 from app.database import get_db
 from app import models, schemas
@@ -22,15 +22,23 @@ def get_product(product_id: str, db: Session = Depends(get_db)):
     return product
 
 @router.post("/search", response_model=List[schemas.ProductResponse])
-def search_products(request: schemas.ProductSearchRequest, db: Session = Depends(get_db)):
+def search_products(request: schemas.ProductSearchRequest, db: Session = Depends(get_db), merchant_id: Optional[str] = None):
     """
-    Multi-tier resilient search:
-    1. Exact category + price filters
-    2. Tokenized multi-word search across name, description, features, use_cases
-    3. Category fallback if specific keywords yielded 0 results
-    4. Storewide top items fallback to avoid dead ends
+    Multi-tier resilient search with multi-tenant merchant scoping:
+    1. Scope to merchant_id if specified and merchant has products
+    2. Exact category + price filters
+    3. Tokenized multi-word search across name, description, features, use_cases
+    4. Category fallback if specific keywords yielded 0 results
+    5. Storewide top items fallback to avoid dead ends
     """
     base_query = db.query(models.Product)
+    
+    # Multi-tenant scoping
+    if merchant_id:
+        merchant_prods_count = base_query.filter(models.Product.merchant_id == merchant_id).count()
+        if merchant_prods_count > 0:
+            base_query = base_query.filter(models.Product.merchant_id == merchant_id)
+
     if request.in_stock:
         base_query = base_query.filter(models.Product.inventory > 0)
     if request.min_price is not None:
@@ -44,7 +52,6 @@ def search_products(request: schemas.ProductSearchRequest, db: Session = Depends
         
         if request.query:
             tokens = [t.strip().lower() for t in request.query.split() if len(t.strip()) > 2]
-            # Try filtering by tokens within category
             if tokens:
                 token_filters = [
                     or_(
@@ -57,7 +64,7 @@ def search_products(request: schemas.ProductSearchRequest, db: Session = Depends
                 if token_matches:
                     return token_matches[:10]
         
-        # Fallback to category products if specific search yielded no direct matches
+        # Fallback to category products
         cat_matches = cat_query.all()
         if cat_matches:
             return cat_matches[:10]
