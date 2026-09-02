@@ -48,7 +48,7 @@ class MockLLMProvider(LLMProvider):
 
 # Factory method
 def get_llm_provider() -> LLMProvider:
-    from app.main import settings
+    from app.core.config import settings
     if settings.gemini_api_key and settings.gemini_api_key != "":
         from app.services.gemini_provider import GeminiLLMProvider
         return GeminiLLMProvider()

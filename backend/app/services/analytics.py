@@ -25,11 +25,17 @@ class AnalyticsService:
             AgentAction.action_type.in_(["RECOMMENDATION", "UPSELL_RECOMMENDATION", "CROSS_SELL_RECOMMENDATION"])
         ).scalar() or 0
 
-        policy_blocks = self.db.query(func.count(AgentAction.id)).filter(
-            AgentAction.merchant_id == merchant_id,
-            AgentAction.action_type == "AI_DISCOUNT_PROPOSAL",
-            AgentAction.policy_result["allowed"].astext == "false"
-        ).scalar() or 0
+        try:
+            policy_actions = self.db.query(AgentAction).filter(
+                AgentAction.merchant_id == merchant_id,
+                AgentAction.action_type == "AI_DISCOUNT_PROPOSAL"
+            ).all()
+            policy_blocks = sum(
+                1 for a in policy_actions 
+                if isinstance(a.policy_result, dict) and not a.policy_result.get("allowed", True)
+            )
+        except Exception:
+            policy_blocks = 0
         
         upsell_count = self.db.query(func.count(AgentAction.id)).filter(
             AgentAction.merchant_id == merchant_id,

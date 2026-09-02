@@ -44,7 +44,7 @@ class AICommerceSupervisor:
         try:
             from psycopg_pool import ConnectionPool
             from langgraph.checkpoint.postgres import PostgresSaver
-            from app.main import settings
+            from app.core.config import settings
             
             # Avoid pool in tests where db URL might be memory SQLite
             if "sqlite" not in settings.database_url:
