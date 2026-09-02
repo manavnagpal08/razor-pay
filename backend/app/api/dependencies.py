@@ -61,8 +61,9 @@ def get_current_user(
         user = User(
             id=user_id,
             email=f"user_{user_id[:8]}@example.com",
-            name="Customer",
-            role="customer"
+            name="Merchant Admin" if user_id == "test-user-id" else "Customer",
+            password_hash="oauth_external",
+            role="merchant" if user_id == "test-user-id" else "customer"
         )
         db.add(user)
         customer = Customer(id=str(uuid.uuid4()), user_id=user_id, segment="new")
