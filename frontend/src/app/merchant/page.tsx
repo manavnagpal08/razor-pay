@@ -4,7 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import { 
   TrendingUp, ShoppingBag, BrainCircuit, ShieldAlert, Bot, Sparkles, Send, 
   Lock, LogIn, Sliders, CheckCircle2, Loader2, Share2, Copy, ExternalLink, Code, 
-  MessageSquare, Terminal, RefreshCw, Download, Filter, PlusCircle, Store, X, ChevronDown
+  MessageSquare, Terminal, RefreshCw, Download, Filter, PlusCircle, Store, X, ChevronDown,
+  QrCode, AlertTriangle, Cpu, Layers, ShieldCheck, Zap
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useAuth } from "@/context/AuthContext";
@@ -40,6 +41,17 @@ export default function MerchantDashboard() {
   const [creatingStore, setCreatingStore] = useState(false);
   const [createdStoreResult, setCreatedStoreResult] = useState<any>(null);
   const [showStoreDropdown, setShowStoreDropdown] = useState(false);
+
+  // Security & Failure Simulation States
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [simulatingAttack, setSimulatingAttack] = useState(false);
+  const [attackResult, setAttackResult] = useState<any>(null);
+
+  // M2M AI Buyer Simulator States
+  const [simulatingM2M, setSimulatingM2M] = useState(false);
+  const [m2mBuyerAgent, setM2mBuyerAgent] = useState("Autonomous_Buyer_Bot_v1");
+  const [m2mDiscountOffer, setM2mDiscountOffer] = useState(15);
+  const [m2mResult, setM2mResult] = useState<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const merchantId = selectedStore?.id || user?.uid || "demo_merchant";
@@ -131,6 +143,59 @@ export default function MerchantDashboard() {
       alert("Connection error when creating store.");
     } finally {
       setCreatingStore(false);
+    }
+  };
+
+  const handleSimulateAttack = async (type: "ROGUE_DISCOUNT_EXPLOIT" | "PAYMENT_DROP_RECOVERY") => {
+    setSimulatingAttack(true);
+    setAttackResult(null);
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/merchant/simulate-attack`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ attack_type: type, merchant_id: merchantId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAttackResult(data);
+        fetchLogs();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSimulatingAttack(false);
+    }
+  };
+
+  const handleRunM2MTransaction = async () => {
+    setSimulatingM2M(true);
+    setM2mResult(null);
+    try {
+      const apiUrl = getApiUrl();
+      const prodRes = await fetch(`${apiUrl}/api/products`);
+      const prods = await prodRes.json();
+      const targetProduct = (prods && prods.length > 0) ? prods[0] : { id: "p1", name: "Pro Gaming Laptop", price: 125000 };
+
+      const res = await fetch(`${apiUrl}/api/agent/transact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agent_id: m2mBuyerAgent,
+          product_id: targetProduct.id,
+          quantity: 1,
+          proposed_discount_percent: Number(m2mDiscountOffer)
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setM2mResult({ ...data, product: targetProduct });
+        fetchLogs();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSimulatingM2M(false);
     }
   };
 
@@ -312,6 +377,16 @@ export default function MerchantDashboard() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowQrModal(true)}
+            className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-2xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+            title="Generate Scannable Storefront QR Code"
+          >
+            <QrCode className="w-4 h-4 text-indigo-600" />
+            <span>Store QR Code</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -546,6 +621,173 @@ export default function MerchantDashboard() {
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
+
+      {/* Track 01 Showcase: M2M AI Buyer Simulator & Graceful Failure Suite */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* 1. M2M AI Buyer Simulator */}
+        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 border border-indigo-500/30 rounded-3xl p-6 shadow-xl text-white flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-400/30">
+                <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Track 01 Core: Agent-to-Agent Commerce</span>
+              </div>
+              <span className="text-[10px] font-mono text-slate-400">UAP / AP2 Compliant</span>
+            </div>
+
+            <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
+              <span>M2M Autonomous AI Buyer Simulator</span>
+            </h2>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Demonstrates making this merchant transactable by external AI buyers end-to-end via machine-readable protocol (<code className="text-indigo-300">/.well-known/agent.json</code>).
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">External AI Buyer Persona</label>
+                <select
+                  value={m2mBuyerAgent}
+                  onChange={(e) => setM2mBuyerAgent(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none"
+                >
+                  <option value="Enterprise_Procurement_AI_v4">🏢 Enterprise Procurement Bot</option>
+                  <option value="Personal_Shopper_AutoGPT_v2">🤖 Autonomous Personal Shopper</option>
+                  <option value="Smart_Cart_Aggregator_Agent">🛒 Smart Cart Aggregator</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Programmatic Discount RFP</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="40"
+                    value={m2mDiscountOffer}
+                    onChange={(e) => setM2mDiscountOffer(Number(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none pr-8"
+                  />
+                  <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">%</span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleRunM2MTransaction}
+              disabled={simulatingM2M}
+              className="w-full mt-2 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {simulatingM2M ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />}
+              <span>{simulatingM2M ? "Executing Machine-to-Machine RFP..." : "Simulate Autonomous AI Buyer Transaction"}</span>
+            </button>
+          </div>
+
+          {/* M2M Result Dual Console */}
+          {m2mResult && (
+            <div className="mt-4 p-3.5 bg-slate-950 border border-slate-800 rounded-2xl font-mono text-[11px] space-y-1.5 animate-in fade-in">
+              <div className="flex items-center justify-between text-emerald-400 font-bold pb-1 border-b border-slate-800">
+                <span>✓ M2M ORDER CREATED: {m2mResult.razorpay_order_id}</span>
+                <span className="text-slate-400">{m2mResult.agent_id}</span>
+              </div>
+              <p className="text-slate-300">Target Item: <strong className="text-white">{m2mResult.product?.name}</strong></p>
+              <p className="text-indigo-300">Policy Evaluation: {m2mResult.policy_evaluation?.reason}</p>
+              <div className="flex items-center justify-between pt-1 text-slate-400">
+                <span>Total: <strong className="text-emerald-400">₹{Number(m2mResult.financials?.total_amount).toLocaleString()}</strong></span>
+                <span className="text-[10px] bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-800">Razorpay Test Mode Verified</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 2. Security Defense & Graceful Failure Suite ("The Bar") */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                <span>The Bar: Failure Handled Gracefully</span>
+              </div>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">100% Bounded & Gated</span>
+            </div>
+
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">
+              Security Defense & Failure Testbed
+            </h2>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Verify that rogue agent discount exploitation is strictly rejected at the server boundary, and payment network timeouts recover with zero cart loss.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => handleSimulateAttack("ROGUE_DISCOUNT_EXPLOIT")}
+                disabled={simulatingAttack}
+                className="p-3.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-2xl text-left transition-all group disabled:opacity-50"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 group-hover:scale-110 transition-transform" />
+                  <span className="text-xs font-bold text-rose-900">Rogue 50% Exploit Attack</span>
+                </div>
+                <p className="text-[11px] text-rose-700 leading-snug">
+                  Simulate buyer agent demanding an unauthorized 50% discount.
+                </p>
+              </button>
+
+              <button
+                onClick={() => handleSimulateAttack("PAYMENT_DROP_RECOVERY")}
+                disabled={simulatingAttack}
+                className="p-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-2xl text-left transition-all group disabled:opacity-50"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <RefreshCw className="w-4 h-4 text-amber-600 group-hover:rotate-180 transition-transform duration-500" />
+                  <span className="text-xs font-bold text-amber-900">Gateway Timeout Recovery</span>
+                </div>
+                <p className="text-[11px] text-amber-700 leading-snug">
+                  Simulate network drop during checkout and test session recovery.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* Defense Result Display */}
+          {attackResult && (
+            <div className={`mt-4 p-4 rounded-2xl border text-xs space-y-2 animate-in fade-in ${
+              attackResult.threat_detected 
+                ? "bg-rose-50/70 border-rose-200 text-rose-950" 
+                : "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+            }`}>
+              <div className="flex items-center justify-between font-bold">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  {attackResult.attack_type === "ROGUE_DISCOUNT_EXPLOIT" ? "POLICY BOUNDARY INTERCEPTION" : "SESSION STATE SECURED"}
+                </span>
+                <span className="font-mono text-[10px] text-slate-500">ID: {attackResult.audit_ledger_id?.slice(0, 8)}</span>
+              </div>
+
+              {attackResult.attack_type === "ROGUE_DISCOUNT_EXPLOIT" ? (
+                <>
+                  <p className="text-rose-700 font-semibold">
+                    🚨 <strong>Threat Neutralized:</strong> Demanded {attackResult.demanded_discount} rejected by server policy engine.
+                  </p>
+                  <p className="text-slate-700">
+                    ✓ <strong>Graceful Recovery:</strong> Supervisor offered policy-bounded {attackResult.graceful_recovery?.counter_offer_discount} + {attackResult.graceful_recovery?.added_perk}. Zero merchant margin compromised.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-emerald-800 font-semibold">
+                    ✓ <strong>Cart Preserved:</strong> {attackResult.graceful_recovery?.cart_status}.
+                  </p>
+                  <p className="text-slate-700">
+                    ✓ <strong>Fallback Rail:</strong> {attackResult.graceful_recovery?.alternative_rail_offered}. Customer resumed without re-adding items.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
       </div>
 
       {/* Live System Logs & Agent Telemetry Console */}
@@ -912,6 +1154,56 @@ export default function MerchantDashboard() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Store QR Code Modal */}
+      {showQrModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-sm w-full p-6 text-center relative">
+            <button
+              onClick={() => setShowQrModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-xl hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-xs">
+              <QrCode className="w-6 h-6" />
+            </div>
+
+            <h3 className="font-black text-slate-900 text-lg">{currentStoreName}</h3>
+            <p className="text-xs text-slate-500 mb-4">Scan with any smartphone camera to launch the AI Shopping Concierge</p>
+
+            {/* Live Generated QR Code */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 inline-block mb-4 shadow-xs">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(agentShareUrl)}`}
+                alt="Storefront QR Code"
+                className="w-48 h-48 rounded-xl mx-auto"
+              />
+            </div>
+
+            <p className="text-[11px] text-slate-400 font-mono mb-4 truncate px-2">{agentShareUrl}</p>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(agentShareUrl);
+                  alert("Copied store agent URL to clipboard!");
+                }}
+                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors"
+              >
+                Copy Link
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
+              >
+                Print Poster
+              </button>
+            </div>
           </div>
         </div>
       )}

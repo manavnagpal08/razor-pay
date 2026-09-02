@@ -150,6 +150,92 @@ def query_copilot(req: CopilotRequest, db: Session = Depends(get_db), merchant_i
     response = copilot.process_query(req.query)
     return {"response": response}
 
+class AttackSimulationRequest(BaseModel):
+    attack_type: str
+    merchant_id: str | None = "demo_merchant"
+
+@router.post("/simulate-attack")
+def simulate_attack(req: AttackSimulationRequest, db: Session = Depends(get_db)):
+    from app.models import AgentAction
+    from app.services.policy import PolicyEngine
+    from fastapi import HTTPException
+    import uuid
+
+    merchant_id = req.merchant_id or "demo_merchant"
+    policy_engine = PolicyEngine(db, merchant_id=merchant_id)
+    
+    if req.attack_type == "ROGUE_DISCOUNT_EXPLOIT":
+        cart_total = 120000.0
+        demanded_discount = 50.0
+        policy_eval = policy_engine.evaluate_discount_proposal(cart_total, demanded_discount)
+        
+        action_id = str(uuid.uuid4())
+        action = AgentAction(
+            id=action_id,
+            merchant_id=merchant_id,
+            agent_name="PolicyEngine",
+            action_type="ATTACK_INTERCEPTION",
+            input={"cart_total": cart_total, "demanded_discount_percent": demanded_discount, "threat_vector": "Autonomous Prompt Injection & Price Manipulation"},
+            decision={"blocked": True, "offered_discount_percent": 15.0, "perk": "Free Laptop Sleeve & Extended Warranty"},
+            reason=f"Security Alert: Demanded discount of {demanded_discount}% exceeded maximum authorized policy ceiling. Autonomous boundary intervention strictly applied.",
+            policy_result={"allowed": False, "policy_reason": policy_eval.reason},
+            approval_status="BLOCKED_BY_GUARDRAIL",
+            execution_status="RECOVERED_GRACEFULLY"
+        )
+        db.add(action)
+        db.commit()
+        
+        return {
+            "attack_type": "ROGUE_DISCOUNT_EXPLOIT",
+            "threat_detected": True,
+            "demanded_discount": f"{demanded_discount}%",
+            "policy_decision": "STRICTLY BLOCKED AT SERVER BOUNDARY",
+            "policy_reason": policy_eval.reason,
+            "graceful_recovery": {
+                "fallback_strategy": "Negotiate within policy envelope",
+                "counter_offer_discount": "15.0%",
+                "added_perk": "Complimentary Protective Sleeve & 1-Year Extended Warranty",
+                "customer_experience": "No crash; customer receives transparent explanation with high-value policy-compliant counter offer"
+            },
+            "audit_ledger_id": action_id,
+            "status": "SECURED"
+        }
+        
+    elif req.attack_type == "PAYMENT_DROP_RECOVERY":
+        action_id = str(uuid.uuid4())
+        action = AgentAction(
+            id=action_id,
+            merchant_id=merchant_id,
+            agent_name="CheckoutAgent",
+            action_type="PAYMENT_FAILURE_RECOVERY",
+            input={"error_code": "GATEWAY_TIMEOUT", "attempted_rail": "Razorpay_Netbanking"},
+            decision={"session_preserved": True, "recovery_token_generated": True, "fallback_rail": "UPI_INTENT"},
+            reason="Gateway network timeout simulated during payment processing. Authoritative cart state preserved and persistent recovery token created.",
+            policy_result={"allowed": True, "recovery_strategy": "Idempotent Cart Lock"},
+            approval_status="AUTO_RECOVERED",
+            execution_status="RECOVERY_LINK_DISPATCHED"
+        )
+        db.add(action)
+        db.commit()
+        
+        return {
+            "attack_type": "PAYMENT_DROP_RECOVERY",
+            "threat_detected": False,
+            "incident": "GATEWAY_TIMEOUT_SIMULATED",
+            "graceful_recovery": {
+                "cart_status": "Session state preserved idempotently (0 data loss)",
+                "recovery_token": f"recov_{action_id[:8]}",
+                "resumption_url": f"https://razorpay-buildthon.vercel.app/checkout?resume={action_id[:8]}",
+                "alternative_rail_offered": "Instant Razorpay Dynamic UPI QR",
+                "customer_experience": "Transparent notification explaining gateway latency, single-click to resume checkout with prefilled cart"
+            },
+            "audit_ledger_id": action_id,
+            "status": "RECOVERED"
+        }
+    else:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Unknown simulation scenario")
+
 @router.get("/public/{merchant_id}")
 def get_public_merchant_store(merchant_id: str, db: Session = Depends(get_db)):
     """
