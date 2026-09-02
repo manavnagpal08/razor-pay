@@ -117,12 +117,12 @@ function ChatContent() {
         setGuestVerifiedToken(savedGuestToken);
         if (savedName) setOtpName(savedName);
         if (savedEmail) setOtpEmail(savedEmail);
-      } else if (!token) {
-        // Customer scanned QR or clicked link: Prompt for name and email OTP verification
+      } else {
+        // Customer scanned QR or opened storefront link: Prompt for name and email OTP verification
         setShowOtpModal(true);
       }
     }
-  }, [token, merchantParam]);
+  }, [merchantParam]);
 
   const startVoiceInput = () => {
     if (typeof window === "undefined") return;
@@ -633,10 +633,28 @@ function ChatContent() {
               setTrackingError("");
               setShowTrackingModal(true);
             }}
-            className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all"
+            className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all cursor-pointer"
             title="Track Orders"
           >
             <Truck className="w-4 h-4 text-blue-600" />
+          </button>
+
+          {/* Customer OTP Verification Badge / Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setOtpError("");
+              setShowOtpModal(true);
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+              guestVerifiedToken
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                : "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 animate-pulse"
+            }`}
+            title={guestVerifiedToken ? `Verified as ${otpName || "Customer"}` : "Verify Customer OTP"}
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            <span>{guestVerifiedToken ? (otpName?.split(" ")[0] || "Verified") : "Verify OTP"}</span>
           </button>
         </div>
       </div>

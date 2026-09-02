@@ -78,6 +78,38 @@ class EmailService:
         server = None
         last_err = None
 
+        # Strategy 0: HTTPS Email Delivery over port 443 (Allowed on Render free-tier)
+        resend_key = creds.get("resend_api_key") or os.getenv("RESEND_API_KEY")
+        if resend_key:
+            try:
+                import urllib.request
+                import json
+                payload = json.dumps({
+                    "from": "BuyFlow <onboarding@resend.dev>",
+                    "to": [to_email],
+                    "subject": subject,
+                    "html": html_body
+                }).encode("utf-8")
+                req_obj = urllib.request.Request(
+                    "https://api.resend.com/emails",
+                    data=payload,
+                    headers={
+                        "Authorization": f"Bearer {resend_key.strip()}",
+                        "Content-Type": "application/json"
+                    }
+                )
+                with urllib.request.urlopen(req_obj, timeout=10) as resp:
+                    if resp.status in (200, 201):
+                        logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Resend HTTPS")
+                        return {
+                            "sent": True,
+                            "mode": "RESEND_HTTPS",
+                            "message": f"Live email delivered successfully to {to_email} via Resend HTTPS!",
+                            "to": to_email
+                        }
+            except Exception as e_resend:
+                logger.warning(f"Resend HTTPS failed: {e_resend}. Falling back to standard SMTP...")
+
         # Strategy 1: IPv4 STARTTLS on port 587
         try:
             server = IPv4SMTP(creds["host"], creds["port"], timeout=12)
@@ -117,11 +149,16 @@ class EmailService:
             last_err = e_ssl
             logger.error(f"[EMAIL ERROR] Both SMTP strategies failed: {e_ssl}")
 
+        err_str = str(last_err)
+        friendly_msg = f"SMTP delivery failed: {err_str}"
+        if "101" in err_str or "unreachable" in err_str.lower():
+            friendly_msg = "Cloud container firewall restriction: Render free tier blocks outbound SMTP ports 465/587 to prevent spam. Unblocked in paid/local environments, or add RESEND_API_KEY for instant HTTPS delivery."
+
         return {
             "sent": False,
             "mode": "SMTP_ERROR",
-            "error": str(last_err),
-            "message": f"SMTP delivery failed: {str(last_err)}"
+            "error": err_str,
+            "message": friendly_msg
         }
 
     @classmethod
