@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
@@ -6,7 +6,8 @@ import Script from "next/script";
 import Link from "next/link";
 import { 
   Send, Loader2, Bot, User as UserIcon, Sparkles, LogIn, ArrowRight, 
-  ShieldCheck, CheckCircle2, ShoppingCart, Zap, Check, ChevronDown, ChevronUp, Store, ExternalLink
+  ShieldCheck, CheckCircle2, ShoppingCart, Zap, Check, ChevronDown, ChevronUp, Store, ExternalLink,
+  Mic, MicOff, Volume2, VolumeX, Radio
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
@@ -24,6 +25,10 @@ function ChatContent() {
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [expandedReasoning, setExpandedReasoning] = useState<{ [key: number]: boolean }>({});
   const [merchantInfo, setMerchantInfo] = useState<any>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
   const { user, token, refreshCartCount } = useAuth();
   
   const suggestedPrompts = [
@@ -49,6 +54,78 @@ function ChatContent() {
     };
     fetchMerchantData();
   }, [merchantParam]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+      setSpeechSupported(true);
+    }
+  }, []);
+
+  const startVoiceInput = () => {
+    if (typeof window === "undefined") return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported on this browser. Please use Chrome, Edge, or Safari.");
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = "en-IN";
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((result: any) => result[0].transcript)
+          .join("");
+        setInput(transcript);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn("Speech recognition error:", event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.warn("Failed to initialize voice recognition:", err);
+      setIsListening(false);
+    }
+  };
+
+  const speakText = (text: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const clean = text.replace(/[*_#`~\[\]]/g, "").slice(0, 250);
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn("TTS error:", e);
+      setIsSpeaking(false);
+    }
+  };
+
+  const stopSpeaking = () => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  };
 
   const toggleReasoning = (idx: number) => {
     setExpandedReasoning(prev => ({ ...prev, [idx]: !prev[idx] }));
@@ -227,18 +304,21 @@ function ChatContent() {
         ? `I analyzed your intent for ${data.intent.category}${data.intent?.max_price ? ` under ₹${data.intent.max_price.toLocaleString()}` : ""}. Here are the best matched options:`
         : "Here are the most relevant items I found for your request:");
 
-      setMessages(prev => [
-        ...prev, 
-        { 
-          role: "assistant", 
-          text: responseText, 
-          results: data.results || [],
-          intent: data.intent,
-          upsell: data.upsell,
-          cross_sell: data.cross_sell,
-          reasoning: data.reasoning
-        }
-      ]);
+      const newMsg = { 
+        role: "assistant", 
+        text: responseText, 
+        results: data.results || [],
+        intent: data.intent,
+        upsell: data.upsell,
+        cross_sell: data.cross_sell,
+        reasoning: data.reasoning
+      };
+
+      setMessages(prev => [...prev, newMsg]);
+
+      if (voiceEnabled) {
+        speakText(responseText);
+      }
     } catch (err) {
       setMessages(prev => [...prev, { role: "assistant", text: "Sorry, I encountered an error processing your request. Please ensure the backend is active.", isError: true }]);
     } finally {
@@ -254,7 +334,7 @@ function ChatContent() {
         onLoad={() => setScriptLoaded(true)}
       />
 
-      {/* Header with Multi-Tenant Merchant Branding */}
+      {/* Header with Multi-Tenant Merchant Branding & Voice Controls */}
       <div className="p-4 px-6 border-b border-slate-100 bg-slate-50/80 backdrop-blur-sm flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-blue-600 rounded-2xl flex items-center justify-center text-white shadow-sm shadow-indigo-500/20">
@@ -280,20 +360,40 @@ function ChatContent() {
           </div>
         </div>
 
-        {!user ? (
-          <Link 
-            href="/login"
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200/50"
+        <div className="flex items-center gap-2.5">
+          {/* Voice Output Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              if (isSpeaking) stopSpeaking();
+              setVoiceEnabled(!voiceEnabled);
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              voiceEnabled 
+                ? "bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-300" 
+                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+            }`}
+            title={voiceEnabled ? "Voice Output Active (Click to mute)" : "Enable Voice Output"}
           >
-            <LogIn className="w-3.5 h-3.5" />
-            <span>Sign in for 1-Click Buy</span>
-          </Link>
-        ) : (
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-bold text-slate-800">{user.email}</p>
-            <p className="text-[10px] text-emerald-600 font-bold">● Connected Customer</p>
-          </div>
-        )}
+            {voiceEnabled ? <Volume2 className="w-3.5 h-3.5 text-white" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
+            <span className="hidden sm:inline">{voiceEnabled ? "Voice ON" : "Voice OFF"}</span>
+          </button>
+
+          {!user ? (
+            <Link 
+              href="/login"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200/50"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </Link>
+          ) : (
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-bold text-slate-800">{user.email}</p>
+              <p className="text-[10px] text-emerald-600 font-bold">● Connected Customer</p>
+            </div>
+          )}
+        </div>
       </div>
       
       {/* Chat Messages Area */}
@@ -551,27 +651,62 @@ function ChatContent() {
         )}
       </div>
       
+      {/* Floating Speaking Indicator */}
+      {isSpeaking && (
+        <div className="mx-6 mb-2 p-3 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl shadow-lg flex items-center justify-between border border-indigo-500/40 animate-pulse">
+          <div className="flex items-center gap-2.5">
+            <Radio className="w-4 h-4 text-indigo-400 animate-spin" />
+            <span className="text-xs font-bold text-slate-100">Voice AI Speaking Response...</span>
+          </div>
+          <button 
+            onClick={stopSpeaking} 
+            className="text-[11px] bg-white/10 hover:bg-white/20 px-3 py-1 rounded-xl text-slate-200 hover:text-white font-bold transition-colors"
+          >
+            Mute Voice
+          </button>
+        </div>
+      )}
+
       {/* Input Form */}
       <div className="p-4 bg-white border-t border-slate-100">
         <form 
           onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
-          className="flex gap-2 relative"
+          className="flex gap-2 relative items-center"
         >
-          <input 
-            type="text" 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type what you need (e.g. 'Show me accessories for my laptop setup' or 'Gaming laptop under ₹150,000')..."
-            className="flex-grow bg-slate-50 border border-slate-200 rounded-2xl py-3.5 pl-4 pr-12 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all placeholder:text-slate-400"
-            disabled={loading}
-          />
-          <button 
-            type="submit"
-            disabled={loading || !input.trim()}
-            className="absolute right-2 top-2 bottom-2 aspect-square bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center transition-colors disabled:opacity-50 disabled:hover:bg-indigo-600 shadow-sm"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>
+          {speechSupported && (
+            <button
+              type="button"
+              onClick={isListening ? () => setIsListening(false) : startVoiceInput}
+              className={`p-3 rounded-2xl transition-all flex items-center justify-center shrink-0 ${
+                isListening 
+                  ? "bg-rose-600 text-white animate-pulse shadow-lg shadow-rose-500/40 ring-4 ring-rose-200" 
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-indigo-600"
+              }`}
+              title={isListening ? "Listening... Speak now" : "Speak to Shopping Concierge"}
+            >
+              {isListening ? <Mic className="w-5 h-5 animate-bounce text-white" /> : <Mic className="w-5 h-5" />}
+            </button>
+          )}
+
+          <div className="relative flex-grow">
+            <input 
+              type="text" 
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={isListening ? "Listening to your voice..." : "Ask in plain language (or click mic to speak)..."}
+              className={`w-full bg-slate-50 border rounded-2xl py-3.5 pl-4 pr-12 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all placeholder:text-slate-400 ${
+                isListening ? "border-rose-400 bg-rose-50/20" : "border-slate-200"
+              }`}
+              disabled={loading}
+            />
+            <button 
+              type="submit"
+              disabled={loading || !input.trim()}
+              className="absolute right-2 top-2 bottom-2 aspect-square bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center transition-colors disabled:opacity-50 disabled:hover:bg-indigo-600 shadow-sm"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </button>
+          </div>
         </form>
       </div>
 

@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { 
   TrendingUp, ShoppingBag, BrainCircuit, ShieldAlert, Bot, Sparkles, Send, 
   Lock, LogIn, Sliders, CheckCircle2, Loader2, Share2, Copy, ExternalLink, Code, 
-  MessageSquare, Terminal, RefreshCw, Download, Filter
+  MessageSquare, Terminal, RefreshCw, Download, Filter, PlusCircle, Store, X, ChevronDown
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useAuth } from "@/context/AuthContext";
@@ -28,9 +28,22 @@ export default function MerchantDashboard() {
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
+  
+  // Multi-Store States
+  const [stores, setStores] = useState<any[]>([]);
+  const [selectedStore, setSelectedStore] = useState<any>(null);
+  const [showNewStoreModal, setShowNewStoreModal] = useState(false);
+  const [newStoreName, setNewStoreName] = useState("");
+  const [newStoreDiscount, setNewStoreDiscount] = useState(20);
+  const [newStorePreset, setNewStorePreset] = useState("all");
+  const [newStoreGreeting, setNewStoreGreeting] = useState("");
+  const [creatingStore, setCreatingStore] = useState(false);
+  const [createdStoreResult, setCreatedStoreResult] = useState<any>(null);
+  const [showStoreDropdown, setShowStoreDropdown] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const merchantId = user?.uid || "demo_merchant";
+  const merchantId = selectedStore?.id || user?.uid || "demo_merchant";
+  const currentStoreName = selectedStore?.name || "Razorpay Demo Store";
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://razorpay-buildthon.vercel.app";
   const agentShareUrl = `${baseUrl}/chat?merchant=${merchantId}`;
   const embedSnippet = `<iframe src="${agentShareUrl}" width="100%" height="700" frameborder="0" style="border-radius: 24px; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);"></iframe>`;
@@ -66,7 +79,8 @@ export default function MerchantDashboard() {
       const [metricsRes, activityRes, policyRes] = await Promise.all([
         fetch(`${apiUrl}/api/merchant/dashboard`, { headers }),
         fetch(`${apiUrl}/api/merchant/ai-activity`, { headers }),
-        fetch(`${apiUrl}/api/merchant/policies`, { headers })
+        fetch(`${apiUrl}/api/merchant/policies`, { headers }),
+        fetch(`${apiUrl}/api/merchant/stores`)
       ]);
 
       if (metricsRes.ok) setMetrics(await metricsRes.json());
@@ -76,10 +90,47 @@ export default function MerchantDashboard() {
         setPolicy(pol);
         setMaxDiscountInput(Number(pol.max_discount_percent) || 20);
       }
+      const storesRes = await fetch(`${apiUrl}/api/merchant/stores`);
+      if (storesRes.ok) {
+        const storeData = await storesRes.json();
+        setStores(storeData);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStoreName.trim()) return;
+    setCreatingStore(true);
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/merchant/onboard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          store_name: newStoreName,
+          max_discount_percent: newStoreDiscount,
+          catalog_preset: newStorePreset,
+          welcome_message: newStoreGreeting || undefined
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCreatedStoreResult(data);
+        const sRes = await fetch(`${apiUrl}/api/merchant/stores`);
+        if (sRes.ok) setStores(await sRes.json());
+      } else {
+        alert("Failed to create store. Please try again.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Connection error when creating store.");
+    } finally {
+      setCreatingStore(false);
     }
   };
 
@@ -200,14 +251,83 @@ export default function MerchantDashboard() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Title & Tenant Status */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Merchant Control Center</h1>
-          <p className="text-slate-500 text-sm">Tenant: <strong className="text-slate-800">Razorpay Demo Store</strong> • Logged in as {user.email}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-slate-500 text-sm">Storefront:</span>
+            
+            {/* Store Dropdown Switcher */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowStoreDropdown(!showStoreDropdown)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition-colors"
+              >
+                <Store className="w-3.5 h-3.5" />
+                <span>{currentStoreName}</span>
+                <ChevronDown className="w-3 h-3 ml-0.5" />
+              </button>
+
+              {showStoreDropdown && (
+                <div className="absolute left-0 top-full mt-1.5 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50">
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Your Active Stores
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedStore(null);
+                      setShowStoreDropdown(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between hover:bg-slate-50 ${
+                      !selectedStore ? "text-indigo-600 bg-indigo-50/50" : "text-slate-700"
+                    }`}
+                  >
+                    <span>Razorpay Demo Store</span>
+                    {!selectedStore && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />}
+                  </button>
+                  {stores.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedStore(s);
+                        setShowStoreDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between hover:bg-slate-50 ${
+                        selectedStore?.id === s.id ? "text-indigo-600 bg-indigo-50/50" : "text-slate-700"
+                      }`}
+                    >
+                      <span className="truncate">{s.name}</span>
+                      {selectedStore?.id === s.id && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <span className="text-slate-400 text-xs hidden sm:inline">• {user.email}</span>
+          </div>
         </div>
-        <div className="bg-white border border-slate-200 px-4 py-2 rounded-2xl text-xs text-slate-700 font-semibold flex items-center gap-2 shadow-xs">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)] animate-pulse"></span>
-          <span>Policy Engine & AI Orchestrator Online</span>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setCreatedStoreResult(null);
+              setShowNewStoreModal(true);
+            }}
+            className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center gap-2"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Launch New Store</span>
+          </button>
+
+          <div className="bg-white border border-slate-200 px-4 py-2 rounded-2xl text-xs text-slate-700 font-semibold flex items-center gap-2 shadow-xs hidden sm:flex">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)] animate-pulse"></span>
+            <span>Policy Engine Online</span>
+          </div>
         </div>
       </div>
 
@@ -654,6 +774,147 @@ export default function MerchantDashboard() {
         </div>
 
       </div>
+
+      {/* Launch New Store Modal Dialog */}
+      {showNewStoreModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-8 relative overflow-hidden">
+            <button
+              onClick={() => setShowNewStoreModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1 rounded-xl hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {!createdStoreResult ? (
+              <form onSubmit={handleCreateStore} className="space-y-4">
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-extrabold uppercase tracking-wide border border-indigo-100">
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <span>Instant Tenant Provisioning</span>
+                  </div>
+                  <h3 className="text-xl font-extrabold text-slate-900">Launch Autonomous Storefront</h3>
+                  <p className="text-xs text-slate-500">Deploy a dedicated AI agent, policy boundaries, and catalog in seconds.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Storefront Brand Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Apex Esports Lab or SoundCraft Audio"
+                    value={newStoreName}
+                    onChange={(e) => setNewStoreName(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Max AI Discount (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={newStoreDiscount}
+                      onChange={(e) => setNewStoreDiscount(Number(e.target.value))}
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Catalog Preset
+                    </label>
+                    <select
+                      value={newStorePreset}
+                      onChange={(e) => setNewStorePreset(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    >
+                      <option value="all">Full Catalog (6 Items)</option>
+                      <option value="laptops">Laptops Only (2 Items)</option>
+                      <option value="audio">Audio Only (2 Items)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Custom AI Agent Greeting (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Welcome! I can help customize high-end audio setups."
+                    value={newStoreGreeting}
+                    onChange={(e) => setNewStoreGreeting(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewStoreModal(false)}
+                    className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creatingStore}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {creatingStore ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    <span>{creatingStore ? "Deploying..." : "Launch Store & AI Agent"}</span>
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4 text-center py-2">
+                <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl mx-auto flex items-center justify-center">
+                  <CheckCircle2 className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-extrabold text-slate-900">Store & AI Agent Live!</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    <strong>{createdStoreResult.store_name}</strong> is now live with {createdStoreResult.product_count} items and a {createdStoreResult.max_discount_percent}% discount guardrail.
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-left">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Your Shareable AI Agent Link</p>
+                  <p className="text-xs font-mono text-indigo-700 break-all">{createdStoreResult.shareable_chat_url}</p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdStoreResult.shareable_chat_url);
+                      alert("Copied store agent URL to clipboard!");
+                    }}
+                    className="w-full sm:flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+                  >
+                    Copy Agent Link
+                  </button>
+                  <a
+                    href={createdStoreResult.shareable_chat_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Open Live Store</span>
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );
