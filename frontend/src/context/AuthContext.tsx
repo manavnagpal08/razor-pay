@@ -172,26 +172,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginWithGoogle = async (userRole: "customer" | "merchant" = "customer") => {
-    let googleEmail = "";
-    let googleName = "Google User";
-
-    try {
-      const { signInWithPopup } = await import("firebase/auth");
-      const { auth, googleProvider } = await import("@/lib/firebase");
-      const result = await signInWithPopup(auth, googleProvider);
-      if (result.user.email) {
-        googleEmail = result.user.email;
-        googleName = result.user.displayName || googleEmail.split("@")[0];
-      }
-    } catch (firebaseErr) {
-      console.warn("Firebase popup skipped/unconfigured, using 1-click Google OAuth fallback:", firebaseErr);
-      const emailInput = window.prompt("1-Click Google Sign-In: Enter your Google email:", "merchant@gmail.com");
-      if (!emailInput) return;
-      googleEmail = emailInput.trim();
-      googleName = googleEmail.split("@")[0];
+    const { signInWithPopup } = await import("firebase/auth");
+    const { auth, googleProvider } = await import("@/lib/firebase");
+    
+    const result = await signInWithPopup(auth, googleProvider);
+    const googleUser = result.user;
+    if (!googleUser || !googleUser.email) {
+      throw new Error("No Google email received from Firebase authentication.");
     }
 
-    if (!googleEmail) return;
+    const googleEmail = googleUser.email;
+    const googleName = googleUser.displayName || googleEmail.split("@")[0];
 
     const apiUrl = getApiUrl();
     const res = await fetch(`${apiUrl}/api/auth/google`, {
@@ -205,7 +196,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (!res.ok) {
-      throw new Error("Failed to authenticate with Google");
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to authenticate with Google");
     }
 
     const data = await res.json();
