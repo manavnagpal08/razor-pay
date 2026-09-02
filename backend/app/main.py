@@ -9,10 +9,15 @@ from app.api import products, ai, cart, orders, merchant, auth
 
 app = FastAPI(title="Razorpay AI Commerce OS API")
 
-# Configure CORS
+# Configure CORS to explicitly allow Vercel and local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://razorpay-buildthon.vercel.app",
+    ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

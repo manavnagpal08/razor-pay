@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 
@@ -45,9 +45,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [cartCount, setCartCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
 
+  const getApiUrl = () => {
+    return (process.env.NEXT_PUBLIC_API_URL || "https://razorpay-commerce-backend.onrender.com").replace(/\/$/, "");
+  };
+
   const fetchCartCount = async (jwtToken: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/cart/`, {
         method: "POST",
         headers: {
@@ -75,7 +79,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (savedToken && savedEmail) {
         setToken(savedToken);
         setRole(savedRole || "customer");
-        setUser({ email: savedEmail, displayName: savedName || savedEmail.split("@")[0] });
+        setUser({ 
+          uid: savedToken,
+          email: savedEmail, 
+          displayName: savedName || savedEmail.split("@")[0] 
+        });
         fetchCartCount(savedToken);
       }
     }
@@ -83,12 +91,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, pass: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    const res = await fetch(`${apiUrl}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: pass })
-    });
+    const apiUrl = getApiUrl();
+    let res: Response;
+    try {
+      res = await fetch(`${apiUrl}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: pass })
+      });
+    } catch (netErr: any) {
+      throw new Error("Server is waking up from sleep mode. Please wait 15 seconds and try again.");
+    }
 
     const data = await res.json();
     if (!res.ok) {
@@ -101,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setToken(jwtToken);
     setRole(userRole);
-    setUser({ email, displayName: userName });
+    setUser({ uid: jwtToken, email, displayName: userName });
 
     if (typeof window !== "undefined") {
       localStorage.setItem("token", jwtToken);
@@ -114,17 +127,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const register = async (email: string, pass: string, userRole: string, name: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    const res = await fetch(`${apiUrl}/api/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email,
-        password: pass,
-        role: userRole,
-        name: name || email.split("@")[0]
-      })
-    });
+    const apiUrl = getApiUrl();
+    let res: Response;
+    try {
+      res = await fetch(`${apiUrl}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password: pass,
+          role: userRole,
+          name: name || email.split("@")[0]
+        })
+      });
+    } catch (netErr: any) {
+      throw new Error("Server is waking up from sleep mode. Please wait 15 seconds and try again.");
+    }
 
     const data = await res.json();
     if (!res.ok) {
@@ -137,7 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setToken(jwtToken);
     setRole(assignedRole);
-    setUser({ email, displayName: assignedName });
+    setUser({ uid: jwtToken, email, displayName: assignedName });
 
     if (typeof window !== "undefined") {
       localStorage.setItem("token", jwtToken);
