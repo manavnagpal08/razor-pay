@@ -1,29 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+﻿from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List
 import logging
 from app.database import get_db
 from app import models, schemas
+from app.core.config import settings
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 logger = logging.getLogger(__name__)
-
-# Cache the embeddings client
-embeddings_client = None
-def get_embeddings_client():
-    from app.main import settings
-    global embeddings_client
-    if embeddings_client is None and settings.gemini_api_key:
-        try:
-            from langchain_google_genai import GoogleGenerativeAIEmbeddings
-            embeddings_client = GoogleGenerativeAIEmbeddings(
-                model="models/text-embedding-004",
-                google_api_key=settings.gemini_api_key
-            )
-        except ImportError:
-            logger.error("langchain-google-genai is not installed.")
-    return embeddings_client
-
 
 @router.get("/", response_model=List[schemas.ProductResponse])
 def get_products(db: Session = Depends(get_db)):
@@ -38,36 +23,61 @@ def get_product(product_id: str, db: Session = Depends(get_db)):
 
 @router.post("/search", response_model=List[schemas.ProductResponse])
 def search_products(request: schemas.ProductSearchRequest, db: Session = Depends(get_db)):
-    query = db.query(models.Product)
-    
-    if request.category:
-        query = query.filter(models.Product.category == request.category)
-    if request.min_price is not None:
-        query = query.filter(models.Product.price >= request.min_price)
-    if request.max_price is not None:
-        query = query.filter(models.Product.price <= request.max_price)
+    """
+    Multi-tier resilient search:
+    1. Exact category + price filters
+    2. Tokenized multi-word search across name, description, features, use_cases
+    3. Category fallback if specific keywords yielded 0 results
+    4. Storewide top items fallback to avoid dead ends
+    """
+    base_query = db.query(models.Product)
     if request.in_stock:
-        query = query.filter(models.Product.inventory > 0)
+        base_query = base_query.filter(models.Product.inventory > 0)
+    if request.min_price is not None:
+        base_query = base_query.filter(models.Product.price >= request.min_price)
+    if request.max_price is not None:
+        base_query = base_query.filter(models.Product.price <= request.max_price)
+
+    # 1. If both category and query provided
+    if request.category:
+        cat_query = base_query.filter(models.Product.category.ilike(f"%{request.category}%"))
         
-    if request.query:
-        emb_client = get_embeddings_client()
-        # If we have the Gemini client, run semantic search
-        if emb_client:
-            try:
-                query_vector = emb_client.embed_query(request.query)
-                # Order by pgvector's cosine distance `<=>` operator
-                query = query.order_by(models.Product.embedding.cosine_distance(query_vector))
-            except Exception as e:
-                logger.error(f"Semantic search failed: {e}. Falling back to ILIKE.")
-                search_term = f"%{request.query}%"
-                query = query.filter(models.Product.name.ilike(search_term) | models.Product.description.ilike(search_term))
-        else:
-            # Fallback to standard ILIKE if no AI available
-            search_term = f"%{request.query}%"
-            query = query.filter(models.Product.name.ilike(search_term) | models.Product.description.ilike(search_term))
-            
-    # Limit semantic search to top 10 results
-    if request.query:
-        query = query.limit(10)
+        if request.query:
+            tokens = [t.strip().lower() for t in request.query.split() if len(t.strip()) > 2]
+            # Try filtering by tokens within category
+            if tokens:
+                token_filters = [
+                    or_(
+                        models.Product.name.ilike(f"%{t}%"),
+                        models.Product.description.ilike(f"%{t}%")
+                    )
+                    for t in tokens
+                ]
+                token_matches = cat_query.filter(or_(*token_filters)).all()
+                if token_matches:
+                    return token_matches[:10]
         
-    return query.all()
+        # Fallback to category products if specific search yielded no direct matches
+        cat_matches = cat_query.all()
+        if cat_matches:
+            return cat_matches[:10]
+
+    # 2. If only query without category
+    if request.query:
+        tokens = [t.strip().lower() for t in request.query.split() if len(t.strip()) > 2]
+        if tokens:
+            token_filters = [
+                or_(
+                    models.Product.name.ilike(f"%{t}%"),
+                    models.Product.description.ilike(f"%{t}%"),
+                    models.Product.category.ilike(f"%{t}%")
+                )
+                for t in tokens
+            ]
+            matches = base_query.filter(or_(*token_filters)).all()
+            if matches:
+                return matches[:10]
+
+    # 3. Default fallback: return all available products in price range
+    all_prods = base_query.limit(10).all()
+    return all_prods
