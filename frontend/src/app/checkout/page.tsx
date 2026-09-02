@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
-import { ShieldCheck, Lock, ArrowLeft, Loader2, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Lock, ArrowLeft, Loader2, CheckCircle2, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
@@ -173,6 +173,19 @@ export default function CheckoutPage() {
         <p className="text-slate-500 text-sm mb-6">Please log in to proceed with secure payment verification.</p>
         <Link href="/login" className="inline-block w-full py-3.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/20">
           Sign In
+        </Link>
+      </div>
+    );
+  }
+
+  if (!cart || !cart.items || cart.items.length === 0) {
+    return (
+      <div className="max-w-md mx-auto my-16 text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+        <ShoppingCart className="w-8 h-8 text-blue-600 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-slate-900 mb-2">Your Cart is Empty</h2>
+        <p className="text-slate-500 text-sm mb-6">Add products from our catalog before proceeding to checkout.</p>
+        <Link href="/shop" className="inline-block w-full py-3.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/20">
+          Explore Products
         </Link>
       </div>
     );

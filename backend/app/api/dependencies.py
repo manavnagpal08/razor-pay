@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import logging
 import jwt
+import uuid
 
 from app.database import get_db
 from app.models import User, Customer, Merchant
