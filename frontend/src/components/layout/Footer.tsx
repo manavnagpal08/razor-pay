@@ -1,9 +1,14 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ShieldCheck, Truck, RotateCcw, Headphones, Heart } from "lucide-react";
 
 export function Footer() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const isEmbed = searchParams.get("embed") === "true";
+  if (isEmbed || pathname === "/chat") return null;
   return (
     <footer className="w-full border-t border-slate-200/80 bg-white text-slate-600 mt-20">
       {/* Top Value Propositions */}

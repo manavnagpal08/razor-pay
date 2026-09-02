@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   description: "Autonomous Conversational Commerce with Deterministic Financial Safety powered by LangGraph, Gemini & PostgreSQL pgvector",
 };
 
+import { Suspense } from "react";
+import { AppShell } from "@/components/layout/AppShell";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -19,13 +22,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.className} min-h-screen bg-slate-50 text-slate-900 antialiased flex flex-col justify-between`}>
+      <body className={`${inter.className} min-h-screen bg-slate-50 text-slate-900 antialiased`}>
         <AuthProvider>
-          <Navbar />
-          <main className="container mx-auto px-4 py-6 flex-1">
-            {children}
-          </main>
-          <Footer />
+          <Suspense fallback={null}>
+            <AppShell>{children}</AppShell>
+          </Suspense>
         </AuthProvider>
       </body>
     </html>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { 
   ShoppingCart, 
@@ -16,7 +16,11 @@ import {
 
 export function Navbar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const isEmbed = searchParams.get("embed") === "true";
   const { user, role, cartCount, logout, loading } = useAuth();
+
+  if (isEmbed || pathname === "/chat") return null;
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur-md shadow-xs">

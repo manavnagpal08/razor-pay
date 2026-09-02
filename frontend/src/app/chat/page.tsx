@@ -15,6 +15,7 @@ import { getApiUrl } from "@/utils/api";
 function ChatContent() {
   const searchParams = useSearchParams();
   const merchantParam = searchParams.get("merchant") || "demo_merchant";
+  const isEmbed = searchParams.get("embed") === "true";
 
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
@@ -500,217 +501,167 @@ function ChatContent() {
     }
   };
 
+
+
   return (
-    <div className="max-w-6xl mx-auto flex flex-col h-[calc(100vh-130px)] bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className={
+      isEmbed 
+        ? "w-full h-screen bg-slate-50 text-slate-900 flex flex-col justify-between overflow-hidden font-sans" 
+        : "max-w-xl mx-auto flex flex-col h-[calc(100vh-30px)] my-auto bg-white text-slate-900 rounded-3xl border border-slate-200/90 shadow-2xl overflow-hidden font-sans"
+    }>
       <Script 
         src="https://checkout.razorpay.com/v1/checkout.js" 
         strategy="lazyOnload"
         onLoad={() => setScriptLoaded(true)}
       />
 
-      {/* Header with Multi-Tenant Merchant Branding & Voice Controls */}
-      <div className="p-4 px-6 border-b border-slate-100 bg-slate-50/80 backdrop-blur-sm flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-blue-600 rounded-2xl flex items-center justify-center text-white shadow-sm shadow-indigo-500/20">
-            <Bot className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-bold text-slate-900 text-base">
-                {merchantInfo?.name || "OmniCommerce"} AI Shopping Concierge
-              </h2>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Verified Merchant Store
-              </span>
+      {/* Clean Light Header */}
+      <div className="p-3 px-4 bg-white/95 border-b border-slate-100 backdrop-blur-md flex items-center justify-between shrink-0 z-20 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          {/* Avatar with Online Status */}
+          <div className="relative">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 shadow-sm shadow-blue-500/20 flex items-center justify-center">
+              <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-blue-600 font-bold">
+                <Bot className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xs text-slate-500 flex items-center gap-1.5">
-              <span>{merchantInfo?.product_count || 6} Catalog Items</span>
-              <span>•</span>
-              <span className="text-indigo-600 font-semibold">Razorpay Test Mode Active</span>
-              <span>•</span>
-              <span>Autonomous In-Chat Checkout</span>
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white animate-pulse"></span>
+          </div>
+
+          <div>
+            <h3 className="font-extrabold text-slate-900 text-sm tracking-tight line-clamp-1">
+              {merchantInfo?.name || "OmniCommerce"}
+            </h3>
+            <p className="text-[11px] font-bold text-blue-600 flex items-center gap-1">
+              <span>AI Shopping Concierge</span>
+              <span className="text-emerald-500 font-normal">• Online</span>
             </p>
           </div>
         </div>
 
-        {/* Switch between AI Concierge and Store Product Catalog */}
-        <div className="flex items-center bg-white p-1 rounded-2xl border border-slate-200 shadow-xs hidden md:flex">
-          <button
-            type="button"
-            onClick={() => setViewMode("chat")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              viewMode === "chat" 
-                ? "bg-indigo-600 text-white shadow-xs" 
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Bot className="w-3.5 h-3.5" />
-            <span>AI Concierge</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setViewMode("catalog");
-              if (catalogProducts.length === 0) fetchStoreCatalog();
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              viewMode === "catalog" 
-                ? "bg-indigo-600 text-white shadow-xs" 
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Store className="w-3.5 h-3.5" />
-            <span>Browse Catalog ({catalogProducts.length || merchantInfo?.product_count || 0})</span>
-          </button>
-        </div>
+        {/* View Switcher & Actions */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
+            <button
+              type="button"
+              onClick={() => setViewMode("chat")}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === "chat" 
+                  ? "bg-white text-blue-600 shadow-xs" 
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span>Chat</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("catalog");
+                if (catalogProducts.length === 0) fetchStoreCatalog();
+              }}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === "catalog" 
+                  ? "bg-white text-blue-600 shadow-xs" 
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span>Catalog ({catalogProducts.length || merchantInfo?.product_count || 0})</span>
+            </button>
+          </div>
 
-        <div className="flex items-center gap-2.5">
-          {/* Voice Output Toggle */}
-          <button
-            type="button"
-            onClick={() => {
-              if (isSpeaking) stopSpeaking();
-              setVoiceEnabled(!voiceEnabled);
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              voiceEnabled 
-                ? "bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-300" 
-                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-            }`}
-            title={voiceEnabled ? "Voice Output Active (Click to mute)" : "Enable Voice Output"}
-          >
-            {voiceEnabled ? <Volume2 className="w-3.5 h-3.5 text-white" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
-            <span className="hidden sm:inline">{voiceEnabled ? "Voice ON" : "Voice OFF"}</span>
-          </button>
-
-          {/* Order Tracking Button */}
+          {/* Track Orders Button */}
           <button
             type="button"
             onClick={() => {
               setTrackingError("");
               setShowTrackingModal(true);
             }}
-            className="px-3 py-1.5 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
-            title="Track Order & Shipment Status"
+            className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all"
+            title="Track Orders"
           >
-            <Truck className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="hidden sm:inline">Track Order</span>
+            <Truck className="w-4 h-4 text-blue-600" />
           </button>
-
-          {!user ? (
-            <Link 
-              href="/login"
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200/50"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Sign In</span>
-            </Link>
-          ) : (
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-bold text-slate-800">{user.email}</p>
-              <p className="text-[10px] text-emerald-600 font-bold">● Connected Customer</p>
-            </div>
-          )}
         </div>
       </div>
-      
-            {viewMode === "catalog" ? (
-        <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-slate-50/40">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
-            <div>
-              <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-                <Store className="w-5 h-5 text-indigo-600" />
-                <span>{merchantInfo?.name || "Store"} Official Catalog</span>
-              </h3>
-              <p className="text-xs text-slate-500">
-                Browse available items. You can buy directly or ask the AI Concierge for recommendations.
-              </p>
-            </div>
 
+      {/* Main Content Area */}
+      {viewMode === "catalog" ? (
+        <div className="flex-grow overflow-y-auto p-4 space-y-4 bg-slate-50/60">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+            <div>
+              <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
+                <Store className="w-4 h-4 text-blue-600" />
+                <span>{merchantInfo?.name || "Store"} Catalog</span>
+              </h4>
+              <p className="text-[11px] text-slate-500">Directly browse items or buy instantly</p>
+            </div>
             <button
               onClick={() => setViewMode("chat")}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
             >
-              <Bot className="w-4 h-4" />
-              <span>Ask AI Concierge</span>
+              <Bot className="w-3.5 h-3.5" />
+              <span>Back to Chat</span>
             </button>
           </div>
 
           {loadingCatalog ? (
             <div className="py-20 text-center">
-              <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-2" />
-              <p className="text-xs text-slate-500 font-semibold">Loading store catalog...</p>
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
+              <p className="text-xs text-slate-500">Loading catalog items...</p>
             </div>
           ) : catalogProducts.length === 0 ? (
-            <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-slate-300 p-8">
-              <div className="w-12 h-12 bg-slate-100 rounded-2xl mx-auto flex items-center justify-center text-slate-400 mb-3">
-                <Package className="w-6 h-6" />
-              </div>
-              <h4 className="font-bold text-slate-800 text-sm mb-1">No Products in Catalog Yet</h4>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4">
-                This store has not published any items yet. You can still ask the AI Concierge general shopping queries.
-              </p>
+            <div className="py-16 text-center bg-white rounded-3xl border border-dashed border-slate-200 p-6">
+              <Package className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+              <p className="text-xs text-slate-500 mb-3">No products available in this storefront yet.</p>
               <button
                 onClick={() => setViewMode("chat")}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold"
               >
-                Switch to AI Concierge
+                Ask AI Assistant Anything
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {catalogProducts.map((prod) => (
-                <div key={prod.id} className="bg-white rounded-3xl border border-slate-200 p-4 shadow-xs hover:shadow-md hover:border-indigo-300 transition-all flex flex-col justify-between group">
+                <div key={prod.id} className="bg-white border border-slate-200/90 rounded-2xl p-3 flex flex-col justify-between group hover:border-blue-400 transition-all shadow-xs">
                   <div>
-                    <div className="w-full h-44 bg-slate-100 rounded-2xl mb-3 overflow-hidden flex items-center justify-center relative">
+                    <div className="w-full h-32 bg-slate-100 rounded-xl mb-2.5 overflow-hidden flex items-center justify-center relative border border-slate-100">
                       {prod.image_url ? (
-                        <img src={prod.image_url} alt={prod.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <img src={prod.image_url} alt={prod.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                       ) : (
-                        <Package className="w-10 h-10 text-slate-300" />
+                        <Package className="w-8 h-8 text-slate-400" />
                       )}
-                      <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-slate-800 backdrop-blur-xs border border-slate-200 shadow-xs">
+                      <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-blue-700 border border-blue-100 shadow-xs">
                         {prod.category}
                       </span>
                     </div>
-
-                    <h4 className="font-extrabold text-slate-900 text-sm mb-1 group-hover:text-indigo-600 transition-colors line-clamp-1">{prod.title}</h4>
-                    <p className="text-[11px] text-slate-500 line-clamp-2 mb-3 leading-relaxed">{prod.description || "High-performance verified tech item."}</p>
+                    <h5 className="font-bold text-slate-900 text-xs mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors">{prod.title}</h5>
+                    <p className="text-[11px] text-slate-500 line-clamp-2 mb-2 leading-relaxed">{prod.description || "High-performance tech item."}</p>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Price</span>
-                        <p className="text-base font-black text-slate-900">₹{Number(prod.price).toLocaleString("en-IN")}</p>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        Number(prod.stock || prod.inventory || 1) > 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
-                      }`}>
-                        {Number(prod.stock || prod.inventory || 1) > 0 ? "In Stock" : "Out of Stock"}
-                      </span>
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-black text-slate-900">₹{Number(prod.price).toLocaleString("en-IN")}</p>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => {
                           setViewMode("chat");
                           handleSend(`Tell me more about the ${prod.title} and why I should buy it.`);
                         }}
-                        className="py-2 px-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200 flex items-center justify-center gap-1"
-                        title="Ask AI Assistant about this product"
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors"
                       >
-                        <Bot className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Ask AI</span>
+                        Ask AI
                       </button>
-
                       <button
                         onClick={() => handleInstantBuy(prod)}
                         disabled={instantBuyingId === prod.id}
-                        className="py-2 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shadow-indigo-600/20 flex items-center justify-center gap-1 disabled:opacity-50"
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold transition-all shadow-xs flex items-center gap-1"
                       >
-                        {instantBuyingId === prod.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />}
-                        <span>Buy Now</span>
+                        {instantBuyingId === prod.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-white" />}
+                        <span>Buy</span>
                       </button>
                     </div>
                   </div>
@@ -720,327 +671,196 @@ function ChatContent() {
           )}
         </div>
       ) : (
-        <>
-{/* Chat Messages Area */}
-      <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-slate-50/40">
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-6 py-8">
-            <div className="w-16 h-16 bg-indigo-50 border border-indigo-100 rounded-3xl flex items-center justify-center text-indigo-600 shadow-sm">
-              <Sparkles className="w-8 h-8" />
-            </div>
-            <div>
-              <h3 className="text-2xl font-extrabold text-slate-900 mb-2">
-                {merchantInfo ? `Welcome to ${merchantInfo.name}!` : "How can I help you shop today?"}
-              </h3>
-              <p className="text-slate-500 max-w-md mx-auto text-sm leading-relaxed">
-                Describe the hardware specs, budget, or use case in plain language. The AI will curate, rank, and execute direct Razorpay checkout inside this chat.
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl mt-4">
-              {suggestedPrompts.map((prompt, i) => (
-                <button 
-                  key={i} 
-                  onClick={() => handleSend(prompt)}
-                  className="p-4 text-xs font-semibold text-left bg-white border border-slate-200 rounded-2xl hover:border-indigo-400 hover:shadow-md transition-all text-slate-700 hover:text-indigo-600 group flex items-center justify-between"
-                >
-                  <span>"{prompt}"</span>
-                  <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-600 shrink-0 ml-2" />
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          messages.map((msg, idx) => (
-            <div key={idx} className={`flex gap-3.5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-              <div className={`w-8 h-8 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-xs ${
-                msg.role === 'user' ? 'bg-slate-900 text-white' : msg.isSuccess ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'
-              }`}>
-                {msg.role === 'user' ? <UserIcon className="w-4 h-4" /> : msg.isSuccess ? <Check className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+        /* Focused Light Chat Stream */
+        <div className="flex-grow overflow-y-auto p-4 space-y-3.5 bg-slate-50/50">
+          {messages.length === 0 ? (
+            /* Clean Light Welcome State */
+            <div className="space-y-3.5 py-4">
+              <div className="bg-white border border-slate-200/90 rounded-3xl p-5 text-center shadow-sm space-y-3">
+                <div className="w-11 h-11 bg-blue-50 text-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-xs">
+                  <Sparkles className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-slate-900 text-base mb-1">
+                    Hi! How can I help you today? 👋
+                  </h4>
+                  <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
+                    I'm the official AI concierge for <strong>{merchantInfo?.name || "this store"}</strong>. Ask about products, compare specs, find offers, or checkout with Razorpay.
+                  </p>
+                </div>
               </div>
-              
-              <div className={`max-w-[92%] ${msg.role === 'user' ? 'flex flex-col items-end' : 'flex flex-col items-start w-full'}`}>
-                
-                {/* Assistant Reasoning Capsule */}
-                {msg.role === 'assistant' && msg.reasoning && (
-                  <div className="mb-2.5 w-full">
-                    <button
-                      onClick={() => toggleReasoning(idx)}
-                      className="flex items-center gap-1.5 px-3 py-1 bg-slate-100/90 hover:bg-slate-200/80 rounded-lg text-[11px] font-semibold text-slate-600 transition-colors"
-                    >
-                      <Zap className="w-3 h-3 text-amber-500" />
-                      <span>AI Reasoning & Intent Inspector</span>
-                      {expandedReasoning[idx] ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
-                    </button>
-                    {expandedReasoning[idx] && (
-                      <div className="mt-2 p-3.5 bg-slate-900 text-slate-200 text-xs rounded-2xl space-y-1.5 font-mono shadow-md border border-slate-800">
-                        <p className="text-emerald-400">✓ Category: {msg.reasoning.intent_extracted?.category} | Budget: {msg.reasoning.intent_extracted?.budget}</p>
-                        <p className="text-blue-400">✓ Keywords: {msg.reasoning.intent_extracted?.keywords?.join(", ") || "General search"}</p>
-                        <p className="text-purple-400">✓ Policy Engine: {msg.reasoning.policy_verification}</p>
-                        <p className="text-amber-400">✓ Catalog Engine: {msg.reasoning.catalog_scanned}</p>
+
+              {/* Quick Suggestion Pills */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider pl-1">Suggested Inquiries</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleSend("What are the best deals and recommended products?")}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-blue-50 border border-slate-200 text-[11px] font-semibold text-slate-700 hover:text-blue-600 transition-all shadow-xs"
+                  >
+                    ⚡ Best deals & recommendations
+                  </button>
+                  <button
+                    onClick={() => handleSend("Show me high-performance laptops under ₹100,000")}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-blue-50 border border-slate-200 text-[11px] font-semibold text-slate-700 hover:text-blue-600 transition-all shadow-xs"
+                  >
+                    💻 Laptops under ₹100,000
+                  </button>
+                  <button
+                    onClick={() => handleSend("Are there any active discounts or coupons available?")}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-blue-50 border border-slate-200 text-[11px] font-semibold text-slate-700 hover:text-blue-600 transition-all shadow-xs"
+                  >
+                    💰 Any active discounts?
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTrackingError("");
+                      setShowTrackingModal(true);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-blue-50 border border-slate-200 text-[11px] font-semibold text-slate-700 hover:text-blue-600 transition-all shadow-xs flex items-center gap-1"
+                  >
+                    <Truck className="w-3 h-3 text-blue-600" />
+                    <span>Track my order</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Active Messages */
+            <div className="space-y-3.5">
+              <div className="flex justify-center">
+                <span className="text-[10px] bg-slate-200/70 text-slate-600 px-2.5 py-0.5 rounded-full font-medium">
+                  Today
+                </span>
+              </div>
+
+              {messages.map((msg, idx) => (
+                <div key={idx} className={`flex gap-2.5 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role !== "user" && (
+                    <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs font-bold text-xs mt-0.5">
+                      <Bot className="w-3.5 h-3.5" />
+                    </div>
+                  )}
+
+                  <div className={`max-w-[85%] ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                    {/* Reasoning Drawer */}
+                    {msg.role === "assistant" && msg.reasoning && (
+                      <div className="mb-1.5">
+                        <button
+                          onClick={() => toggleReasoning(idx)}
+                          className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-600 transition-colors"
+                        >
+                          <Zap className="w-3 h-3 text-amber-500" />
+                          <span>AI Reasoning</span>
+                          {expandedReasoning[idx] ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                        </button>
+                        {expandedReasoning[idx] && (
+                          <div className="mt-1 p-2.5 bg-slate-900 text-slate-200 text-[10px] rounded-xl font-mono border border-slate-800 space-y-0.5">
+                            <p className="text-emerald-400">✓ Category: {msg.reasoning.intent_extracted?.category || "general"}</p>
+                            <p className="text-blue-400">✓ Policy: {msg.reasoning.policy_verification || "Server boundary verified"}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Message Bubble */}
+                    <div className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-xs ${
+                      msg.role === "user"
+                        ? "bg-blue-600 text-white font-medium rounded-tr-xs"
+                        : "bg-white border border-slate-200/90 text-slate-800 rounded-tl-xs"
+                    }`}>
+                      <p className="whitespace-pre-wrap">{msg.text}</p>
+                      <span className={`text-[9px] block text-right mt-1 font-mono ${
+                        msg.role === "user" ? "text-blue-200" : "text-slate-400"
+                      }`}>
+                        {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    {/* Product Recommendations */}
+                    {msg.products && msg.products.length > 0 && (
+                      <div className="mt-2.5 grid grid-cols-1 gap-2 w-full">
+                        {msg.products.map((prod: any) => (
+                          <div key={prod.id} className="bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs hover:border-blue-400 transition-colors">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-11 h-11 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center">
+                                {prod.image_url ? (
+                                  <img src={prod.image_url} alt={prod.title} className="w-full h-full object-cover" />
+                                ) : (
+                                  <Package className="w-5 h-5 text-slate-400" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <h5 className="font-bold text-slate-900 text-xs truncate">{prod.title}</h5>
+                                <p className="text-xs font-black text-blue-600">₹{Number(prod.price).toLocaleString("en-IN")}</p>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => handleInstantBuy(prod)}
+                              disabled={instantBuyingId === prod.id}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1 shadow-xs"
+                            >
+                              {instantBuyingId === prod.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-white" />}
+                              <span>Buy Now</span>
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
-                )}
-
-                {/* Message Bubble */}
-                <div className={`p-4 rounded-3xl ${
-                  msg.role === 'user' 
-                    ? 'bg-slate-900 text-white rounded-tr-none text-sm' 
-                    : msg.isSuccess
-                      ? 'bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-tl-none text-sm font-semibold shadow-xs'
-                      : msg.isError 
-                        ? 'bg-red-50 text-red-700 border border-red-100 rounded-tl-none text-sm' 
-                        : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none shadow-xs text-sm'
-                }`}>
-                  <p className="leading-relaxed font-medium">{msg.text}</p>
                 </div>
-                
-                {/* Results View */}
-                {msg.results && msg.results.length > 0 && (
-                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
-                    {msg.results.map((r: any) => {
-                      const prod = r.product;
-                      const imageUrl = prod.metadata_?.image_url || prod.metadata?.image_url || prod.image_url;
-                      const isAdded = addedId === prod.id;
-                      const isAdding = addingId === prod.id;
-                      const isInstantBuying = instantBuyingId === prod.id;
-
-                      return (
-                        <div key={prod.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs hover:shadow-lg hover:border-indigo-400 transition-all duration-200 flex flex-col justify-between group">
-                          {/* Image & Badges */}
-                          <div className="relative aspect-[16/10] bg-slate-50 flex items-center justify-center p-3 border-b border-slate-100 overflow-hidden">
-                            {imageUrl ? (
-                              <img src={imageUrl} alt={prod.name} className="h-full object-contain group-hover:scale-105 transition-transform duration-300" />
-                            ) : (
-                              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                                <Sparkles className="w-6 h-6" />
-                              </div>
-                            )}
-
-                            {r.match_type === "BEST_MATCH" && (
-                              <span className="absolute top-2.5 right-2.5 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1">
-                                <Sparkles className="w-2.5 h-2.5" /> Best Match
-                              </span>
-                            )}
-                            <span className="absolute top-2.5 left-2.5 bg-white/90 backdrop-blur-sm text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200 uppercase tracking-wide">
-                              {prod.category}
-                            </span>
-                          </div>
-
-                          {/* Content */}
-                          <div className="p-4 flex-grow flex flex-col justify-between">
-                            <div>
-                              <h4 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1 group-hover:text-indigo-600 transition-colors">
-                                {prod.name}
-                              </h4>
-                              <p className="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed">
-                                {prod.description}
-                              </p>
-
-                              {/* Price */}
-                              <div className="flex items-baseline gap-2 mb-3">
-                                <span className="text-lg font-black text-slate-900">
-                                  ₹{Number(prod.price).toLocaleString()}
-                                </span>
-                                <span className="text-[11px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded">
-                                  Verified Price
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Reasons / Specs */}
-                            <div className="pt-2.5 border-t border-slate-100 space-y-2">
-                              {r.reasons && r.reasons.length > 0 && (
-                                <div className="space-y-1">
-                                  {r.reasons.slice(0, 2).map((reason: string, rIdx: number) => (
-                                    <p key={rIdx} className="text-[11px] text-slate-600 flex items-center gap-1.5 font-medium">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                                      <span className="truncate">{reason}</span>
-                                    </p>
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Action Buttons: Instant Buy & Add to Cart */}
-                              <div className="flex items-center gap-2 pt-1">
-                                <button
-                                  onClick={() => handleInstantBuy(prod)}
-                                  disabled={isInstantBuying}
-                                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-50"
-                                >
-                                  {isInstantBuying ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
-                                      <span>Buy Now</span>
-                                    </>
-                                  )}
-                                </button>
-
-                                <button
-                                  onClick={() => handleAddToCart(prod)}
-                                  disabled={isAdding}
-                                  className={`p-2 rounded-xl text-xs font-bold transition-all ${
-                                    isAdded 
-                                      ? "bg-emerald-600 text-white" 
-                                      : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                                  }`}
-                                  title="Add to Cart"
-                                >
-                                  {isAdding ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : isAdded ? (
-                                    <Check className="w-4 h-4" />
-                                  ) : (
-                                    <ShoppingCart className="w-4 h-4" />
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Intelligent Upsell Spotlight */}
-                {msg.upsell && msg.upsell.upgrade_product_id && (
-                  <div className="mt-4 bg-gradient-to-r from-indigo-900 to-blue-900 text-white rounded-3xl p-5 w-full shadow-md border border-indigo-700/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1.5 text-amber-400 font-extrabold text-xs uppercase tracking-wider">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Recommended Pro Upgrade</span>
-                      </div>
-                      <p className="text-sm font-semibold text-slate-100">
-                        {msg.upsell.reasons ? msg.upsell.reasons.join(" ") : "Higher performance option available within policy margin."}
-                      </p>
-                      <p className="text-xs text-slate-300">
-                        Verified by Merchant Policy Engine (Under maximum discount cap).
-                      </p>
-                    </div>
-                    <Link 
-                      href={`/products/${msg.upsell.upgrade_product_id}`} 
-                      className="shrink-0 flex items-center gap-2 bg-white text-indigo-900 px-4 py-2.5 rounded-2xl font-bold text-xs hover:bg-amber-300 hover:text-slate-900 transition-all shadow-sm"
-                    >
-                      <span>Explore Upgrade</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
-                )}
-
-                {/* Follow-up Quick Chips */}
-                {msg.results && msg.results.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button 
-                      onClick={() => handleSend("What discounts or offers apply to these items?")}
-                      className="px-3 py-1 bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 rounded-full text-xs font-semibold text-slate-600 transition-all"
-                    >
-                      🏷️ Check available offers
-                    </button>
-                    <button 
-                      onClick={() => handleSend("Compare the top 2 products in detail")}
-                      className="px-3 py-1 bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 rounded-full text-xs font-semibold text-slate-600 transition-all"
-                    >
-                      ⚖️ Compare top 2 specs
-                    </button>
-                    <button 
-                      onClick={() => handleSend("Show budget-friendly alternatives under ₹10,000")}
-                      className="px-3 py-1 bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 rounded-full text-xs font-semibold text-slate-600 transition-all"
-                    >
-                      💰 Under ₹10,000 options
-                    </button>
-                  </div>
-                )}
-
-              </div>
+              ))}
             </div>
-          ))
-        )}
-        
-        {loading && (
-          <div className="flex gap-3.5">
-            <div className="w-8 h-8 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xs">
-              <Bot className="w-4 h-4" />
-            </div>
-            <div className="bg-white border border-slate-200 rounded-3xl rounded-tl-none p-4 flex items-center gap-3 shadow-xs">
-              <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-              <div className="space-y-0.5">
-                <p className="text-xs font-bold text-slate-800">Agent Supervisor Reasoning...</p>
-                <p className="text-[11px] text-slate-500">Extracting intent, scanning merchant catalog & validating policy guardrails</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Floating Speaking Indicator */}
-      {isSpeaking && (
-        <div className="mx-6 mb-2 p-3 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl shadow-lg flex items-center justify-between border border-indigo-500/40 animate-pulse">
-          <div className="flex items-center gap-2.5">
-            <Radio className="w-4 h-4 text-indigo-400 animate-spin" />
-            <span className="text-xs font-bold text-slate-100">Voice AI Speaking Response...</span>
-          </div>
-          <button 
-            onClick={stopSpeaking} 
-            className="text-[11px] bg-white/10 hover:bg-white/20 px-3 py-1 rounded-xl text-slate-200 hover:text-white font-bold transition-colors"
-          >
-            Mute Voice
-          </button>
+          )}
         </div>
       )}
 
-      {/* Input Form */}
-      <div className="p-4 bg-white border-t border-slate-100">
-        <form 
-          onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
-          className="flex gap-2 relative items-center"
-        >
-          {speechSupported && (
-            <button
-              type="button"
-              onClick={isListening ? () => setIsListening(false) : startVoiceInput}
-              className={`p-3 rounded-2xl transition-all flex items-center justify-center shrink-0 ${
-                isListening 
-                  ? "bg-rose-600 text-white animate-pulse shadow-lg shadow-rose-500/40 ring-4 ring-rose-200" 
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-indigo-600"
-              }`}
-              title={isListening ? "Listening... Speak now" : "Speak to Shopping Concierge"}
-            >
-              {isListening ? <Mic className="w-5 h-5 animate-bounce text-white" /> : <Mic className="w-5 h-5" />}
-            </button>
-          )}
-
-          <div className="relative flex-grow">
-            <input 
-              type="text" 
+      {/* Clean Light Input Bar */}
+      <div className="p-3 bg-white border-t border-slate-100 shrink-0">
+        <form onSubmit={(e) => { e.preventDefault(); handleSend(input); }}>
+          <div className="relative flex items-center bg-slate-100 border border-slate-200/90 rounded-full px-3 py-1 focus-within:border-blue-500 focus-within:bg-white transition-all shadow-inner">
+            <input
+              type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={isListening ? "Listening to your voice..." : "Ask in plain language (or click mic to speak)..."}
-              className={`w-full bg-slate-50 border rounded-2xl py-3.5 pl-4 pr-12 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all placeholder:text-slate-400 ${
-                isListening ? "border-rose-400 bg-rose-50/20" : "border-slate-200"
-              }`}
-              disabled={loading}
+              placeholder={isListening ? "Listening to your voice..." : "Type your message..."}
+              className="flex-1 bg-transparent px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none"
             />
-            <button 
+
+            {/* Voice Input */}
+            {speechSupported && (
+              <button
+                type="button"
+                onClick={startVoiceInput}
+                className={`p-2 rounded-full mr-1 transition-all ${
+                  isListening ? "bg-rose-600 text-white animate-pulse" : "text-slate-500 hover:text-blue-600 hover:bg-slate-200"
+                }`}
+                title="Voice input"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Send Button */}
+            <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="absolute right-2 top-2 bottom-2 aspect-square bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center transition-colors disabled:opacity-50 disabled:hover:bg-indigo-600 shadow-sm"
+              className="p-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all disabled:opacity-40 disabled:hover:bg-blue-600 shadow-xs"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
         </form>
+        <p className="text-[10px] text-slate-400 text-center mt-1.5 font-medium">
+          Powered by Razorpay AI Commerce
+        </p>
       </div>
-        </>
-      )}
 
       {/* In-Chat OTP Verification Modal */}
       {showOtpModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 sm:p-8 relative">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 relative text-slate-900">
             <button
               onClick={() => {
                 setShowOtpModal(false);
@@ -1051,17 +871,17 @@ function ChatContent() {
               <X className="w-5 h-5" />
             </button>
 
-            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-3">
-              <KeyRound className="w-6 h-6" />
+            <div className="w-11 h-11 bg-blue-50 text-blue-600 rounded-2xl mx-auto flex items-center justify-center mb-2.5">
+              <KeyRound className="w-5 h-5" />
             </div>
 
-            <h3 className="font-extrabold text-slate-900 text-lg text-center">Instant Checkout Verification</h3>
-            <p className="text-xs text-slate-500 text-center mb-5">
-              Zero passwords needed. Enter your details for automated order dispatch and delivery tracking.
+            <h3 className="font-extrabold text-slate-900 text-base text-center">Instant Checkout Verification</h3>
+            <p className="text-xs text-slate-500 text-center mb-4">
+              Zero passwords needed. Enter details to confirm order.
             </p>
 
             {otpError && (
-              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
+              <div className="mb-3 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
                 {otpError}
               </div>
             )}
@@ -1069,186 +889,137 @@ function ChatContent() {
             {!otpSent ? (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Your Full Name</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Your Name</label>
                   <input
                     type="text"
                     placeholder="e.g. Rahul Sharma"
                     value={otpName}
                     onChange={(e) => setOtpName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Email Address (For Invoice & Updates)</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Email Address</label>
                   <input
                     type="email"
                     required
                     placeholder="e.g. rahul@gmail.com"
                     value={otpEmail}
                     onChange={(e) => setOtpEmail(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Mobile Number (Optional for WhatsApp Alerts)</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Phone Number (Optional)</label>
                   <input
                     type="tel"
-                    placeholder="e.g. +91 9876543210"
+                    placeholder="e.g. 9876543210"
                     value={otpPhone}
                     onChange={(e) => setOtpPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <button
                   type="button"
-                  onClick={handleSendOtp}
                   disabled={otpLoading || !otpEmail.trim()}
-                  className="w-full mt-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                  onClick={handleSendOtp}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 mt-1 disabled:opacity-50"
                 >
-                  {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  <span>Send 6-Digit Verification Code</span>
+                  {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+                  <span>Send Verification Code</span>
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-3 text-center">
-                  <p className="text-xs text-indigo-900 font-semibold">Verification code sent to <strong>{otpEmail}</strong></p>
-                  <p className="text-[11px] text-indigo-600 mt-0.5">Test Mode Code: <strong className="font-mono bg-white px-2 py-0.5 rounded border border-indigo-200">482910</strong></p>
+              <div className="space-y-3">
+                <div className="text-center">
+                  <p className="text-xs text-slate-600">Code sent to <strong>{otpEmail}</strong></p>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Enter 6-Digit Code</label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    required
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value)}
-                    placeholder="482910"
-                    className="w-full text-center tracking-[0.3em] font-mono text-lg font-black px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                  />
-                </div>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.trim())}
+                  placeholder="Enter 6-digit code"
+                  className="w-full text-center tracking-widest text-lg font-mono py-2 bg-slate-50 border border-slate-200 rounded-xl text-blue-600 focus:outline-none focus:border-blue-500"
+                />
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setOtpSent(false)}
-                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={otpLoading || otpCode.length < 6}
-                    className="flex-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 disabled:opacity-50"
-                  >
-                    {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    <span>Verify & Launch Razorpay</span>
-                  </button>
-                </div>
-              </form>
+                <button
+                  type="button"
+                  disabled={otpLoading || otpCode.length < 6}
+                  onClick={handleVerifyOtp}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  <span>Verify & Proceed to Payment</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
       )}
 
-      {/* In-Chat Order Tracking Modal */}
+      {/* Order Tracking Modal */}
       {showTrackingModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-8 relative max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 relative text-slate-900 max-h-[85vh] overflow-y-auto">
             <button
-              onClick={() => setShowTrackingModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-xl hover:bg-slate-100"
+              onClick={() => {
+                setShowTrackingModal(false);
+                setTrackingData(null);
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-xl"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
-                <Truck className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-lg">Live Order & Shipment Tracking</h3>
-                <p className="text-xs text-slate-500">Track shipments across BlueDart, Delhivery, and local fulfillment</p>
-              </div>
+            <div className="w-11 h-11 bg-blue-50 text-blue-600 rounded-2xl mx-auto flex items-center justify-center mb-2.5">
+              <Truck className="w-5 h-5" />
             </div>
 
-            <form onSubmit={handleTrackOrders} className="flex gap-2 mb-4">
+            <h3 className="font-extrabold text-slate-900 text-base text-center">Track Your Orders</h3>
+            <p className="text-xs text-slate-500 text-center mb-4">
+              Enter your email address to look up live courier tracking status.
+            </p>
+
+            <div className="flex gap-2 mb-3">
               <input
                 type="email"
-                required
-                placeholder="Enter order email address..."
+                placeholder="Enter your email..."
                 value={trackingEmail}
                 onChange={(e) => setTrackingEmail(e.target.value)}
-                className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500"
               />
               <button
-                type="submit"
-                disabled={trackingLoading}
-                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                type="button"
+                disabled={trackingLoading || !trackingEmail.trim()}
+                onClick={handleTrackOrders}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50"
               >
-                {trackingLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-                <span>Track</span>
+                {trackingLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Track"}
               </button>
-            </form>
+            </div>
 
             {trackingError && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 mb-4">
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 mb-3 font-medium">
                 {trackingError}
               </div>
             )}
 
-            {trackingData && trackingData.orders && (
-              <div className="space-y-4">
-                {trackingData.orders.map((ord: any) => (
-                  <div key={ord.order_id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-[11px] font-mono text-slate-400">Order #{ord.order_id.slice(0, 8)}</span>
-                        <h4 className="font-extrabold text-slate-900 text-sm">₹{Number(ord.amount).toLocaleString()}</h4>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold tracking-wide uppercase">
-                        {ord.status}
-                      </span>
+            {trackingData && (
+              <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                <p className="text-xs text-slate-600 font-bold">Found {trackingData.orders?.length || 0} order(s):</p>
+                {trackingData.orders?.map((ord: any) => (
+                  <div key={ord.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-mono text-blue-600 font-bold">{ord.id}</span>
+                      <span className="text-emerald-600 font-extrabold">₹{ord.amount}</span>
                     </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-xs text-slate-600 bg-white p-2.5 rounded-xl border border-slate-100">
-                      <div>
-                        <p className="text-[10px] text-slate-400 uppercase font-bold">Courier</p>
-                        <p className="font-semibold text-slate-800 text-[11px] truncate">{ord.courier}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-slate-400 uppercase font-bold">AWB Number</p>
-                        <p className="font-mono text-indigo-600 font-bold text-[11px] truncate">{ord.tracking_number}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-slate-400 uppercase font-bold">Expected</p>
-                        <p className="font-semibold text-emerald-600 text-[11px] truncate">{ord.estimated_delivery}</p>
-                      </div>
-                    </div>
-
-                    {/* Shipment Timeline */}
-                    <div className="pt-2 border-t border-slate-200 space-y-2">
-                      <p className="text-[11px] font-bold text-slate-700 uppercase">Live Shipment Milestones</p>
-                      {ord.timeline.map((step: any, idx: number) => (
-                        <div key={idx} className="flex items-start gap-2.5 text-xs">
-                          <div className={`w-3.5 h-3.5 rounded-full mt-0.5 flex items-center justify-center shrink-0 ${
-                            step.completed ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
-                          }`}>
-                            {step.completed && <Check className="w-2.5 h-2.5" />}
-                          </div>
-                          <div>
-                            <p className={`font-semibold ${step.completed ? "text-slate-900" : "text-slate-400"}`}>
-                              {step.stage}
-                            </p>
-                            <p className="text-[11px] text-slate-500">{step.detail}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="text-[11px] text-slate-600">Carrier: {ord.shipping?.carrier} • AWB: {ord.shipping?.tracking_number}</p>
+                    <p className="text-[11px] text-indigo-600 font-semibold">Status: {ord.shipping?.status}</p>
                   </div>
                 ))}
               </div>
@@ -1265,7 +1036,7 @@ export default function ChatPage() {
   return (
     <Suspense fallback={
       <div className="flex justify-center items-center h-[70vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     }>
       <ChatContent />
