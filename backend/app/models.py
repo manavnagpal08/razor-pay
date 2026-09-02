@@ -24,6 +24,7 @@ class Customer(Base):
     __tablename__ = "customers"
     id = Column(String, primary_key=True, index=True)
     user_id = Column(String, ForeignKey("users.id"))
+    merchant_id = Column(String, ForeignKey("merchants.id"), nullable=True)
     segment = Column(String)
     preferences = Column(JSONType, default=dict)
     lifetime_value = Column(Numeric(10, 2), default=0.0)

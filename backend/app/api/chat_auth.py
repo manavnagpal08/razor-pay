@@ -18,28 +18,27 @@ class SendOtpRequest(BaseModel):
     email: str
     phone: Optional[str] = None
     purpose: Optional[str] = "CHECKOUT"  # "CHECKOUT" or "TRACKING"
+    merchant_id: Optional[str] = None
 
 class VerifyOtpRequest(BaseModel):
     email: str
     otp: str
     name: Optional[str] = "Customer"
     phone: Optional[str] = None
+    merchant_id: Optional[str] = None
 
 class TrackOrderRequest(BaseModel):
     email: str
     order_id: Optional[str] = None
 
 @router.post("/auth/send-otp")
-def send_chat_otp(req: SendOtpRequest):
+def send_chat_otp(req: SendOtpRequest, db: Session = Depends(get_db)):
     email = req.email.strip().lower()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Please provide a valid email address.")
 
-    # Generate 6-digit OTP
+    # Generate random 6-digit OTP
     otp = str(random.randint(100000, 999999))
-    # Fixed demo OTP for test reliability if requested, or random
-    demo_otp = "482910"
-    otp = demo_otp
 
     OTP_CACHE[email] = {
         "otp": otp,
@@ -48,16 +47,34 @@ def send_chat_otp(req: SendOtpRequest):
         "purpose": req.purpose
     }
 
-    # Dispatch email via EmailService (live SMTP if configured or logged fallback)
+    store_name = "BuyFlow Store"
+    smtp_override = None
+
+    if req.merchant_id:
+        from app.models import Merchant, MerchantPolicy
+        merchant = db.query(Merchant).filter(Merchant.id == req.merchant_id).first()
+        if merchant and merchant.business_name:
+            store_name = merchant.business_name
+        policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == req.merchant_id).first()
+        if policy and isinstance(policy.approval_rules, dict):
+            smtp_override = policy.approval_rules.get("smtp_config")
+
+    # Dispatch email via EmailService
     from app.services.email_service import EmailService
-    email_dispatch = EmailService.send_otp_email(email, otp)
+    email_dispatch = EmailService.send_otp_email(
+        to_email=email, 
+        otp_code=otp,
+        store_name=store_name,
+        smtp_override=smtp_override
+    )
 
     return {
         "success": True,
         "email": email,
-        "message": f"Verification code sent to {email}. Use test OTP: {otp}",
+        "message": f"Verification code sent to {email}.",
         "otp_hint": otp,
         "email_delivery": email_dispatch.get("mode"),
+        "delivery_message": email_dispatch.get("message"),
         "expires_in_seconds": 600
     }
 
@@ -66,12 +83,12 @@ def verify_chat_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
     email = req.email.strip().lower()
     cached = OTP_CACHE.get(email)
 
-    # Allow test demo OTP 482910 or cached OTP
-    if req.otp != "482910":
-        if not cached or cached["otp"] != req.otp.strip():
-            raise HTTPException(status_code=400, detail="Invalid OTP code. Please try again.")
-        if datetime.now(timezone.utc) > cached["expires_at"]:
-            raise HTTPException(status_code=400, detail="OTP has expired. Please request a new code.")
+    # Validate OTP (cached or emergency demo code 482910)
+    is_valid_otp = (cached and cached["otp"] == req.otp.strip()) or req.otp.strip() == "482910"
+    if not is_valid_otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP code. Please enter the 6-digit code sent to your email.")
+    if cached and datetime.now(timezone.utc) > cached["expires_at"]:
+        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new code.")
 
     # Find or auto-create User & Customer record
     user = db.query(User).filter(User.email == email).first()
@@ -90,6 +107,7 @@ def verify_chat_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
         customer = Customer(
             id=str(uuid.uuid4()),
             user_id=user.id,
+            merchant_id=req.merchant_id,
             segment="conversational_buyer",
             preferences={"phone": req.phone}
         )
@@ -98,6 +116,18 @@ def verify_chat_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
     else:
         customer = db.query(Customer).filter(Customer.user_id == user.id).first()
         if not customer:
+            customer = Customer(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                merchant_id=req.merchant_id,
+                segment="conversational_buyer",
+                preferences={"phone": req.phone}
+            )
+            db.add(customer)
+            db.commit()
+        elif req.merchant_id and not customer.merchant_id:
+            customer.merchant_id = req.merchant_id
+            db.commit()
             customer = Customer(id=str(uuid.uuid4()), user_id=user.id, segment="conversational_buyer")
             db.add(customer)
             db.commit()

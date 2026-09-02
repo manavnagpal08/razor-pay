@@ -1,11 +1,35 @@
-﻿import os
+import os
 import smtplib
+import ssl
+import socket
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
+
+class IPv4SMTP(smtplib.SMTP):
+    """SMTP client that forces IPv4 socket resolution to prevent [Errno 101] Network is unreachable on cloud hosts."""
+    def _get_socket(self, host, port, timeout):
+        try:
+            res = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+            ip, p = res[0][4][0], res[0][4][1]
+            return socket.create_connection((ip, p), timeout)
+        except Exception:
+            return socket.create_connection((host, port), timeout)
+
+class IPv4SMTP_SSL(smtplib.SMTP_SSL):
+    """SMTP_SSL client that forces IPv4 socket resolution to prevent [Errno 101] Network is unreachable on cloud hosts."""
+    def _get_socket(self, host, port, timeout):
+        try:
+            res = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+            ip, p = res[0][4][0], res[0][4][1]
+            raw_sock = socket.create_connection((ip, p), timeout)
+        except Exception:
+            raw_sock = socket.create_connection((host, port), timeout)
+        server_hostname = self._host if ssl.HAS_SNI else None
+        return self.context.wrap_socket(raw_sock, server_hostname=server_hostname)
 
 class EmailService:
     @staticmethod
@@ -29,7 +53,7 @@ class EmailService:
     @classmethod
     def send_email(cls, to_email: str, subject: str, html_body: str, smtp_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Sends an email using standard SMTP. Gracefully falls back to logged simulation if credentials missing.
+        Sends an email using IPv4-forced SMTP with auto-fallback between STARTTLS (587) and SSL (465).
         """
         creds = cls.get_smtp_credentials(smtp_override)
         
@@ -43,41 +67,65 @@ class EmailService:
                 "subject": subject
             }
 
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"BuyFlow AI Commerce <{creds['user']}>"
+        msg["To"] = to_email
+
+        part = MIMEText(html_body, "html")
+        msg.attach(part)
+
+        server = None
+        last_err = None
+
+        # Strategy 1: IPv4 STARTTLS on port 587
         try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"Razorpay AI Commerce <{creds['user']}>"
-            msg["To"] = to_email
-
-            part = MIMEText(html_body, "html")
-            msg.attach(part)
-
-            server = smtplib.SMTP(creds["host"], creds["port"], timeout=10)
-            server.ehlo()
+            server = IPv4SMTP(creds["host"], creds["port"], timeout=12)
+            server.ehlo(creds["host"])
             server.starttls()
-            server.ehlo()
+            server.ehlo(creds["host"])
             server.login(creds["user"], creds["password"])
             server.sendmail(creds["user"], [to_email], msg.as_string())
             server.quit()
-
-            logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via {creds['host']}")
+            logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via STARTTLS {creds['port']}")
             return {
                 "sent": True,
                 "mode": "SMTP_DELIVERED",
-                "message": f"Live email delivered successfully to {to_email}!",
+                "message": f"Live email delivered successfully to {to_email} via Gmail SMTP!",
                 "to": to_email
             }
-        except Exception as e:
-            logger.error(f"[EMAIL ERROR] Failed to send email via SMTP: {e}")
+        except Exception as e_starttls:
+            last_err = e_starttls
+            logger.warning(f"STARTTLS attempt on port {creds['port']} failed: {e_starttls}. Retrying via SSL on port 465...")
+
+        # Strategy 2: IPv4 direct SSL on port 465 fallback
+        try:
+            ssl_ctx = ssl.create_default_context()
+            server = IPv4SMTP_SSL(creds["host"], 465, timeout=12, context=ssl_ctx)
+            server.ehlo(creds["host"])
+            server.login(creds["user"], creds["password"])
+            server.sendmail(creds["user"], [to_email], msg.as_string())
+            server.quit()
+            logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via SSL 465")
             return {
-                "sent": False,
-                "mode": "SMTP_ERROR",
-                "error": str(e),
-                "message": f"SMTP delivery failed: {str(e)}"
+                "sent": True,
+                "mode": "SMTP_DELIVERED",
+                "message": f"Live email delivered successfully to {to_email} via Gmail SMTP SSL!",
+                "to": to_email
             }
+        except Exception as e_ssl:
+            last_err = e_ssl
+            logger.error(f"[EMAIL ERROR] Both SMTP strategies failed: {e_ssl}")
+
+        return {
+            "sent": False,
+            "mode": "SMTP_ERROR",
+            "error": str(last_err),
+            "message": f"SMTP delivery failed: {str(last_err)}"
+        }
 
     @classmethod
-    def send_otp_email(cls, to_email: str, otp_code: str, store_name: str = "Razorpay AI Storefront", smtp_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def send_otp_email(cls, to_email: str, otp_code: str, store_name: str = "BuyFlow Store", smtp_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Sends formatted OTP verification email.
         """

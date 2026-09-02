@@ -11,12 +11,15 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
+import { Toast } from "@/components/ui/Toast";
 
 function ChatContent() {
   const searchParams = useSearchParams();
   const merchantParam = searchParams.get("merchant") || "demo_merchant";
   const isEmbed = searchParams.get("embed") === "true";
 
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const showToast = (message: string, type: "success" | "error" | "info" = "success") => setToast({ message, type });
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -104,11 +107,28 @@ function ChatContent() {
     }
   }, []);
 
+  // Auto-prompt Name & Email verification when customer lands via QR code or direct link
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedGuestToken = localStorage.getItem(`buyflow_token_${merchantParam}`);
+      const savedName = localStorage.getItem("buyflow_customer_name");
+      const savedEmail = localStorage.getItem("buyflow_customer_email");
+      if (savedGuestToken) {
+        setGuestVerifiedToken(savedGuestToken);
+        if (savedName) setOtpName(savedName);
+        if (savedEmail) setOtpEmail(savedEmail);
+      } else if (!token) {
+        // Customer scanned QR or clicked link: Prompt for name and email OTP verification
+        setShowOtpModal(true);
+      }
+    }
+  }, [token, merchantParam]);
+
   const startVoiceInput = () => {
     if (typeof window === "undefined") return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Speech recognition is not supported on this browser. Please use Chrome, Edge, or Safari.");
+      showToast("Speech recognition is not supported on this browser. Please use Chrome, Edge, or Safari.", "info");
       return;
     }
 
@@ -176,7 +196,7 @@ function ChatContent() {
 
   const handleAddToCart = async (product: any) => {
     if (!token) {
-      alert("Please sign in to add items to your cart.");
+      showToast("Please sign in to add items to your cart.", "info");
       window.location.href = "/login";
       return;
     }
@@ -195,13 +215,14 @@ function ChatContent() {
       if (res.ok) {
         await refreshCartCount();
         setAddedId(product.id);
+        showToast(`Added ${product.title || product.name || "item"} to cart!`, "success");
         setTimeout(() => setAddedId(null), 2500);
       } else {
-        alert("Failed to add to cart.");
+        showToast("Failed to add to cart.", "error");
       }
     } catch (e) {
       console.error(e);
-      alert("Failed to add to cart.");
+      showToast("Failed to add to cart.", "error");
     } finally {
       setAddingId(null);
     }
@@ -212,8 +233,12 @@ function ChatContent() {
 
   // Send OTP for In-Chat Verification
   const handleSendOtp = async () => {
-    if (!otpEmail.trim()) {
-      setOtpError("Please enter your email address.");
+    if (!otpName.trim()) {
+      setOtpError("Please enter your name.");
+      return;
+    }
+    if (!otpEmail.trim() || !otpEmail.includes("@")) {
+      setOtpError("Please enter a valid email address.");
       return;
     }
     setOtpLoading(true);
@@ -226,14 +251,16 @@ function ChatContent() {
         body: JSON.stringify({
           email: otpEmail.trim(),
           phone: otpPhone.trim() || undefined,
-          purpose: "CHECKOUT"
+          purpose: "CHECKOUT",
+          merchant_id: merchantParam
         })
       });
       const data = await res.json();
       if (res.ok) {
         setOtpSent(true);
+        showToast(`Verification code sent to ${otpEmail}!`, "success");
         if (data.otp_hint) {
-          setOtpCode(data.otp_hint); // Prefill demo OTP for fast hackathon testing!
+          setOtpCode(data.otp_hint); // Pre-fill test OTP for instantaneous test flow
         }
       } else {
         setOtpError(data.detail || "Failed to send verification code.");
@@ -263,15 +290,31 @@ function ChatContent() {
           email: otpEmail.trim(),
           otp: otpCode.trim(),
           name: otpName.trim() || "Valued Shopper",
-          phone: otpPhone.trim() || undefined
+          phone: otpPhone.trim() || undefined,
+          merchant_id: merchantParam
         })
       });
       const data = await res.json();
       if (res.ok && data.token) {
         setGuestVerifiedToken(data.token);
         setGuestCustomer(data.customer);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`buyflow_token_${merchantParam}`, data.token);
+          localStorage.setItem("buyflow_customer_name", otpName.trim());
+          localStorage.setItem("buyflow_customer_email", otpEmail.trim());
+        }
         setShowOtpModal(false);
         setOtpSent(false);
+        showToast("Email verified successfully!", "success");
+
+        // Welcome message greeting customer by name
+        setMessages(prev => [
+          ...prev,
+          {
+            role: "assistant",
+            text: `🎉 Welcome, ${otpName.trim()}! Your account is verified. I am your AI Shopping Concierge for ${merchantInfo?.name || "our store"}. What products are you looking for today? Tell me what you need or ask for recommendations!`
+          }
+        ]);
 
         // Auto-launch checkout if customer clicked "Buy Now"
         if (pendingProductToBuy) {
@@ -280,7 +323,7 @@ function ChatContent() {
           proceedWithCheckout(prod, data.token);
         }
       } else {
-        setOtpError(data.detail || "Invalid code. Please use test code: 482910");
+        setOtpError(data.detail || "Invalid code. Please enter the 6-digit code sent to your email.");
       }
     } catch (e) {
       setOtpError("Failed to verify code. Please try again.");
@@ -331,7 +374,7 @@ function ChatContent() {
 
   const proceedWithCheckout = async (product: any, activeToken: string) => {
     if (!scriptLoaded && !(window as any).Razorpay) {
-      alert("Razorpay payment gateway is loading. Please retry in a few seconds.");
+      showToast("Razorpay payment gateway is loading. Please retry in a few seconds.", "info");
       return;
     }
 
@@ -348,11 +391,14 @@ function ChatContent() {
         },
         body: JSON.stringify({})
       });
-      if (!cartRes.ok) throw new Error("Failed to create checkout cart");
+      if (!cartRes.ok) {
+        const errJson = await cartRes.json().catch(() => ({}));
+        throw new Error(errJson.detail || "Failed to create checkout cart");
+      }
       const cartData = await cartRes.json();
 
       // 2. Add product to the checkout cart
-      await fetch(`${apiUrl}/api/cart/items`, {
+      const itemRes = await fetch(`${apiUrl}/api/cart/items`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${activeToken}`,
@@ -360,6 +406,10 @@ function ChatContent() {
         },
         body: JSON.stringify({ product_id: product.id, quantity: 1 })
       });
+      if (!itemRes.ok) {
+        const errJson = await itemRes.json().catch(() => ({}));
+        throw new Error(errJson.detail || "Failed to add item to checkout cart");
+      }
 
       // 3. Create Razorpay order
       const orderRes = await fetch(`${apiUrl}/api/orders/`, {
@@ -370,19 +420,23 @@ function ChatContent() {
         },
         body: JSON.stringify({ cart_id: cartData.id })
       });
-      if (!orderRes.ok) throw new Error("Failed to create Razorpay order");
+      if (!orderRes.ok) {
+        const errJson = await orderRes.json().catch(() => ({}));
+        throw new Error(errJson.detail || "Failed to create Razorpay order");
+      }
       const orderData = await orderRes.json();
 
       // 4. Launch Razorpay Checkout Modal directly in the chat!
       const customerEmail = user?.email || guestCustomer?.email || otpEmail || "shopper@example.com";
       const customerName = user?.displayName || guestCustomer?.name || otpName || "Valued Customer";
+      const prodName = product.title || product.name || "Product";
 
       const options = {
         key: orderData.key_id,
         amount: orderData.amount_paise,
         currency: orderData.currency || "INR",
-        name: merchantInfo?.name || "OmniCommerce Store",
-        description: `Order for ${product.name}`,
+        name: merchantInfo?.name || "BuyFlow Store",
+        description: `Order for ${prodName}`,
         order_id: orderData.razorpay_order_id,
         handler: async function (response: any) {
           try {
@@ -406,7 +460,7 @@ function ChatContent() {
                 ...prev,
                 {
                   role: "assistant",
-                  text: `🎉 Payment Successful! Your order for "${product.name}" has been confirmed via Razorpay test-mode. Payment ID: ${response.razorpay_payment_id}. Your items are being prepared for shipping!`,
+                  text: `🎉 Payment Successful! Your order for "${prodName}" has been confirmed via Razorpay test-mode. Payment ID: ${response.razorpay_payment_id}. Your items are being prepared for shipping!`,
                   isSuccess: true
                 }
               ]);
@@ -419,15 +473,15 @@ function ChatContent() {
                   order_id: response.razorpay_order_id,
                   payment_id: response.razorpay_payment_id,
                   amount: orderData.amount_paise / 100,
-                  product_name: product.name
+                  product_name: prodName
                 }, "*");
               }
             } else {
-              alert("Payment verification failed.");
+              showToast("Payment verification failed.", "error");
             }
           } catch (e) {
             console.error(e);
-            alert("Payment verification failed.");
+            showToast("Payment verification failed.", "error");
           }
         },
         prefill: {
@@ -435,14 +489,14 @@ function ChatContent() {
           name: customerName,
           contact: otpPhone || undefined
         },
-        theme: { color: "#4f46e5" }
+        theme: { color: "#2563eb" }
       };
 
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Failed to initiate instant payment. Please try again.");
+      showToast(err.message || "Failed to initiate instant payment. Please try again.", "error");
     } finally {
       setInstantBuyingId(null);
     }
@@ -479,10 +533,13 @@ function ChatContent() {
         ? `I analyzed your intent for ${data.intent.category}${data.intent?.max_price ? ` under ₹${data.intent.max_price.toLocaleString()}` : ""}. Here are the best matched options:`
         : "Here are the most relevant items I found for your request:");
 
+      const prods = data.results || data.products || [];
+
       const newMsg = { 
         role: "assistant", 
         text: responseText, 
-        results: data.results || [],
+        products: prods,
+        results: prods,
         intent: data.intent,
         upsell: data.upsell,
         cross_sell: data.cross_sell,
@@ -520,17 +577,15 @@ function ChatContent() {
         <div className="flex items-center gap-2.5">
           {/* Avatar with Online Status */}
           <div className="relative">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 shadow-sm shadow-blue-500/20 flex items-center justify-center">
-              <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-blue-600 font-bold">
-                <Bot className="w-4 h-4" />
-              </div>
+            <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 p-0.5 shadow-xs flex items-center justify-center overflow-hidden">
+              <img src="/logo.png" alt="BuyFlow" className="w-full h-full object-contain rounded-full" />
             </div>
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white animate-pulse"></span>
           </div>
 
           <div>
             <h3 className="font-extrabold text-slate-900 text-sm tracking-tight line-clamp-1">
-              {merchantInfo?.name || "OmniCommerce"}
+              {merchantInfo?.name || "BuyFlow Store"}
             </h3>
             <p className="text-[11px] font-bold text-blue-600 flex items-center gap-1">
               <span>AI Shopping Concierge</span>
@@ -628,8 +683,12 @@ function ChatContent() {
                 <div key={prod.id} className="bg-white border border-slate-200/90 rounded-2xl p-3 flex flex-col justify-between group hover:border-blue-400 transition-all shadow-xs">
                   <div>
                     <div className="w-full h-32 bg-slate-100 rounded-xl mb-2.5 overflow-hidden flex items-center justify-center relative border border-slate-100">
-                      {prod.image_url ? (
-                        <img src={prod.image_url} alt={prod.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      {(prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url) ? (
+                        <img 
+                          src={prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url} 
+                          alt={prod.title || prod.name} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                        />
                       ) : (
                         <Package className="w-8 h-8 text-slate-400" />
                       )}
@@ -778,39 +837,61 @@ function ChatContent() {
                     </div>
 
                     {/* Product Recommendations */}
-                    {msg.products && msg.products.length > 0 && (
+                    {((msg.products && msg.products.length > 0) || (msg.results && msg.results.length > 0)) && (
                       <div className="mt-2.5 grid grid-cols-1 gap-2 w-full">
-                        {msg.products.map((prod: any) => (
-                          <div key={prod.id} className="bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs hover:border-blue-400 transition-colors">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="w-11 h-11 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center">
-                                {prod.image_url ? (
-                                  <img src={prod.image_url} alt={prod.title} className="w-full h-full object-cover" />
-                                ) : (
-                                  <Package className="w-5 h-5 text-slate-400" />
-                                )}
+                        {(msg.products || msg.results).map((prod: any) => {
+                          const prodImg = prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url;
+                          const prodName = prod.title || prod.name;
+                          return (
+                            <div key={prod.id} className="bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs hover:border-blue-400 transition-colors">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-12 h-12 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center">
+                                  {prodImg ? (
+                                    <img src={prodImg} alt={prodName} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <Package className="w-5 h-5 text-slate-400" />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <h5 className="font-bold text-slate-900 text-xs truncate">{prodName}</h5>
+                                  <p className="text-xs font-black text-blue-600">₹{Number(prod.price).toLocaleString("en-IN")}</p>
+                                </div>
                               </div>
-                              <div className="min-w-0">
-                                <h5 className="font-bold text-slate-900 text-xs truncate">{prod.title}</h5>
-                                <p className="text-xs font-black text-blue-600">₹{Number(prod.price).toLocaleString("en-IN")}</p>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleInstantBuy(prod)}
+                                  disabled={instantBuyingId === prod.id}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+                                >
+                                  {instantBuyingId === prod.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-white" />}
+                                  <span>Buy Now</span>
+                                </button>
                               </div>
                             </div>
-
-                            <button
-                              onClick={() => handleInstantBuy(prod)}
-                              disabled={instantBuyingId === prod.id}
-                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1 shadow-xs"
-                            >
-                              {instantBuyingId === prod.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-white" />}
-                              <span>Buy Now</span>
-                            </button>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
                 </div>
               ))}
+
+              {/* Typing Animation when AI is replying */}
+              {loading && (
+                <div className="flex gap-2.5 justify-start items-center animate-in fade-in duration-200">
+                  <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs font-bold text-xs mt-0.5">
+                    <Bot className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="bg-white border border-slate-200/90 rounded-2xl rounded-tl-xs px-4 py-3 shadow-xs flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-600 animate-bounce [animation-delay:-0.3s]"></span>
+                    <span className="w-2 h-2 rounded-full bg-blue-600 animate-bounce [animation-delay:-0.15s]"></span>
+                    <span className="w-2 h-2 rounded-full bg-blue-600 animate-bounce"></span>
+                    <span className="text-[11px] font-medium text-slate-400 ml-1.5">BuyFlow Concierge is replying...</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -853,7 +934,7 @@ function ChatContent() {
           </div>
         </form>
         <p className="text-[10px] text-slate-400 text-center mt-1.5 font-medium">
-          Powered by Razorpay AI Commerce
+          Powered by BuyFlow AI Commerce
         </p>
       </div>
 
@@ -871,17 +952,19 @@ function ChatContent() {
               <X className="w-5 h-5" />
             </button>
 
-            <div className="w-11 h-11 bg-blue-50 text-blue-600 rounded-2xl mx-auto flex items-center justify-center mb-2.5">
-              <KeyRound className="w-5 h-5" />
+            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-xs">
+              <KeyRound className="w-6 h-6" />
             </div>
 
-            <h3 className="font-extrabold text-slate-900 text-base text-center">Instant Checkout Verification</h3>
+            <h3 className="font-extrabold text-slate-900 text-lg text-center">
+              Welcome to {merchantInfo?.name || "BuyFlow Store"}
+            </h3>
             <p className="text-xs text-slate-500 text-center mb-4">
-              Zero passwords needed. Enter details to confirm order.
+              Enter your name and email to receive your OTP code and unlock personalized AI shopping concierge access.
             </p>
 
             {otpError && (
-              <div className="mb-3 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
+              <div className="mb-3 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium text-center">
                 {otpError}
               </div>
             )}
@@ -889,73 +972,100 @@ function ChatContent() {
             {!otpSent ? (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Your Name</label>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Your Full Name</label>
                   <input
                     type="text"
-                    placeholder="e.g. Rahul Sharma"
+                    required
+                    placeholder="e.g. Manav Nagpal"
                     value={otpName}
                     onChange={(e) => setOtpName(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Email Address</label>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Email Address (for OTP)</label>
                   <input
                     type="email"
                     required
-                    placeholder="e.g. rahul@gmail.com"
+                    placeholder="e.g. customer@gmail.com"
                     value={otpEmail}
                     onChange={(e) => setOtpEmail(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Phone Number (Optional)</label>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Phone Number (Optional)</label>
                   <input
                     type="tel"
                     placeholder="e.g. 9876543210"
                     value={otpPhone}
                     onChange={(e) => setOtpPhone(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
                   />
                 </div>
 
                 <button
                   type="button"
-                  disabled={otpLoading || !otpEmail.trim()}
+                  disabled={otpLoading || !otpEmail.trim() || !otpName.trim()}
                   onClick={handleSendOtp}
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 mt-1 disabled:opacity-50"
+                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 mt-2 shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
                 >
                   {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-                  <span>Send Verification Code</span>
+                  <span>Send Verification OTP</span>
                 </button>
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="text-center">
-                  <p className="text-xs text-slate-600">Code sent to <strong>{otpEmail}</strong></p>
+                <div className="text-center p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                  <p className="text-xs text-slate-600">Enter the 6-digit code sent to</p>
+                  <p className="text-xs font-bold text-blue-600 font-mono mt-0.5">{otpEmail}</p>
                 </div>
 
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.trim())}
-                  placeholder="Enter 6-digit code"
-                  className="w-full text-center tracking-widest text-lg font-mono py-2 bg-slate-50 border border-slate-200 rounded-xl text-blue-600 focus:outline-none focus:border-blue-500"
-                />
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1 text-center">6-Digit Verification Code</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.trim())}
+                    placeholder="• • • • • •"
+                    className="w-full text-center tracking-[0.4em] text-xl font-mono py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-blue-600 focus:outline-none focus:border-blue-500 focus:bg-white transition-all font-black"
+                  />
+                </div>
 
                 <button
                   type="button"
                   disabled={otpLoading || otpCode.length < 6}
                   onClick={handleVerifyOtp}
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
                 >
                   {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  <span>Verify & Proceed to Payment</span>
+                  <span>Verify & Start Shopping</span>
                 </button>
+
+                <div className="flex items-center justify-between pt-2 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpSent(false);
+                      setOtpCode("");
+                    }}
+                    className="text-slate-500 hover:text-blue-600 font-medium"
+                  >
+                    ← Edit email
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={otpLoading}
+                    onClick={handleSendOtp}
+                    className="text-blue-600 hover:underline font-bold"
+                  >
+                    Resend Code
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1026,6 +1136,15 @@ function ChatContent() {
             )}
           </div>
         </div>
+      )}
+
+      {/* In-App Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
 
     </div>

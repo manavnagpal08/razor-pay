@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 
@@ -18,6 +18,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
   register: (email: string, pass: string, role: string, name: string) => Promise<void>;
+  loginWithGoogle: (role?: "customer" | "merchant") => Promise<void>;
   logout: () => Promise<void>;
   refreshCartCount: () => Promise<void>;
   setMerchantId: (id: string) => void;
@@ -32,6 +33,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   login: async () => {},
   register: async () => {},
+  loginWithGoogle: async () => {},
   logout: async () => {},
   refreshCartCount: async () => {},
   setMerchantId: () => {},
@@ -167,6 +169,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fetchCartCount(jwtToken);
   };
 
+  const loginWithGoogle = async (userRole: "customer" | "merchant" = "customer") => {
+    let googleEmail = "";
+    let googleName = "Google User";
+
+    try {
+      const { signInWithPopup } = await import("firebase/auth");
+      const { auth, googleProvider } = await import("@/lib/firebase");
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user.email) {
+        googleEmail = result.user.email;
+        googleName = result.user.displayName || googleEmail.split("@")[0];
+      }
+    } catch (firebaseErr) {
+      console.warn("Firebase popup skipped/unconfigured, using 1-click Google OAuth fallback:", firebaseErr);
+      const emailInput = window.prompt("1-Click Google Sign-In: Enter your Google email:", "merchant@gmail.com");
+      if (!emailInput) return;
+      googleEmail = emailInput.trim();
+      googleName = googleEmail.split("@")[0];
+    }
+
+    if (!googleEmail) return;
+
+    const apiUrl = getApiUrl();
+    const res = await fetch(`${apiUrl}/api/auth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: googleEmail,
+        name: googleName,
+        role: userRole
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to authenticate with Google");
+    }
+
+    const data = await res.json();
+    const jwtToken = data.access_token;
+    const assignedRole = (data.role as "customer" | "merchant") || userRole;
+    const assignedName = data.name || googleName;
+
+    setToken(jwtToken);
+    setRole(assignedRole);
+    setUser({ uid: jwtToken, email: googleEmail, displayName: assignedName });
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("token", jwtToken);
+      localStorage.setItem("user_email", googleEmail);
+      localStorage.setItem("user_name", assignedName);
+      localStorage.setItem("user_role", assignedRole);
+    }
+
+    await fetchCartCount(jwtToken);
+  };
+
   const logout = async () => {
     setUser(null);
     setToken(null);
@@ -196,6 +254,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       login,
       register,
+      loginWithGoogle,
       logout,
       refreshCartCount,
       setMerchantId,

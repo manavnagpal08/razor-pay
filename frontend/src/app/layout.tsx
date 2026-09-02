@@ -8,8 +8,13 @@ import { AuthProvider } from "@/context/AuthContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Razorpay AI Commerce OS | Multi-Tenant Agentic Commerce",
-  description: "Autonomous Conversational Commerce with Deterministic Financial Safety powered by LangGraph, Gemini & PostgreSQL pgvector",
+  title: "BuyFlow | Autonomous Conversational Commerce & Razorpay AI OS",
+  description: "BuyFlow: Autonomous Conversational Commerce with Deterministic Financial Safety powered by LangGraph, Gemini & Razorpay",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  }
 };
 
 import { Suspense } from "react";

@@ -5,15 +5,18 @@ import {
   TrendingUp, ShoppingBag, BrainCircuit, ShieldAlert, Bot, Sparkles, Send, 
   Lock, LogIn, Sliders, CheckCircle2, Loader2, Share2, Copy, ExternalLink, Code, 
   MessageSquare, Terminal, RefreshCw, Download, Filter, PlusCircle, Store, X, ChevronDown,
-  QrCode, AlertTriangle, Cpu, Layers, ShieldCheck, Zap, Mail, Trash2, Inbox
+  QrCode, AlertTriangle, Cpu, Layers, ShieldCheck, Zap, Mail, Trash2, Inbox, Package, Search
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
 import Link from "next/link";
+import { Toast } from "@/components/ui/Toast";
 
 export default function MerchantDashboard() {
   const { user, token, role, loading: authLoading } = useAuth();
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const showToast = (message: string, type: "success" | "error" | "info" = "success") => setToast({ message, type });
   const [metrics, setMetrics] = useState<any>(null);
   const [activity, setActivity] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
@@ -66,6 +69,8 @@ export default function MerchantDashboard() {
 
   // Product Catalog Management States
   const [merchantProducts, setMerchantProducts] = useState<any[]>([]);
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("ALL");
   const [productsLoading, setProductsLoading] = useState(false);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [newProdName, setNewProdName] = useState("");
@@ -92,7 +97,7 @@ export default function MerchantDashboard() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 3 * 1024 * 1024) {
-        alert("Image size should be under 3MB.");
+        showToast("Image size should be under 3MB.", "error");
         return;
       }
       const reader = new FileReader();
@@ -100,6 +105,69 @@ export default function MerchantDashboard() {
         setNewProdImage(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDownloadQrCode = async () => {
+    try {
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(agentShareUrl)}`;
+      const response = await fetch(qrUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = blobUrl;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 600;
+        canvas.height = 600;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, 600, 600);
+        ctx.drawImage(img, 0, 0, 600, 600);
+        
+        const logoImg = new Image();
+        logoImg.src = "/logo.png";
+        logoImg.onload = () => {
+          const logoSize = 130;
+          const center = (600 - logoSize) / 2;
+          
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.roundRect(center - 10, center - 10, logoSize + 20, logoSize + 20, 24);
+          ctx.fill();
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = "#e2e8f0";
+          ctx.stroke();
+          
+          ctx.drawImage(logoImg, center, center, logoSize, logoSize);
+          
+          const finalUrl = canvas.toDataURL("image/png");
+          const a = document.createElement("a");
+          a.href = finalUrl;
+          a.download = `${currentStoreName.toLowerCase().replace(/[^a-z0-9]/g, "-")}-buyflow-qr.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          showToast("QR code downloaded successfully!", "success");
+        };
+        logoImg.onerror = () => {
+          const finalUrl = canvas.toDataURL("image/png");
+          const a = document.createElement("a");
+          a.href = finalUrl;
+          a.download = `${currentStoreName.toLowerCase().replace(/[^a-z0-9]/g, "-")}-qr.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          showToast("QR code downloaded successfully!", "success");
+        };
+      };
+    } catch (e) {
+      console.error("Failed to download QR code:", e);
+      showToast("Failed to download QR code.", "error");
     }
   };
 
@@ -198,11 +266,11 @@ export default function MerchantDashboard() {
         const sRes = await fetch(`${apiUrl}/api/merchant/stores`);
         if (sRes.ok) setStores(await sRes.json());
       } else {
-        alert("Failed to create store. Please try again.");
+        showToast("Failed to create store. Please try again.", "error");
       }
     } catch (err) {
       console.error(err);
-      alert("Connection error when creating store.");
+      showToast("Connection error when creating store.", "error");
     } finally {
       setCreatingStore(false);
     }
@@ -397,13 +465,13 @@ export default function MerchantDashboard() {
         setNewProdDescription("");
         setNewProdImage("");
         await fetchMerchantProducts();
-        alert("Product added to catalog successfully!");
+        showToast("Product added to catalog successfully!", "success");
       } else {
-        alert("Failed to add product. Please check fields.");
+        showToast("Failed to add product. Please check fields.", "error");
       }
     } catch (err) {
       console.error(err);
-      alert("Error adding product.");
+      showToast("Error adding product.", "error");
     } finally {
       setCreatingProduct(false);
     }
@@ -460,7 +528,7 @@ export default function MerchantDashboard() {
         setTimeout(() => setSmtpMessage(""), 4000);
       }
     } catch (e) {
-      alert("Failed to save SMTP credentials.");
+      showToast("Failed to save SMTP credentials.", "error");
     } finally {
       setSavingSmtp(false);
     }
@@ -661,11 +729,6 @@ export default function MerchantDashboard() {
             <PlusCircle className="w-4 h-4" />
             <span>Launch New Store</span>
           </button>
-
-          <div className="bg-white border border-slate-200 px-4 py-2 rounded-2xl text-xs text-slate-700 font-semibold flex items-center gap-2 shadow-xs hidden sm:flex">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)] animate-pulse"></span>
-            <span>Policy Engine Online</span>
-          </div>
         </div>
       </div>
 
@@ -881,37 +944,46 @@ export default function MerchantDashboard() {
                 </div>
               </div>
               {/* Shareable AI Storefront Agent Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-indigo-500/30 relative overflow-hidden">
-        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div className="space-y-2.5 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-400/30">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 text-white shadow-xl p-6 sm:p-8">
+        {/* Glow Accents */}
+        <div className="pointer-events-none absolute -top-24 -right-24 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-indigo-600/10 blur-3xl" />
+
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          {/* Left Column: Info & Actions */}
+          <div className="lg:col-span-8 space-y-3.5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-bold border border-blue-500/20">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               <span>Multi-Tenant Conversational Commerce</span>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
               Shareable AI Storefront Agent Link
             </h2>
-            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
-              Share this dedicated link with your customers on WhatsApp, Instagram, or email. Buyers can chat directly with your AI concierge, receive instant product recommendations, and complete Razorpay test-mode payments right inside the chat!
+
+            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed max-w-xl">
+              Share this dedicated link with your customers on WhatsApp, Instagram, or email. Buyers can chat directly with your AI concierge, receive instant product recommendations, and complete payments right inside the chat!
             </p>
 
             {/* Link display and actions */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
-              <div className="flex items-center gap-2 px-4 py-3 bg-slate-800/90 border border-slate-700 rounded-2xl text-xs font-mono text-indigo-200 overflow-x-auto">
-                <Share2 className="w-4 h-4 text-indigo-400 shrink-0" />
-                <span className="truncate">{agentShareUrl}</span>
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-2xl text-xs font-mono text-slate-300 w-full max-w-xl shadow-inner">
+                <Share2 className="w-4 h-4 text-blue-400 shrink-0" />
+                <span className="truncate flex-1 text-slate-300 select-all">{agentShareUrl}</span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
+                  type="button"
                   onClick={() => {
                     navigator.clipboard.writeText(agentShareUrl);
                     setCopiedLink(true);
+                    showToast("Copied storefront link to clipboard!", "success");
                     setTimeout(() => setCopiedLink(false), 2500);
                   }}
-                  className="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-bold transition-all shadow-md shrink-0"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 cursor-pointer"
                 >
-                  {copiedLink ? <CheckCircle2 className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                  {copiedLink ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedLink ? "Copied Link!" : "Copy Link"}</span>
                 </button>
 
@@ -919,44 +991,49 @@ export default function MerchantDashboard() {
                   href={agentShareUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-2xl text-xs font-bold transition-all shrink-0"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700/80 rounded-xl text-xs font-bold transition-all cursor-pointer"
                 >
-                  <ExternalLink className="w-4 h-4" />
+                  <ExternalLink className="w-3.5 h-3.5" />
                   <span>Open Agent</span>
                 </a>
 
                 <a
-                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out our AI Shopping Assistant and buy direct on Razorpay: ${agentShareUrl}`)}`}
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out our AI Shopping Assistant and buy directly: ${agentShareUrl}`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 px-3.5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold transition-all shrink-0"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
                   title="Share on WhatsApp"
                 >
-                  <MessageSquare className="w-4 h-4" />
-                  <span className="hidden sm:inline">WhatsApp</span>
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>WhatsApp</span>
                 </a>
               </div>
             </div>
           </div>
 
-          {/* Embed Code Snippet Box */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col justify-between gap-3 w-full lg:w-72 shrink-0">
-            <div>
-              <p className="text-xs font-bold text-slate-200 flex items-center gap-1.5 mb-1">
-                <Code className="w-4 h-4 text-indigo-400" />
+          {/* Right Column: Embed on Any Website Box */}
+          <div className="lg:col-span-4 h-full bg-slate-900/70 border border-slate-800/90 rounded-2xl p-5 flex flex-col justify-between gap-4 backdrop-blur-md">
+            <div className="space-y-1.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-2">
+                <Code className="w-4 h-4" />
+              </div>
+              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                 <span>Embed on Any Website</span>
-              </p>
-              <p className="text-[11px] text-slate-400 leading-normal">
+              </h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
                 Add an interactive AI shopping widget to your Shopify, WordPress, or custom site.
               </p>
             </div>
+
             <button
+              type="button"
               onClick={() => {
                 navigator.clipboard.writeText(embedSnippet);
                 setCopiedEmbed(true);
+                showToast("Copied embed HTML code to clipboard!", "success");
                 setTimeout(() => setCopiedEmbed(false), 2500);
               }}
-              className="w-full py-2 px-3 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-white border border-slate-700/80 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
             >
               {copiedEmbed ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedEmbed ? "Copied Embed HTML!" : "Copy Embed Code"}</span>
@@ -1161,89 +1238,231 @@ export default function MerchantDashboard() {
           {activeTab === 'catalog' && (
             <div className="space-y-6 animate-in fade-in">
               {/* Store Product Catalog Management */}
-      <div id="catalog" className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-xs">
+      <div id="catalog" className="space-y-6">
+        {/* Catalog Summary Stats Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
               <ShoppingBag className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-slate-900 text-base">Store Product Catalog</h3>
-                <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-extrabold border border-indigo-100">
-                  {merchantProducts.length} Items Published
-                </span>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Catalog Size</p>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl font-black text-slate-900">{merchantProducts.length}</span>
+                <span className="text-xs font-semibold text-slate-500">Active SKUs</span>
               </div>
-              <p className="text-xs text-slate-500">Add products to your catalog so customers and autonomous AI buyers can discover and purchase them.</p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowAddProductModal(true)}
-            className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center gap-2"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Add New Product</span>
-          </button>
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <Package className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Stock</p>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl font-black text-slate-900">
+                  {merchantProducts.reduce((acc: number, p: any) => acc + (Number(p.inventory) || 0), 0)}
+                </span>
+                <span className="text-xs font-semibold text-slate-500">Units Available</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <Sparkles className="w-5 h-5 text-indigo-500" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Vector Search</p>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-xl font-black text-indigo-600">100%</span>
+                <span className="text-xs font-semibold text-slate-500">Live & Synced</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {productsLoading ? (
-          <div className="py-12 flex justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-          </div>
-        ) : merchantProducts.length === 0 ? (
-          <div className="py-12 px-4 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-            <Inbox className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <h4 className="font-extrabold text-slate-800 text-sm">Your Catalog is Currently Empty</h4>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
-              You have not added any products to this store yet. Add your first item to make it transactable.
-            </p>
-            <button
-              onClick={() => setShowAddProductModal(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
-            >
-              + Add First Product
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {merchantProducts.map((prod: any) => (
-              <div key={prod.id} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:shadow-xs transition-shadow">
-                <div className="flex items-start gap-3">
-                  <img
-                    src={prod.metadata_?.image_url || "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=300&q=80"}
-                    alt={prod.name}
-                    className="w-14 h-14 object-cover rounded-xl border border-slate-200 shrink-0 bg-white"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 uppercase tracking-wide">
-                      {prod.category}
-                    </span>
-                    <h4 className="font-bold text-slate-900 text-xs mt-1 truncate">{prod.name}</h4>
-                    <p className="font-mono font-black text-indigo-600 text-sm mt-0.5">₹{Number(prod.price).toLocaleString()}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-200 text-xs">
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                    prod.inventory > 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"
-                  }`}>
-                    {prod.inventory > 0 ? `In Stock: ${prod.inventory}` : "Out of Stock"}
-                  </span>
-
-                  <button
-                    onClick={() => handleDeleteProduct(prod.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                    title="Remove from Catalog"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+        {/* Main Catalog Card */}
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
+          {/* Header & Action Controls */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h3 className="font-extrabold text-slate-900 text-lg tracking-tight">Store Product Catalog</h3>
+                <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-black border border-blue-100">
+                  {merchantProducts.length} Items
+                </span>
               </div>
-            ))}
+              <p className="text-xs text-slate-500 mt-0.5">Manage your catalog items, inventory levels, and AI product embeddings.</p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAddProductModal(true)}
+                className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Add New Product</span>
+              </button>
+            </div>
           </div>
-        )}
+
+          {/* Search Bar & Category Filter Chips */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={catalogSearch}
+                onChange={(e) => setCatalogSearch(e.target.value)}
+                placeholder="Search products by name, category, or specs..."
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all shadow-inner"
+              />
+              {catalogSearch && (
+                <button
+                  onClick={() => setCatalogSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Dynamic Category Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              {["ALL", ...Array.from(new Set(merchantProducts.map((p: any) => p.category).filter(Boolean)))].map((cat: any) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategoryFilter(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    selectedCategoryFilter.toUpperCase() === cat.toUpperCase()
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {cat === "ALL" ? "All Products" : cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Product Grid */}
+          {productsLoading ? (
+            <div className="py-16 flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <p className="text-xs font-bold text-slate-400">Loading catalog inventory...</p>
+            </div>
+          ) : merchantProducts.length === 0 ? (
+            <div className="py-16 px-4 text-center bg-slate-50/70 rounded-3xl border border-dashed border-slate-200">
+              <div className="w-14 h-14 bg-white rounded-2xl shadow-xs border border-slate-200 flex items-center justify-center mx-auto mb-3 text-slate-400">
+                <Inbox className="w-7 h-7" />
+              </div>
+              <h4 className="font-extrabold text-slate-900 text-sm">Your Catalog is Currently Empty</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-5 leading-relaxed">
+                You haven't added any products to this storefront yet. Add your first product to enable autonomous AI shopping and instant checkout.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAddProductModal(true)}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 inline-flex items-center gap-2 cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Add First Product</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              {merchantProducts
+                .filter((prod: any) => {
+                  const matchesCat = selectedCategoryFilter === "ALL" || (prod.category?.toUpperCase() === selectedCategoryFilter.toUpperCase());
+                  const matchesQuery = !catalogSearch.trim() ||
+                    (prod.name && prod.name.toLowerCase().includes(catalogSearch.toLowerCase())) ||
+                    (prod.category && prod.category.toLowerCase().includes(catalogSearch.toLowerCase())) ||
+                    (prod.description && prod.description.toLowerCase().includes(catalogSearch.toLowerCase()));
+                  return matchesCat && matchesQuery;
+                })
+                .map((prod: any) => {
+                  const prodImg = prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url || "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80";
+                  return (
+                    <div 
+                      key={prod.id} 
+                      className="group bg-white border border-slate-200/90 hover:border-blue-400/90 rounded-3xl overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between"
+                    >
+                      {/* Product Image Area */}
+                      <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                        <img
+                          src={prodImg}
+                          alt={prod.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        {/* Gradient Vignette */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60" />
+
+                        {/* Category Floating Badge */}
+                        <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md text-slate-800 text-[10px] font-extrabold uppercase tracking-wide border border-white/60 shadow-xs">
+                          {prod.category}
+                        </span>
+
+                        {/* Stock Badge */}
+                        <span className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-black shadow-xs backdrop-blur-md ${
+                          prod.inventory > 0 
+                            ? "bg-emerald-500/90 text-white" 
+                            : "bg-rose-500/90 text-white"
+                        }`}>
+                          {prod.inventory > 0 ? `${prod.inventory} In Stock` : "Out of Stock"}
+                        </span>
+                      </div>
+
+                      {/* Card Content */}
+                      <div className="p-4 flex-1 flex flex-col justify-between">
+                        <div>
+                          <h4 className="font-extrabold text-slate-900 text-sm group-hover:text-blue-600 transition-colors line-clamp-1">
+                            {prod.name}
+                          </h4>
+                          <p className="text-[11px] text-slate-500 line-clamp-2 mt-1 leading-relaxed">
+                            {prod.description || "High performance product optimized for autonomous commerce."}
+                          </p>
+                        </div>
+
+                        <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Price</span>
+                            <span className="font-mono font-black text-blue-600 text-base">
+                              ₹{Number(prod.price).toLocaleString("en-IN")}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <a
+                              href={`${agentShareUrl}&q=${encodeURIComponent(prod.name)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                              title="Test product in AI Storefront"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteProduct(prod.id)}
+                              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                              title="Remove from Catalog"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
       </div>
             </div>
           )}
@@ -1889,7 +2108,7 @@ export default function MerchantDashboard() {
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(createdStoreResult.shareable_chat_url);
-                      alert("Copied store agent URL to clipboard!");
+                      showToast("Copied store agent URL to clipboard!", "success");
                     }}
                     className="w-full sm:flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
                   >
@@ -1922,32 +2141,34 @@ export default function MerchantDashboard() {
               <X className="w-5 h-5" />
             </button>
 
-            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-xs">
-              <QrCode className="w-6 h-6" />
-            </div>
-
-            <h3 className="font-black text-slate-900 text-lg">{currentStoreName}</h3>
-            <p className="text-xs text-slate-500 mb-4">Scan with any smartphone camera to launch the AI Shopping Concierge</p>
-
             {/* Live Generated QR Code Card */}
-            <div id="printable-qr-poster" className="bg-white p-6 rounded-3xl border border-slate-200 text-center mb-4 shadow-xs">
-              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-xs">
-                <QrCode className="w-6 h-6" />
+            <div id="printable-qr-poster" className="bg-white p-5 rounded-3xl border border-slate-200 text-center mb-4 shadow-xs">
+              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-2 shadow-xs">
+                <QrCode className="w-5 h-5" />
               </div>
 
-              <h3 className="font-black text-slate-900 text-lg">{currentStoreName}</h3>
-              <p className="text-xs text-slate-500 mb-4">Scan with any smartphone camera to launch the AI Shopping Concierge</p>
+              <h3 className="font-black text-slate-900 text-base">{currentStoreName}</h3>
+              <p className="text-[11px] text-slate-500 mb-3">Scan with your smartphone camera to launch the BuyFlow AI Concierge</p>
 
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 inline-block mb-4 shadow-xs">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(agentShareUrl)}`}
-                  alt="Storefront QR Code"
-                  className="w-52 h-52 rounded-xl mx-auto"
-                />
+              {/* QR Image with BuyFlow Logo in Center */}
+              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 inline-block mb-3 shadow-xs">
+                <div className="relative inline-block">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(agentShareUrl)}`}
+                    alt="Storefront QR Code"
+                    className="w-48 h-48 rounded-xl mx-auto block"
+                  />
+                  {/* BuyFlow Logo in Center */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-11 h-11 bg-white rounded-xl shadow-md border-2 border-white p-1 flex items-center justify-center">
+                      <img src="/logo.png" alt="BuyFlow" className="w-full h-full object-contain rounded-lg" />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <p className="text-[11px] text-slate-400 font-mono mb-1 truncate px-2">{agentShareUrl}</p>
-              <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Verified Razorpay AI Storefront</p>
+              <p className="text-[10px] text-slate-400 font-mono mb-1 truncate px-2">{agentShareUrl}</p>
+              <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Verified BuyFlow AI Storefront</p>
             </div>
 
             {/* Print Styles for Exactly 1-Page Poster Printing */}
@@ -1974,21 +2195,26 @@ export default function MerchantDashboard() {
               }
             `}</style>
 
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
+                type="button"
+                onClick={handleDownloadQrCode}
+                className="py-2.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download QR</span>
+              </button>
+              
+              <button
+                type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(agentShareUrl);
-                  alert("Copied store agent URL to clipboard!");
+                  showToast("Copied store agent URL to clipboard!", "success");
                 }}
-                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors"
+                className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                Copy Link
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
-              >
-                <span>Print Poster (1 Page)</span>
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copy Link</span>
               </button>
             </div>
           </div>
@@ -2145,6 +2371,15 @@ export default function MerchantDashboard() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modern In-App Toast Dialog */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
 
     </div>

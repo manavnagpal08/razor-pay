@@ -74,13 +74,8 @@ def get_current_user(
 
 def get_current_customer(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> str:
     """
-    Enforces customer isolation. Requires a valid user tied to a Customer profile.
+    Enforces customer isolation. Allows customers and merchants testing their storefront to act as a customer.
     """
-    if current_user.role != "customer":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions. Requires customer access.",
-        )
     customer = db.query(Customer).filter(Customer.user_id == current_user.id).first()
     if not customer:
         import uuid

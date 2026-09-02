@@ -101,7 +101,29 @@ class CreateProductPayload(schemas.BaseModel):
 @router.get("/merchant/{merchant_id}", response_model=List[schemas.ProductResponse])
 def get_merchant_products(merchant_id: str, db: Session = Depends(get_db)):
     """Retrieve all catalog items owned by a specific merchant."""
-    return db.query(models.Product).filter(models.Product.merchant_id == merchant_id).all()
+    products = db.query(models.Product).filter(models.Product.merchant_id == merchant_id).all()
+    results = []
+    for p in products:
+        img = (p.metadata_ or {}).get("image_url") if isinstance(p.metadata_, dict) else None
+        p_dict = {
+            "id": p.id,
+            "merchant_id": p.merchant_id,
+            "name": p.name,
+            "category": p.category,
+            "description": p.description,
+            "price": float(p.price),
+            "currency": p.currency,
+            "inventory": p.inventory,
+            "image_url": img,
+            "features": p.features or {},
+            "use_cases": p.use_cases or [],
+            "metadata_": p.metadata_ or {},
+            "created_at": p.created_at,
+            "updated_at": p.updated_at,
+            "source_relations": []
+        }
+        results.append(p_dict)
+    return results
 
 @router.post("/", response_model=schemas.ProductResponse)
 def create_merchant_product(req: CreateProductPayload, db: Session = Depends(get_db)):
@@ -115,6 +137,7 @@ def create_merchant_product(req: CreateProductPayload, db: Session = Depends(get
         db.flush()
 
     prod_id = f"prod_{str(uuid.uuid4())[:8]}"
+    img_url = req.image_url or "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80"
     product = models.Product(
         id=prod_id,
         merchant_id=merchant_id,
@@ -126,12 +149,29 @@ def create_merchant_product(req: CreateProductPayload, db: Session = Depends(get
         currency="INR",
         features={"verified": True},
         use_cases=["Everyday", "Professional"],
-        metadata_={"image_url": req.image_url or "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80"}
+        metadata_={"image_url": img_url}
     )
     db.add(product)
     db.commit()
     db.refresh(product)
-    return product
+    
+    return {
+        "id": product.id,
+        "merchant_id": product.merchant_id,
+        "name": product.name,
+        "category": product.category,
+        "description": product.description,
+        "price": float(product.price),
+        "currency": product.currency,
+        "inventory": product.inventory,
+        "image_url": img_url,
+        "features": product.features or {},
+        "use_cases": product.use_cases or [],
+        "metadata_": product.metadata_ or {},
+        "created_at": product.created_at,
+        "updated_at": product.updated_at,
+        "source_relations": []
+    }
 
 @router.delete("/{product_id}")
 def delete_merchant_product(product_id: str, db: Session = Depends(get_db)):

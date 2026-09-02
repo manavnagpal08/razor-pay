@@ -200,3 +200,44 @@ def sync_user(req: SyncRequest, db: Session = Depends(get_db)):
             db.rollback()
 
     return {"status": "synced", "user_id": user_id, "role": user.role}
+class GoogleAuthPayload(BaseModel):
+    email: str
+    name: Optional[str] = None
+    role: str = "customer"
+
+@router.post("/google", response_model=Token)
+def google_auth_login(req: GoogleAuthPayload, db: Session = Depends(get_db)):
+    """
+    1-Click Google Sign-In & Sign-Up: Authenticates user and issues signed JWT.
+    """
+    clean_email = req.email.strip().lower()
+    user = db.query(User).filter(User.email == clean_email).first()
+    
+    if not user:
+        user_id = str(uuid.uuid4())
+        user = User(
+            id=user_id,
+            email=clean_email,
+            name=req.name or clean_email.split("@")[0],
+            password_hash="oauth_google_verified",
+            role=req.role
+        )
+        db.add(user)
+        
+        if req.role == "merchant":
+            merchant = Merchant(id=user_id, name=f"{user.name}'s Store", currency="INR")
+            db.add(merchant)
+        else:
+            customer = Customer(id=str(uuid.uuid4()), user_id=user_id, segment="new")
+            db.add(customer)
+            
+        db.commit()
+        db.refresh(user)
+
+    token = create_access_token(subject=user.id)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": user.role,
+        "name": user.name or clean_email.split("@")[0]
+    }

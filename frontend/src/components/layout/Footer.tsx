@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ShieldCheck, Truck, RotateCcw, Headphones, Heart } from "lucide-react";
+import { Heart } from "lucide-react";
 
 export function Footer() {
   const pathname = usePathname();
@@ -11,53 +11,6 @@ export function Footer() {
   if (isEmbed || pathname === "/chat") return null;
   return (
     <footer className="w-full border-t border-slate-200/80 bg-white text-slate-600 mt-20">
-      {/* Top Value Propositions */}
-      <div className="border-b border-slate-100 bg-slate-50/50">
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
-                <Truck className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-slate-900">Express Delivery</h4>
-                <p className="text-[11px] text-slate-500">Free shipping on orders above ₹999</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-slate-900">Secure Payments</h4>
-                <p className="text-[11px] text-slate-500">256-bit encrypted Razorpay checkout</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                <RotateCcw className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-slate-900">7-Day Easy Returns</h4>
-                <p className="text-[11px] text-slate-500">Hassle-free replacement guarantee</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
-                <Headphones className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-slate-900">24/7 AI Concierge</h4>
-                <p className="text-[11px] text-slate-500">Instant expert product advice</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Main Footer Links */}
       <div className="container mx-auto px-4 py-12 max-w-7xl">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
@@ -65,11 +18,13 @@ export function Footer() {
           {/* Brand */}
           <div className="md:col-span-1 space-y-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-500/20">
-                <span className="text-white font-black text-base leading-none">R</span>
-              </div>
+              <img 
+                src="/logo.png" 
+                alt="BuyFlow" 
+                className="w-8 h-8 rounded-xl object-contain shadow-xs" 
+              />
               <span className="font-extrabold text-lg tracking-tight text-slate-900">
-                Razorpay <span className="text-blue-600 font-semibold text-sm">Store</span>
+                Buy<span className="text-blue-600 font-black">Flow</span>
               </span>
             </div>
             <p className="text-slate-500 text-xs leading-relaxed">
