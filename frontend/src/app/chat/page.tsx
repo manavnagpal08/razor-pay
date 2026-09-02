@@ -7,7 +7,7 @@ import Link from "next/link";
 import { 
   Send, Loader2, Bot, User as UserIcon, Sparkles, LogIn, ArrowRight, 
   ShieldCheck, CheckCircle2, ShoppingCart, Zap, Check, ChevronDown, ChevronUp, Store, ExternalLink,
-  Mic, MicOff, Volume2, VolumeX, Radio
+  Mic, MicOff, Volume2, VolumeX, Radio, Truck, Package, MapPin, Calendar, KeyRound, X, Search
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
@@ -30,6 +30,26 @@ function ChatContent() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const { user, token, refreshCartCount } = useAuth();
+
+  // In-Chat OTP Authentication & Frictionless Guest Checkout States
+  const [guestVerifiedToken, setGuestVerifiedToken] = useState<string | null>(null);
+  const [guestCustomer, setGuestCustomer] = useState<any>(null);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpName, setOtpName] = useState("");
+  const [otpPhone, setOtpPhone] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState("");
+  const [pendingProductToBuy, setPendingProductToBuy] = useState<any>(null);
+
+  // In-Chat Order Tracking States
+  const [showTrackingModal, setShowTrackingModal] = useState(false);
+  const [trackingEmail, setTrackingEmail] = useState("");
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingData, setTrackingData] = useState<any>(null);
+  const [trackingError, setTrackingError] = useState("");
   
   const suggestedPrompts = [
     "Show me accessories for my laptop setup",
@@ -164,14 +184,129 @@ function ChatContent() {
     }
   };
 
-  // 1-Click Conversational In-App Razorpay Checkout
-  const handleInstantBuy = async (product: any) => {
-    if (!token) {
-      alert("Please sign in to complete secure Razorpay checkout.");
-      window.location.href = "/login";
+  // Effective authenticated token (User Login OR Verified Guest Session)
+  const effectiveToken = token || guestVerifiedToken;
+
+  // Send OTP for In-Chat Verification
+  const handleSendOtp = async () => {
+    if (!otpEmail.trim()) {
+      setOtpError("Please enter your email address.");
       return;
     }
+    setOtpLoading(true);
+    setOtpError("");
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/chat/auth/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: otpEmail.trim(),
+          phone: otpPhone.trim() || undefined,
+          purpose: "CHECKOUT"
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOtpSent(true);
+        if (data.otp_hint) {
+          setOtpCode(data.otp_hint); // Prefill demo OTP for fast hackathon testing!
+        }
+      } else {
+        setOtpError(data.detail || "Failed to send verification code.");
+      }
+    } catch (e) {
+      setOtpError("Connection error while sending verification code.");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
 
+  // Verify In-Chat OTP
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode.trim()) {
+      setOtpError("Please enter the 6-digit verification code.");
+      return;
+    }
+    setOtpLoading(true);
+    setOtpError("");
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/chat/auth/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: otpEmail.trim(),
+          otp: otpCode.trim(),
+          name: otpName.trim() || "Valued Shopper",
+          phone: otpPhone.trim() || undefined
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        setGuestVerifiedToken(data.token);
+        setGuestCustomer(data.customer);
+        setShowOtpModal(false);
+        setOtpSent(false);
+
+        // Auto-launch checkout if customer clicked "Buy Now"
+        if (pendingProductToBuy) {
+          const prod = pendingProductToBuy;
+          setPendingProductToBuy(null);
+          proceedWithCheckout(prod, data.token);
+        }
+      } else {
+        setOtpError(data.detail || "Invalid code. Please use test code: 482910");
+      }
+    } catch (e) {
+      setOtpError("Failed to verify code. Please try again.");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  // Order Tracking Handler
+  const handleTrackOrders = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trackingEmail.trim()) {
+      setTrackingError("Please enter the email address used for your order.");
+      return;
+    }
+    setTrackingLoading(true);
+    setTrackingError("");
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/chat/orders/track`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trackingEmail.trim() })
+      });
+      const data = await res.json();
+      if (res.ok && data.found) {
+        setTrackingData(data);
+      } else {
+        setTrackingError(data.message || "No orders found matching this email.");
+      }
+    } catch (e) {
+      setTrackingError("Failed to retrieve order tracking.");
+    } finally {
+      setTrackingLoading(false);
+    }
+  };
+
+  // 1-Click Conversational In-App Razorpay Checkout
+  const handleInstantBuy = async (product: any) => {
+    if (!effectiveToken) {
+      setPendingProductToBuy(product);
+      setOtpError("");
+      setShowOtpModal(true);
+      return;
+    }
+    proceedWithCheckout(product, effectiveToken);
+  };
+
+  const proceedWithCheckout = async (product: any, activeToken: string) => {
     if (!scriptLoaded && !(window as any).Razorpay) {
       alert("Razorpay payment gateway is loading. Please retry in a few seconds.");
       return;
@@ -185,7 +320,7 @@ function ChatContent() {
       const cartRes = await fetch(`${apiUrl}/api/cart/`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token}`,
+          "Authorization": `Bearer ${activeToken}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({})
@@ -197,7 +332,7 @@ function ChatContent() {
       await fetch(`${apiUrl}/api/cart/items`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token}`,
+          "Authorization": `Bearer ${activeToken}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ product_id: product.id, quantity: 1 })
@@ -207,7 +342,7 @@ function ChatContent() {
       const orderRes = await fetch(`${apiUrl}/api/orders/`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token}`,
+          "Authorization": `Bearer ${activeToken}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ cart_id: cartData.id })
@@ -216,6 +351,9 @@ function ChatContent() {
       const orderData = await orderRes.json();
 
       // 4. Launch Razorpay Checkout Modal directly in the chat!
+      const customerEmail = user?.email || guestCustomer?.email || otpEmail || "shopper@example.com";
+      const customerName = user?.displayName || guestCustomer?.name || otpName || "Valued Customer";
+
       const options = {
         key: orderData.key_id,
         amount: orderData.amount_paise,
@@ -228,10 +366,11 @@ function ChatContent() {
             const verifyRes = await fetch(`${apiUrl}/api/orders/verify`, {
               method: "POST",
               headers: {
-                "Authorization": `Bearer ${token}`,
+                "Authorization": `Bearer ${activeToken}`,
                 "Content-Type": "application/json"
               },
               body: JSON.stringify({
+                internal_order_id: orderData.internal_order_id,
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 signature: response.razorpay_signature
@@ -248,6 +387,18 @@ function ChatContent() {
                   isSuccess: true
                 }
               ]);
+
+              // Notify host merchant website if embedded in an iframe!
+              if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                  type: "RAZORPAY_AI_ORDER_COMPLETED",
+                  merchant_id: merchantParam,
+                  order_id: response.razorpay_order_id,
+                  payment_id: response.razorpay_payment_id,
+                  amount: orderData.amount_paise / 100,
+                  product_name: product.name
+                }, "*");
+              }
             } else {
               alert("Payment verification failed.");
             }
@@ -257,8 +408,9 @@ function ChatContent() {
           }
         },
         prefill: {
-          email: user?.email || "customer@example.com",
-          name: user?.displayName || "Valued Customer"
+          email: customerEmail,
+          name: customerName,
+          contact: otpPhone || undefined
         },
         theme: { color: "#4f46e5" }
       };
@@ -377,6 +529,20 @@ function ChatContent() {
           >
             {voiceEnabled ? <Volume2 className="w-3.5 h-3.5 text-white" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
             <span className="hidden sm:inline">{voiceEnabled ? "Voice ON" : "Voice OFF"}</span>
+          </button>
+
+          {/* Order Tracking Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setTrackingError("");
+              setShowTrackingModal(true);
+            }}
+            className="px-3 py-1.5 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+            title="Track Order & Shipment Status"
+          >
+            <Truck className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="hidden sm:inline">Track Order</span>
           </button>
 
           {!user ? (
@@ -709,6 +875,226 @@ function ChatContent() {
           </div>
         </form>
       </div>
+
+      {/* In-Chat OTP Verification Modal */}
+      {showOtpModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 sm:p-8 relative">
+            <button
+              onClick={() => {
+                setShowOtpModal(false);
+                setPendingProductToBuy(null);
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-xl"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-3">
+              <KeyRound className="w-6 h-6" />
+            </div>
+
+            <h3 className="font-extrabold text-slate-900 text-lg text-center">Instant Checkout Verification</h3>
+            <p className="text-xs text-slate-500 text-center mb-5">
+              Zero passwords needed. Enter your details for automated order dispatch and delivery tracking.
+            </p>
+
+            {otpError && (
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
+                {otpError}
+              </div>
+            )}
+
+            {!otpSent ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Your Full Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Rahul Sharma"
+                    value={otpName}
+                    onChange={(e) => setOtpName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Email Address (For Invoice & Updates)</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. rahul@gmail.com"
+                    value={otpEmail}
+                    onChange={(e) => setOtpEmail(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Mobile Number (Optional for WhatsApp Alerts)</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. +91 9876543210"
+                    value={otpPhone}
+                    onChange={(e) => setOtpPhone(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSendOtp}
+                  disabled={otpLoading || !otpEmail.trim()}
+                  className="w-full mt-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  <span>Send 6-Digit Verification Code</span>
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-3 text-center">
+                  <p className="text-xs text-indigo-900 font-semibold">Verification code sent to <strong>{otpEmail}</strong></p>
+                  <p className="text-[11px] text-indigo-600 mt-0.5">Test Mode Code: <strong className="font-mono bg-white px-2 py-0.5 rounded border border-indigo-200">482910</strong></p>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Enter 6-Digit Code</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    required
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    placeholder="482910"
+                    className="w-full text-center tracking-[0.3em] font-mono text-lg font-black px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOtpSent(false)}
+                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={otpLoading || otpCode.length < 6}
+                    className="flex-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    <span>Verify & Launch Razorpay</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* In-Chat Order Tracking Modal */}
+      {showTrackingModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-8 relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowTrackingModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-xl hover:bg-slate-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                <Truck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-lg">Live Order & Shipment Tracking</h3>
+                <p className="text-xs text-slate-500">Track shipments across BlueDart, Delhivery, and local fulfillment</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleTrackOrders} className="flex gap-2 mb-4">
+              <input
+                type="email"
+                required
+                placeholder="Enter order email address..."
+                value={trackingEmail}
+                onChange={(e) => setTrackingEmail(e.target.value)}
+                className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+              <button
+                type="submit"
+                disabled={trackingLoading}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {trackingLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                <span>Track</span>
+              </button>
+            </form>
+
+            {trackingError && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 mb-4">
+                {trackingError}
+              </div>
+            )}
+
+            {trackingData && trackingData.orders && (
+              <div className="space-y-4">
+                {trackingData.orders.map((ord: any) => (
+                  <div key={ord.order_id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[11px] font-mono text-slate-400">Order #{ord.order_id.slice(0, 8)}</span>
+                        <h4 className="font-extrabold text-slate-900 text-sm">₹{Number(ord.amount).toLocaleString()}</h4>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold tracking-wide uppercase">
+                        {ord.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-xs text-slate-600 bg-white p-2.5 rounded-xl border border-slate-100">
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-bold">Courier</p>
+                        <p className="font-semibold text-slate-800 text-[11px] truncate">{ord.courier}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-bold">AWB Number</p>
+                        <p className="font-mono text-indigo-600 font-bold text-[11px] truncate">{ord.tracking_number}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-bold">Expected</p>
+                        <p className="font-semibold text-emerald-600 text-[11px] truncate">{ord.estimated_delivery}</p>
+                      </div>
+                    </div>
+
+                    {/* Shipment Timeline */}
+                    <div className="pt-2 border-t border-slate-200 space-y-2">
+                      <p className="text-[11px] font-bold text-slate-700 uppercase">Live Shipment Milestones</p>
+                      {ord.timeline.map((step: any, idx: number) => (
+                        <div key={idx} className="flex items-start gap-2.5 text-xs">
+                          <div className={`w-3.5 h-3.5 rounded-full mt-0.5 flex items-center justify-center shrink-0 ${
+                            step.completed ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
+                          }`}>
+                            {step.completed && <Check className="w-2.5 h-2.5" />}
+                          </div>
+                          <div>
+                            <p className={`font-semibold ${step.completed ? "text-slate-900" : "text-slate-400"}`}>
+                              {step.stage}
+                            </p>
+                            <p className="text-[11px] text-slate-500">{step.detail}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );

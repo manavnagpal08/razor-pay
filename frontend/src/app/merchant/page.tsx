@@ -52,6 +52,14 @@ export default function MerchantDashboard() {
   const [m2mBuyerAgent, setM2mBuyerAgent] = useState("Autonomous_Buyer_Bot_v1");
   const [m2mDiscountOffer, setM2mDiscountOffer] = useState(15);
   const [m2mResult, setM2mResult] = useState<any>(null);
+
+  // External Software / OMS Integration States
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
+  const [testingWebhook, setTestingWebhook] = useState(false);
+  const [webhookTestResult, setWebhookTestResult] = useState<any>(null);
+  const [savingWebhook, setSavingWebhook] = useState(false);
+  const [webhookMessage, setWebhookMessage] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const merchantId = selectedStore?.id || user?.uid || "demo_merchant";
@@ -74,6 +82,7 @@ export default function MerchantDashboard() {
     if (token) {
       fetchDashboard();
       fetchLogs();
+      fetchWebhookConfig();
     } else if (!authLoading) {
       setLoading(false);
     }
@@ -225,6 +234,72 @@ export default function MerchantDashboard() {
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+  };
+
+  const fetchWebhookConfig = async () => {
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/merchant/webhook-config`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWebhookUrl(data.webhook_url || "");
+        setWebhookSecret(data.webhook_secret || "");
+      }
+    } catch (e) {
+      console.warn("Failed to fetch webhook config:", e);
+    }
+  };
+
+  const handleSaveWebhook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingWebhook(true);
+    setWebhookMessage("");
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/merchant/webhook-config`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          webhook_url: webhookUrl,
+          webhook_secret: webhookSecret,
+          auto_sync: true
+        })
+      });
+      if (res.ok) {
+        setWebhookMessage("External OMS Webhook configuration saved! Automatic order sync active.");
+        setTimeout(() => setWebhookMessage(""), 4000);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingWebhook(false);
+    }
+  };
+
+  const handleTestWebhook = async () => {
+    setTestingWebhook(true);
+    setWebhookTestResult(null);
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/merchant/webhook-test`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWebhookTestResult(data);
+        fetchLogs();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTestingWebhook(false);
+    }
   };
 
   const handleUpdatePolicy = async (e: React.FormEvent) => {
@@ -578,6 +653,87 @@ export default function MerchantDashboard() {
           <p className="mt-3 text-xs font-semibold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
             ✓ {policyMessage}
           </p>
+        )}
+      </div>
+
+      {/* External Software / OMS Webhook Integration */}
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs">
+              <Code className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-slate-900 text-sm">External Software & OMS Webhook API</h3>
+                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100">
+                  REAL-TIME ORDER SYNC
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">Automatically push verified orders to your custom ERP, Shopify, WooCommerce, or order management software.</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleTestWebhook}
+            disabled={testingWebhook}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+          >
+            {testingWebhook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            <span>Test Webhook Ping</span>
+          </button>
+        </div>
+
+        <form onSubmit={handleSaveWebhook} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">External Order Webhook Endpoint</label>
+            <input
+              type="url"
+              required
+              placeholder="https://your-oms.com/api/webhooks/orders"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Webhook Signing Secret</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="whsec_..."
+                value={webhookSecret}
+                onChange={(e) => setWebhookSecret(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+              <button
+                type="submit"
+                disabled={savingWebhook}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors whitespace-nowrap shadow-xs"
+              >
+                {savingWebhook ? "Saving..." : "Save Config"}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {webhookMessage && (
+          <p className="mt-3 text-xs font-semibold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+            ✓ {webhookMessage}
+          </p>
+        )}
+
+        {webhookTestResult && (
+          <div className="mt-4 p-3.5 bg-slate-900 border border-slate-800 rounded-2xl font-mono text-[11px] text-slate-200 space-y-1.5 animate-in fade-in">
+            <div className="flex items-center justify-between text-emerald-400 font-bold pb-1 border-b border-slate-800">
+              <span>✓ WEBHOOK DISPATCH SUCCESS: HTTP {webhookTestResult.http_status} OK ({webhookTestResult.latency_ms}ms)</span>
+              <span className="text-slate-400 truncate max-w-xs">{webhookTestResult.target_url}</span>
+            </div>
+            <p className="text-slate-400">Target URL: <code className="text-blue-300">{webhookTestResult.target_url}</code></p>
+            <p className="text-slate-400">Simulated Payload: <code className="text-emerald-300">{JSON.stringify(webhookTestResult.payload_preview)}</code></p>
+          </div>
         )}
       </div>
 

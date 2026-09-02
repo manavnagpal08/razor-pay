@@ -30,6 +30,8 @@ app.include_router(cart.router, prefix="/api")
 app.include_router(orders.router, prefix="/api")
 app.include_router(merchant.router, prefix="/api")
 app.include_router(agent_protocol.router)
+from app.api import chat_auth
+app.include_router(chat_auth.router)
 
 @app.get("/.well-known/agent.json")
 def well_known_agent_manifest():
