@@ -37,42 +37,12 @@ export function Navbar() {
         {/* Nav Links */}
         <div className="hidden md:flex items-center space-x-1 text-sm font-medium">
           {role === "merchant" ? (
-            <>
-              <Link 
-                href="/merchant" 
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition-all ${
-                  pathname === '/merchant' 
-                    ? 'bg-indigo-600 text-white font-bold shadow-xs' 
-                    : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 font-semibold'
-                }`}
-              >
-                <LayoutDashboard className="w-4 h-4" />
-                <span>Merchant Control Center</span>
-              </Link>
-
-              <Link 
-                href="/merchant#catalog" 
-                className="px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors font-semibold"
-              >
-                Product Catalog
-              </Link>
-
-              <Link 
-                href="/merchant#webhooks" 
-                className="px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors font-semibold"
-              >
-                OMS Webhooks
-              </Link>
-
-              <Link 
-                href="/chat" 
-                target="_blank"
-                className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors font-semibold text-xs border border-emerald-200/50"
-              >
-                <span>Live AI Storefront</span>
-                <Sparkles className="w-3 h-3 text-amber-500" />
-              </Link>
-            </>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-100 flex items-center gap-1.5">
+                <LayoutDashboard className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Merchant Workspace</span>
+              </span>
+            </div>
           ) : (
             <>
               <Link 

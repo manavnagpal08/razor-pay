@@ -61,6 +61,9 @@ export default function MerchantDashboard() {
   const [savingWebhook, setSavingWebhook] = useState(false);
   const [webhookMessage, setWebhookMessage] = useState("");
 
+  // Active Dashboard Tab
+  const [activeTab, setActiveTab] = useState<"overview" | "catalog" | "simulator" | "security" | "policy" | "webhooks" | "smtp" | "audit">("overview");
+
   // Product Catalog Management States
   const [merchantProducts, setMerchantProducts] = useState<any[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -71,6 +74,7 @@ export default function MerchantDashboard() {
   const [newProdInventory, setNewProdInventory] = useState<number>(15);
   const [newProdDescription, setNewProdDescription] = useState("");
   const [newProdImage, setNewProdImage] = useState("");
+  const [imageUploadMode, setImageUploadMode] = useState<"file" | "url">("file");
   const [creatingProduct, setCreatingProduct] = useState(false);
 
   // SMTP Gmail Delivery States
@@ -83,6 +87,21 @@ export default function MerchantDashboard() {
   const [smtpTestResult, setSmtpTestResult] = useState<any>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 3 * 1024 * 1024) {
+        alert("Image size should be under 3MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewProdImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const merchantId = selectedStore?.id || user?.uid || "demo_merchant";
   const currentStoreName = selectedStore?.name || "Razorpay Demo Store";
@@ -118,16 +137,25 @@ export default function MerchantDashboard() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "");
+      if (hash && ["overview", "catalog", "simulator", "security", "policy", "webhooks", "smtp", "audit"].includes(hash)) {
+        setActiveTab(hash as any);
+      }
+    }
+  }, []);
+
   const fetchDashboard = async () => {
     try {
       const apiUrl = getApiUrl();
       const headers = { "Authorization": `Bearer ${token}` };
 
-      const [metricsRes, activityRes, policyRes] = await Promise.all([
+      const [metricsRes, activityRes, policyRes, storesRes] = await Promise.all([
         fetch(`${apiUrl}/api/merchant/dashboard`, { headers }),
         fetch(`${apiUrl}/api/merchant/ai-activity`, { headers }),
         fetch(`${apiUrl}/api/merchant/policies`, { headers }),
-        fetch(`${apiUrl}/api/merchant/stores`)
+        fetch(`${apiUrl}/api/merchant/stores`, { headers })
       ]);
 
       if (metricsRes.ok) setMetrics(await metricsRes.json());
@@ -137,7 +165,6 @@ export default function MerchantDashboard() {
         setPolicy(pol);
         setMaxDiscountInput(Number(pol.max_discount_percent) || 20);
       }
-      const storesRes = await fetch(`${apiUrl}/api/merchant/stores`);
       if (storesRes.ok) {
         const storeData = await storesRes.json();
         setStores(storeData);
@@ -642,7 +669,181 @@ export default function MerchantDashboard() {
         </div>
       </div>
 
-      {/* Shareable AI Storefront Agent Banner */}
+
+      {/* 2-Column Responsive Workspace: Sidebar + Modular Tab Content */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* Left Navigation Sidebar */}
+        <aside className="w-full lg:w-64 bg-white border border-slate-200/80 rounded-3xl p-3 shadow-xs shrink-0 lg:sticky lg:top-20 z-10">
+          <div className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+            Control Center Menu
+          </div>
+          <nav className="space-y-1">
+            <button
+              onClick={() => setActiveTab("overview")}
+              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                activeTab === "overview" 
+                  ? "bg-indigo-600 text-white shadow-xs" 
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <TrendingUp className="w-4 h-4 shrink-0" />
+              <span>Overview & Sales</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("catalog")}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                activeTab === "catalog" 
+                  ? "bg-indigo-600 text-white shadow-xs" 
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <ShoppingBag className="w-4 h-4 shrink-0" />
+                <span>Product Catalog</span>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                activeTab === "catalog" ? "bg-white/20 text-white" : "bg-indigo-50 text-indigo-700"
+              }`}>
+                {merchantProducts.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("simulator")}
+              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                activeTab === "simulator" 
+                  ? "bg-indigo-600 text-white shadow-xs" 
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <Cpu className="w-4 h-4 shrink-0" />
+              <span>AI Buyer Simulator</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("security")}
+              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                activeTab === "security" 
+                  ? "bg-indigo-600 text-white shadow-xs" 
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span>Security Defense</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("policy")}
+              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                activeTab === "policy" 
+                  ? "bg-indigo-600 text-white shadow-xs" 
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <Sliders className="w-4 h-4 shrink-0" />
+              <span>Policy Safeguards</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("webhooks")}
+              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                activeTab === "webhooks" 
+                  ? "bg-indigo-600 text-white shadow-xs" 
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <Code className="w-4 h-4 shrink-0" />
+              <span>OMS Webhooks</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("smtp")}
+              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                activeTab === "smtp" 
+                  ? "bg-indigo-600 text-white shadow-xs" 
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <Mail className="w-4 h-4 shrink-0" />
+              <span>Gmail Delivery</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("audit")}
+              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                activeTab === "audit" 
+                  ? "bg-indigo-600 text-white shadow-xs" 
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <Terminal className="w-4 h-4 shrink-0" />
+              <span>Audit Ledger</span>
+            </button>
+          </nav>
+
+          <div className="mt-6 pt-4 border-t border-slate-100">
+            <a
+              href={agentShareUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-2xl text-xs font-bold transition-all flex items-center justify-between border border-emerald-200/60"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Open Live Store</span>
+              </div>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </aside>
+
+        {/* Right Active Page Viewport */}
+        <main className="flex-1 w-full space-y-6 min-w-0">
+
+          {activeTab === 'overview' && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center gap-2.5 text-slate-600 mb-2">
+            <TrendingUp className="w-5 h-5 text-indigo-600" />
+            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">Gross Revenue</h3>
+          </div>
+          <p className="text-3xl font-extrabold text-slate-900">₹{Number(metrics?.revenue || 0).toLocaleString()}</p>
+          <p className="text-[11px] text-emerald-600 font-bold mt-1">↑ Verified Razorpay Captures</p>
+        </div>
+        
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center gap-2.5 text-slate-600 mb-2">
+            <ShoppingBag className="w-5 h-5 text-blue-600" />
+            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">Paid Orders</h3>
+          </div>
+          <p className="text-3xl font-extrabold text-slate-900">{metrics?.orders || 0}</p>
+          <p className="text-[11px] text-slate-500 mt-1 font-medium">AOV: ₹{Number(metrics?.average_order_value || 0).toLocaleString()}</p>
+        </div>
+        
+        <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 rounded-3xl shadow-md shadow-indigo-500/20 text-white">
+          <div className="flex items-center gap-2.5 text-indigo-100 mb-2">
+            <BrainCircuit className="w-5 h-5" />
+            <h3 className="font-bold text-xs uppercase tracking-wider text-indigo-100">AI Recommendations</h3>
+          </div>
+          <p className="text-3xl font-extrabold">{metrics?.ai_recommendations || 0}</p>
+          <p className="text-[11px] text-indigo-200 mt-1 font-medium">
+            <span className="text-white font-bold">{metrics?.upsell_proposals || 0}</span> Upsells | <span className="text-white font-bold">{metrics?.cross_sell_proposals || 0}</span> Cross-sells
+          </p>
+        </div>
+
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center gap-2.5 text-slate-600 mb-2">
+            <ShieldAlert className="w-5 h-5 text-amber-500" />
+            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">Policy Blocks</h3>
+          </div>
+          <p className="text-3xl font-extrabold text-slate-900">{metrics?.policy_blocks || 0}</p>
+          <p className="text-[11px] text-amber-600 font-semibold mt-1">Autonomous violations prevented</p>
+        </div>
+      </div>
+              {/* Shareable AI Storefront Agent Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-indigo-500/30 relative overflow-hidden">
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="space-y-2.5 max-w-2xl">
@@ -726,361 +927,7 @@ export default function MerchantDashboard() {
           </div>
         </div>
       </div>
-      
-      {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center gap-2.5 text-slate-600 mb-2">
-            <TrendingUp className="w-5 h-5 text-indigo-600" />
-            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">Gross Revenue</h3>
-          </div>
-          <p className="text-3xl font-extrabold text-slate-900">₹{Number(metrics?.revenue || 0).toLocaleString()}</p>
-          <p className="text-[11px] text-emerald-600 font-bold mt-1">↑ Verified Razorpay Captures</p>
-        </div>
-        
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center gap-2.5 text-slate-600 mb-2">
-            <ShoppingBag className="w-5 h-5 text-blue-600" />
-            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">Paid Orders</h3>
-          </div>
-          <p className="text-3xl font-extrabold text-slate-900">{metrics?.orders || 0}</p>
-          <p className="text-[11px] text-slate-500 mt-1 font-medium">AOV: ₹{Number(metrics?.average_order_value || 0).toLocaleString()}</p>
-        </div>
-        
-        <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 rounded-3xl shadow-md shadow-indigo-500/20 text-white">
-          <div className="flex items-center gap-2.5 text-indigo-100 mb-2">
-            <BrainCircuit className="w-5 h-5" />
-            <h3 className="font-bold text-xs uppercase tracking-wider text-indigo-100">AI Recommendations</h3>
-          </div>
-          <p className="text-3xl font-extrabold">{metrics?.ai_recommendations || 0}</p>
-          <p className="text-[11px] text-indigo-200 mt-1 font-medium">
-            <span className="text-white font-bold">{metrics?.upsell_proposals || 0}</span> Upsells | <span className="text-white font-bold">{metrics?.cross_sell_proposals || 0}</span> Cross-sells
-          </p>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center gap-2.5 text-slate-600 mb-2">
-            <ShieldAlert className="w-5 h-5 text-amber-500" />
-            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">Policy Blocks</h3>
-          </div>
-          <p className="text-3xl font-extrabold text-slate-900">{metrics?.policy_blocks || 0}</p>
-          <p className="text-[11px] text-amber-600 font-semibold mt-1">Autonomous violations prevented</p>
-        </div>
-      </div>
-
-      {/* Policy Control Panel */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <Sliders className="w-5 h-5 text-indigo-600" />
-            <h2 className="font-bold text-slate-900 text-sm">Policy Engine Safeguards</h2>
-          </div>
-          <span className="text-xs text-slate-500 font-medium">Enforced at Server Boundary</span>
-        </div>
-
-        <form onSubmit={handleUpdatePolicy} className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="flex-1">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Maximum Allowed AI Discount (%)
-            </label>
-            <p className="text-xs text-slate-500">Any AI discount proposal exceeding this threshold is automatically rejected by the policy engine.</p>
-          </div>
-
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="relative w-28">
-              <input 
-                type="number"
-                min="0"
-                max="100"
-                value={maxDiscountInput}
-                onChange={e => setMaxDiscountInput(Number(e.target.value))}
-                className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              />
-              <span className="absolute right-3 top-2 text-xs font-bold text-slate-400">%</span>
-            </div>
-
-            <button 
-              type="submit"
-              disabled={savingPolicy}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm shadow-indigo-500/20"
-            >
-              {savingPolicy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-              <span>Save Policy</span>
-            </button>
-          </div>
-        </form>
-
-        {policyMessage && (
-          <p className="mt-3 text-xs font-semibold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
-            ✓ {policyMessage}
-          </p>
-        )}
-      </div>
-
-      {/* External Software / OMS Webhook Integration */}
-      <div id="webhooks" className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs">
-              <Code className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-slate-900 text-sm">External Software & OMS Webhook API</h3>
-                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100">
-                  REAL-TIME ORDER SYNC
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">Automatically push verified orders to your custom ERP, Shopify, WooCommerce, or order management software.</p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleTestWebhook}
-            disabled={testingWebhook}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
-          >
-            {testingWebhook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-            <span>Test Webhook Ping</span>
-          </button>
-        </div>
-
-        <form onSubmit={handleSaveWebhook} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">External Order Webhook Endpoint</label>
-            <input
-              type="url"
-              required
-              placeholder="https://your-oms.com/api/webhooks/orders"
-              value={webhookUrl}
-              onChange={(e) => setWebhookUrl(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Webhook Signing Secret</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="whsec_..."
-                value={webhookSecret}
-                onChange={(e) => setWebhookSecret(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              />
-              <button
-                type="submit"
-                disabled={savingWebhook}
-                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors whitespace-nowrap shadow-xs"
-              >
-                {savingWebhook ? "Saving..." : "Save Config"}
-              </button>
-            </div>
-          </div>
-        </form>
-
-        {webhookMessage && (
-          <p className="mt-3 text-xs font-semibold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
-            ✓ {webhookMessage}
-          </p>
-        )}
-
-        {webhookTestResult && (
-          <div className="mt-4 p-3.5 bg-slate-900 border border-slate-800 rounded-2xl font-mono text-[11px] text-slate-200 space-y-1.5 animate-in fade-in">
-            <div className="flex items-center justify-between text-emerald-400 font-bold pb-1 border-b border-slate-800">
-              <span>✓ WEBHOOK DISPATCH SUCCESS: HTTP {webhookTestResult.http_status} OK ({webhookTestResult.latency_ms}ms)</span>
-              <span className="text-slate-400 truncate max-w-xs">{webhookTestResult.target_url}</span>
-            </div>
-            <p className="text-slate-400">Target URL: <code className="text-blue-300">{webhookTestResult.target_url}</code></p>
-            <p className="text-slate-400">Simulated Payload: <code className="text-emerald-300">{JSON.stringify(webhookTestResult.payload_preview)}</code></p>
-          </div>
-        )}
-      </div>
-
-      {/* Production Email Delivery (Gmail SMTP) */}
-      <div id="smtp" className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-xs">
-              <Mail className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-slate-900 text-sm">Production Email Delivery (Gmail SMTP)</h3>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                  smtpUser ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"
-                }`}>
-                  {smtpUser ? "LIVE SMTP CONNECTED" : "SIMULATION FALLBACK"}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">Configure your Google Gmail address and 16-character App Password to send live OTP codes and order receipts.</p>
-            </div>
-          </div>
-        </div>
-
-        <form onSubmit={handleSaveSmtp} className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Gmail Address</label>
-            <input
-              type="email"
-              required
-              placeholder="e.g. store@gmail.com"
-              value={smtpUser}
-              onChange={(e) => setSmtpUser(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Google App Password (16 chars)</label>
-            <input
-              type="password"
-              placeholder="xxxx xxxx xxxx xxxx"
-              value={smtpPassword}
-              onChange={(e) => setSmtpPassword(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
-
-          <div className="flex items-end">
-            <button
-              type="submit"
-              disabled={savingSmtp}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
-            >
-              {savingSmtp ? "Saving..." : "Save Gmail Credentials"}
-            </button>
-          </div>
-        </form>
-
-        {smtpMessage && (
-          <p className="mb-4 text-xs font-semibold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
-            ✓ {smtpMessage}
-          </p>
-        )}
-
-        {/* Test Email Dispatch */}
-        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex-1 w-full sm:w-auto">
-            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Send Live Test Email</label>
-            <input
-              type="email"
-              placeholder="Enter your personal email to verify delivery..."
-              value={testEmailRecipient}
-              onChange={(e) => setTestEmailRecipient(e.target.value)}
-              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
-          <div className="flex items-end w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={handleTestSmtp}
-              disabled={testingSmtp || !testEmailRecipient.trim()}
-              className="w-full sm:w-auto px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-            >
-              {testingSmtp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              <span>Send Test Email</span>
-            </button>
-          </div>
-        </div>
-
-        {smtpTestResult && (
-          <div className={`mt-3 p-3 rounded-xl border text-xs font-mono ${
-            smtpTestResult.sent ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-200 text-amber-800"
-          }`}>
-            {smtpTestResult.message}
-          </div>
-        )}
-      </div>
-
-      {/* Store Product Catalog Management */}
-      <div id="catalog" className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-xs">
-              <ShoppingBag className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-slate-900 text-base">Store Product Catalog</h3>
-                <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-extrabold border border-indigo-100">
-                  {merchantProducts.length} Items Published
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">Add products to your catalog so customers and autonomous AI buyers can discover and purchase them.</p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowAddProductModal(true)}
-            className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center gap-2"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Add New Product</span>
-          </button>
-        </div>
-
-        {productsLoading ? (
-          <div className="py-12 flex justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-          </div>
-        ) : merchantProducts.length === 0 ? (
-          <div className="py-12 px-4 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-            <Inbox className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <h4 className="font-extrabold text-slate-800 text-sm">Your Catalog is Currently Empty</h4>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
-              You have not added any products to this store yet. Add your first item to make it transactable.
-            </p>
-            <button
-              onClick={() => setShowAddProductModal(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
-            >
-              + Add First Product
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {merchantProducts.map((prod: any) => (
-              <div key={prod.id} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:shadow-xs transition-shadow">
-                <div className="flex items-start gap-3">
-                  <img
-                    src={prod.metadata_?.image_url || "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=300&q=80"}
-                    alt={prod.name}
-                    className="w-14 h-14 object-cover rounded-xl border border-slate-200 shrink-0 bg-white"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 uppercase tracking-wide">
-                      {prod.category}
-                    </span>
-                    <h4 className="font-bold text-slate-900 text-xs mt-1 truncate">{prod.name}</h4>
-                    <p className="font-mono font-black text-indigo-600 text-sm mt-0.5">₹{Number(prod.price).toLocaleString()}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-200 text-xs">
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                    prod.inventory > 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"
-                  }`}>
-                    {prod.inventory > 0 ? `In Stock: ${prod.inventory}` : "Out of Stock"}
-                  </span>
-
-                  <button
-                    onClick={() => handleDeleteProduct(prod.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                    title="Remove from Catalog"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Analytics Charts */}
+              {/* Analytics Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border border-slate-200/80 rounded-3xl shadow-xs p-6">
           <div className="flex items-center justify-between mb-4">
@@ -1151,281 +998,7 @@ export default function MerchantDashboard() {
           )}
         </div>
       </div>
-
-      {/* Track 01 Showcase: M2M AI Buyer Simulator & Graceful Failure Suite */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* 1. M2M AI Buyer Simulator */}
-        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 border border-indigo-500/30 rounded-3xl p-6 shadow-xl text-white flex flex-col justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-400/30">
-                <Cpu className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Track 01 Core: Agent-to-Agent Commerce</span>
-              </div>
-              <span className="text-[10px] font-mono text-slate-400">UAP / AP2 Compliant</span>
-            </div>
-
-            <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-              <span>M2M Autonomous AI Buyer Simulator</span>
-            </h2>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Demonstrates making this merchant transactable by external AI buyers end-to-end via machine-readable protocol (<code className="text-indigo-300">/.well-known/agent.json</code>).
-            </p>
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">External AI Buyer Persona</label>
-                <select
-                  value={m2mBuyerAgent}
-                  onChange={(e) => setM2mBuyerAgent(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none"
-                >
-                  <option value="Enterprise_Procurement_AI_v4">🏢 Enterprise Procurement Bot</option>
-                  <option value="Personal_Shopper_AutoGPT_v2">🤖 Autonomous Personal Shopper</option>
-                  <option value="Smart_Cart_Aggregator_Agent">🛒 Smart Cart Aggregator</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Programmatic Discount RFP</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="0"
-                    max="40"
-                    value={m2mDiscountOffer}
-                    onChange={(e) => setM2mDiscountOffer(Number(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none pr-8"
-                  />
-                  <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">%</span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleRunM2MTransaction}
-              disabled={simulatingM2M}
-              className="w-full mt-2 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {simulatingM2M ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />}
-              <span>{simulatingM2M ? "Executing Machine-to-Machine RFP..." : "Simulate Autonomous AI Buyer Transaction"}</span>
-            </button>
-          </div>
-
-          {/* M2M Result Dual Console */}
-          {m2mResult && (
-            <div className="mt-4 p-3.5 bg-slate-950 border border-slate-800 rounded-2xl font-mono text-[11px] space-y-1.5 animate-in fade-in">
-              <div className="flex items-center justify-between text-emerald-400 font-bold pb-1 border-b border-slate-800">
-                <span>✓ M2M ORDER CREATED: {m2mResult.razorpay_order_id}</span>
-                <span className="text-slate-400">{m2mResult.agent_id}</span>
-              </div>
-              <p className="text-slate-300">Target Item: <strong className="text-white">{m2mResult.product?.name}</strong></p>
-              <p className="text-indigo-300">Policy Evaluation: {m2mResult.policy_evaluation?.reason}</p>
-              <div className="flex items-center justify-between pt-1 text-slate-400">
-                <span>Total: <strong className="text-emerald-400">₹{Number(m2mResult.financials?.total_amount).toLocaleString()}</strong></span>
-                <span className="text-[10px] bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-800">Razorpay Test Mode Verified</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 2. Security Defense & Graceful Failure Suite ("The Bar") */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex flex-col justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
-                <span>The Bar: Failure Handled Gracefully</span>
-              </div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">100% Bounded & Gated</span>
-            </div>
-
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">
-              Security Defense & Failure Testbed
-            </h2>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Verify that rogue agent discount exploitation is strictly rejected at the server boundary, and payment network timeouts recover with zero cart loss.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              <button
-                onClick={() => handleSimulateAttack("ROGUE_DISCOUNT_EXPLOIT")}
-                disabled={simulatingAttack}
-                className="p-3.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-2xl text-left transition-all group disabled:opacity-50"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 group-hover:scale-110 transition-transform" />
-                  <span className="text-xs font-bold text-rose-900">Rogue 50% Exploit Attack</span>
-                </div>
-                <p className="text-[11px] text-rose-700 leading-snug">
-                  Simulate buyer agent demanding an unauthorized 50% discount.
-                </p>
-              </button>
-
-              <button
-                onClick={() => handleSimulateAttack("PAYMENT_DROP_RECOVERY")}
-                disabled={simulatingAttack}
-                className="p-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-2xl text-left transition-all group disabled:opacity-50"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <RefreshCw className="w-4 h-4 text-amber-600 group-hover:rotate-180 transition-transform duration-500" />
-                  <span className="text-xs font-bold text-amber-900">Gateway Timeout Recovery</span>
-                </div>
-                <p className="text-[11px] text-amber-700 leading-snug">
-                  Simulate network drop during checkout and test session recovery.
-                </p>
-              </button>
-            </div>
-          </div>
-
-          {/* Defense Result Display */}
-          {attackResult && (
-            <div className={`mt-4 p-4 rounded-2xl border text-xs space-y-2 animate-in fade-in ${
-              attackResult.threat_detected 
-                ? "bg-rose-50/70 border-rose-200 text-rose-950" 
-                : "bg-emerald-50/70 border-emerald-200 text-emerald-950"
-            }`}>
-              <div className="flex items-center justify-between font-bold">
-                <span className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  {attackResult.attack_type === "ROGUE_DISCOUNT_EXPLOIT" ? "POLICY BOUNDARY INTERCEPTION" : "SESSION STATE SECURED"}
-                </span>
-                <span className="font-mono text-[10px] text-slate-500">ID: {attackResult.audit_ledger_id?.slice(0, 8)}</span>
-              </div>
-
-              {attackResult.attack_type === "ROGUE_DISCOUNT_EXPLOIT" ? (
-                <>
-                  <p className="text-rose-700 font-semibold">
-                    🚨 <strong>Threat Neutralized:</strong> Demanded {attackResult.demanded_discount} rejected by server policy engine.
-                  </p>
-                  <p className="text-slate-700">
-                    ✓ <strong>Graceful Recovery:</strong> Supervisor offered policy-bounded {attackResult.graceful_recovery?.counter_offer_discount} + {attackResult.graceful_recovery?.added_perk}. Zero merchant margin compromised.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-emerald-800 font-semibold">
-                    ✓ <strong>Cart Preserved:</strong> {attackResult.graceful_recovery?.cart_status}.
-                  </p>
-                  <p className="text-slate-700">
-                    ✓ <strong>Fallback Rail:</strong> {attackResult.graceful_recovery?.alternative_rail_offered}. Customer resumed without re-adding items.
-                  </p>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-      </div>
-
-      {/* Live System Logs & Agent Telemetry Console */}
-      <div className="bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl p-6 text-slate-100 overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-800/80">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-indigo-900/50 border border-indigo-700/50 flex items-center justify-center text-indigo-400">
-              <Terminal className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-bold text-white text-base">Live Agent Telemetry & Audit Logs</h2>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold flex items-center gap-1 border border-emerald-500/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  STREAM ACTIVE
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">Deterministic traces across LangGraph Supervisor, Policy Engine, and Razorpay SDK</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button
-              onClick={fetchLogs}
-              disabled={logsLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? "animate-spin text-indigo-400" : ""}`} />
-              <span>Refresh</span>
-            </button>
-
-            <button
-              onClick={handleExportLogs}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export JSON</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Filter Pills */}
-        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 text-xs">
-          <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0 mr-1" />
-          {["ALL", "POLICY_BLOCK", "PAYMENT", "SUCCESS"].map((filter) => (
-            <button
-              key={filter}
-              onClick={() => setLogFilter(filter)}
-              className={`px-3 py-1 rounded-xl font-bold transition-all shrink-0 ${
-                logFilter === filter
-                  ? "bg-indigo-600 text-white shadow-xs"
-                  : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
-              }`}
-            >
-              {filter === "ALL" ? `All Traces (${logs.length})` : 
-               filter === "POLICY_BLOCK" ? "Policy Blocks" :
-               filter === "PAYMENT" ? "Payments" : "AI Decisions"}
-            </button>
-          ))}
-        </div>
-
-        {/* Terminal Logs Table */}
-        <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-3 font-mono text-xs max-h-[380px] overflow-y-auto space-y-2">
-          {filteredLogs.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">
-              No telemetry events recorded matching the selected filter.
-            </div>
-          ) : (
-            filteredLogs.map((log) => (
-              <div key={log.id} className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60 hover:border-slate-700 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-start sm:items-center gap-2.5">
-                  <span className="text-slate-500 text-[11px] shrink-0">
-                    {new Date(log.timestamp).toLocaleTimeString()}
-                  </span>
-
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0 ${
-                    log.level === "POLICY_BLOCK"
-                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                      : log.level === "PAYMENT"
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                        : "bg-blue-500/20 text-blue-300 border border-blue-500/40"
-                  }`}>
-                    {log.level}
-                  </span>
-
-                  <span className="text-indigo-400 font-bold text-xs shrink-0">
-                    [{log.component}]
-                  </span>
-
-                  <span className="text-slate-200 text-xs line-clamp-1">
-                    {log.message}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto text-[11px]">
-                  <span className="text-slate-500 font-mono">
-                    {log.trace_id}
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">
-                    {log.latency_ms}ms
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-      
-      {/* Copilot & AI Action Split */}
+              {/* Copilot & AI Action Split */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Merchant Copilot */}
@@ -1545,6 +1118,620 @@ export default function MerchantDashboard() {
         </div>
 
       </div>
+            </div>
+          )}
+
+          {activeTab === 'catalog' && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* Store Product Catalog Management */}
+      <div id="catalog" className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-xs">
+              <ShoppingBag className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-slate-900 text-base">Store Product Catalog</h3>
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-extrabold border border-indigo-100">
+                  {merchantProducts.length} Items Published
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">Add products to your catalog so customers and autonomous AI buyers can discover and purchase them.</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAddProductModal(true)}
+            className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center gap-2"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Add New Product</span>
+          </button>
+        </div>
+
+        {productsLoading ? (
+          <div className="py-12 flex justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+          </div>
+        ) : merchantProducts.length === 0 ? (
+          <div className="py-12 px-4 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            <Inbox className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <h4 className="font-extrabold text-slate-800 text-sm">Your Catalog is Currently Empty</h4>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
+              You have not added any products to this store yet. Add your first item to make it transactable.
+            </p>
+            <button
+              onClick={() => setShowAddProductModal(true)}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+            >
+              + Add First Product
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {merchantProducts.map((prod: any) => (
+              <div key={prod.id} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:shadow-xs transition-shadow">
+                <div className="flex items-start gap-3">
+                  <img
+                    src={prod.metadata_?.image_url || "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=300&q=80"}
+                    alt={prod.name}
+                    className="w-14 h-14 object-cover rounded-xl border border-slate-200 shrink-0 bg-white"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 uppercase tracking-wide">
+                      {prod.category}
+                    </span>
+                    <h4 className="font-bold text-slate-900 text-xs mt-1 truncate">{prod.name}</h4>
+                    <p className="font-mono font-black text-indigo-600 text-sm mt-0.5">₹{Number(prod.price).toLocaleString()}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200 text-xs">
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                    prod.inventory > 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"
+                  }`}>
+                    {prod.inventory > 0 ? `In Stock: ${prod.inventory}` : "Out of Stock"}
+                  </span>
+
+                  <button
+                    onClick={() => handleDeleteProduct(prod.id)}
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                    title="Remove from Catalog"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+            </div>
+          )}
+
+          {activeTab === 'simulator' && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* 1. M2M AI Buyer Simulator */}
+        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 border border-indigo-500/30 rounded-3xl p-6 shadow-xl text-white flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-400/30">
+                <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Track 01 Core: Agent-to-Agent Commerce</span>
+              </div>
+              <span className="text-[10px] font-mono text-slate-400">UAP / AP2 Compliant</span>
+            </div>
+
+            <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
+              <span>M2M Autonomous AI Buyer Simulator</span>
+            </h2>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Demonstrates making this merchant transactable by external AI buyers end-to-end via machine-readable protocol (<code className="text-indigo-300">/.well-known/agent.json</code>).
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">External AI Buyer Persona</label>
+                <select
+                  value={m2mBuyerAgent}
+                  onChange={(e) => setM2mBuyerAgent(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none"
+                >
+                  <option value="Enterprise_Procurement_AI_v4">🏢 Enterprise Procurement Bot</option>
+                  <option value="Personal_Shopper_AutoGPT_v2">🤖 Autonomous Personal Shopper</option>
+                  <option value="Smart_Cart_Aggregator_Agent">🛒 Smart Cart Aggregator</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Programmatic Discount RFP</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="40"
+                    value={m2mDiscountOffer}
+                    onChange={(e) => setM2mDiscountOffer(Number(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none pr-8"
+                  />
+                  <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">%</span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleRunM2MTransaction}
+              disabled={simulatingM2M}
+              className="w-full mt-2 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {simulatingM2M ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />}
+              <span>{simulatingM2M ? "Executing Machine-to-Machine RFP..." : "Simulate Autonomous AI Buyer Transaction"}</span>
+            </button>
+          </div>
+
+          {/* M2M Result Dual Console */}
+          {m2mResult && (
+            <div className="mt-4 p-3.5 bg-slate-950 border border-slate-800 rounded-2xl font-mono text-[11px] space-y-1.5 animate-in fade-in">
+              <div className="flex items-center justify-between text-emerald-400 font-bold pb-1 border-b border-slate-800">
+                <span>✓ M2M ORDER CREATED: {m2mResult.razorpay_order_id}</span>
+                <span className="text-slate-400">{m2mResult.agent_id}</span>
+              </div>
+              <p className="text-slate-300">Target Item: <strong className="text-white">{m2mResult.product?.name}</strong></p>
+              <p className="text-indigo-300">Policy Evaluation: {m2mResult.policy_evaluation?.reason}</p>
+              <div className="flex items-center justify-between pt-1 text-slate-400">
+                <span>Total: <strong className="text-emerald-400">₹{Number(m2mResult.financials?.total_amount).toLocaleString()}</strong></span>
+                <span className="text-[10px] bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-800">Razorpay Test Mode Verified</span>
+              </div>
+            </div>
+          )}
+        </div>
+            </div>
+          )}
+
+          {activeTab === 'security' && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* 2. Security Defense & Graceful Failure Suite ("The Bar") */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                <span>The Bar: Failure Handled Gracefully</span>
+              </div>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">100% Bounded & Gated</span>
+            </div>
+
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">
+              Security Defense & Failure Testbed
+            </h2>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Verify that rogue agent discount exploitation is strictly rejected at the server boundary, and payment network timeouts recover with zero cart loss.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => handleSimulateAttack("ROGUE_DISCOUNT_EXPLOIT")}
+                disabled={simulatingAttack}
+                className="p-3.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-2xl text-left transition-all group disabled:opacity-50"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 group-hover:scale-110 transition-transform" />
+                  <span className="text-xs font-bold text-rose-900">Rogue 50% Exploit Attack</span>
+                </div>
+                <p className="text-[11px] text-rose-700 leading-snug">
+                  Simulate buyer agent demanding an unauthorized 50% discount.
+                </p>
+              </button>
+
+              <button
+                onClick={() => handleSimulateAttack("PAYMENT_DROP_RECOVERY")}
+                disabled={simulatingAttack}
+                className="p-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-2xl text-left transition-all group disabled:opacity-50"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <RefreshCw className="w-4 h-4 text-amber-600 group-hover:rotate-180 transition-transform duration-500" />
+                  <span className="text-xs font-bold text-amber-900">Gateway Timeout Recovery</span>
+                </div>
+                <p className="text-[11px] text-amber-700 leading-snug">
+                  Simulate network drop during checkout and test session recovery.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* Defense Result Display */}
+          {attackResult && (
+            <div className={`mt-4 p-4 rounded-2xl border text-xs space-y-2 animate-in fade-in ${
+              attackResult.threat_detected 
+                ? "bg-rose-50/70 border-rose-200 text-rose-950" 
+                : "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+            }`}>
+              <div className="flex items-center justify-between font-bold">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  {attackResult.attack_type === "ROGUE_DISCOUNT_EXPLOIT" ? "POLICY BOUNDARY INTERCEPTION" : "SESSION STATE SECURED"}
+                </span>
+                <span className="font-mono text-[10px] text-slate-500">ID: {attackResult.audit_ledger_id?.slice(0, 8)}</span>
+              </div>
+
+              {attackResult.attack_type === "ROGUE_DISCOUNT_EXPLOIT" ? (
+                <>
+                  <p className="text-rose-700 font-semibold">
+                    🚨 <strong>Threat Neutralized:</strong> Demanded {attackResult.demanded_discount} rejected by server policy engine.
+                  </p>
+                  <p className="text-slate-700">
+                    ✓ <strong>Graceful Recovery:</strong> Supervisor offered policy-bounded {attackResult.graceful_recovery?.counter_offer_discount} + {attackResult.graceful_recovery?.added_perk}. Zero merchant margin compromised.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-emerald-800 font-semibold">
+                    ✓ <strong>Cart Preserved:</strong> {attackResult.graceful_recovery?.cart_status}.
+                  </p>
+                  <p className="text-slate-700">
+                    ✓ <strong>Fallback Rail:</strong> {attackResult.graceful_recovery?.alternative_rail_offered}. Customer resumed without re-adding items.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+
+          {activeTab === 'policy' && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* Policy Control Panel */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs">
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <Sliders className="w-5 h-5 text-indigo-600" />
+            <h2 className="font-bold text-slate-900 text-sm">Policy Engine Safeguards</h2>
+          </div>
+          <span className="text-xs text-slate-500 font-medium">Enforced at Server Boundary</span>
+        </div>
+
+        <form onSubmit={handleUpdatePolicy} className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="flex-1">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Maximum Allowed AI Discount (%)
+            </label>
+            <p className="text-xs text-slate-500">Any AI discount proposal exceeding this threshold is automatically rejected by the policy engine.</p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative w-28">
+              <input 
+                type="number"
+                min="0"
+                max="100"
+                value={maxDiscountInput}
+                onChange={e => setMaxDiscountInput(Number(e.target.value))}
+                className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+              <span className="absolute right-3 top-2 text-xs font-bold text-slate-400">%</span>
+            </div>
+
+            <button 
+              type="submit"
+              disabled={savingPolicy}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm shadow-indigo-500/20"
+            >
+              {savingPolicy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              <span>Save Policy</span>
+            </button>
+          </div>
+        </form>
+
+        {policyMessage && (
+          <p className="mt-3 text-xs font-semibold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+            ✓ {policyMessage}
+          </p>
+        )}
+      </div>
+            </div>
+          )}
+
+          {activeTab === 'webhooks' && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* External Software / OMS Webhook Integration */}
+      <div id="webhooks" className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs">
+              <Code className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-slate-900 text-sm">External Software & OMS Webhook API</h3>
+                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100">
+                  REAL-TIME ORDER SYNC
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">Automatically push verified orders to your custom ERP, Shopify, WooCommerce, or order management software.</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleTestWebhook}
+            disabled={testingWebhook}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+          >
+            {testingWebhook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            <span>Test Webhook Ping</span>
+          </button>
+        </div>
+
+        <form onSubmit={handleSaveWebhook} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">External Order Webhook Endpoint</label>
+            <input
+              type="url"
+              required
+              placeholder="https://your-oms.com/api/webhooks/orders"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Webhook Signing Secret</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="whsec_..."
+                value={webhookSecret}
+                onChange={(e) => setWebhookSecret(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+              <button
+                type="submit"
+                disabled={savingWebhook}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors whitespace-nowrap shadow-xs"
+              >
+                {savingWebhook ? "Saving..." : "Save Config"}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {webhookMessage && (
+          <p className="mt-3 text-xs font-semibold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+            ✓ {webhookMessage}
+          </p>
+        )}
+
+        {webhookTestResult && (
+          <div className="mt-4 p-3.5 bg-slate-900 border border-slate-800 rounded-2xl font-mono text-[11px] text-slate-200 space-y-1.5 animate-in fade-in">
+            <div className="flex items-center justify-between text-emerald-400 font-bold pb-1 border-b border-slate-800">
+              <span>✓ WEBHOOK DISPATCH SUCCESS: HTTP {webhookTestResult.http_status} OK ({webhookTestResult.latency_ms}ms)</span>
+              <span className="text-slate-400 truncate max-w-xs">{webhookTestResult.target_url}</span>
+            </div>
+            <p className="text-slate-400">Target URL: <code className="text-blue-300">{webhookTestResult.target_url}</code></p>
+            <p className="text-slate-400">Simulated Payload: <code className="text-emerald-300">{JSON.stringify(webhookTestResult.payload_preview)}</code></p>
+          </div>
+        )}
+      </div>
+            </div>
+          )}
+
+          {activeTab === 'smtp' && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* Production Email Delivery (Gmail SMTP) */}
+      <div id="smtp" className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-xs">
+              <Mail className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-slate-900 text-sm">Production Email Delivery (Gmail SMTP)</h3>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                  smtpUser ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"
+                }`}>
+                  {smtpUser ? "LIVE SMTP CONNECTED" : "SIMULATION FALLBACK"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">Configure your Google Gmail address and 16-character App Password to send live OTP codes and order receipts.</p>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveSmtp} className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Gmail Address</label>
+            <input
+              type="email"
+              required
+              placeholder="e.g. store@gmail.com"
+              value={smtpUser}
+              onChange={(e) => setSmtpUser(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Google App Password (16 chars)</label>
+            <input
+              type="password"
+              placeholder="xxxx xxxx xxxx xxxx"
+              value={smtpPassword}
+              onChange={(e) => setSmtpPassword(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="flex items-end">
+            <button
+              type="submit"
+              disabled={savingSmtp}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+            >
+              {savingSmtp ? "Saving..." : "Save Gmail Credentials"}
+            </button>
+          </div>
+        </form>
+
+        {smtpMessage && (
+          <p className="mb-4 text-xs font-semibold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+            ✓ {smtpMessage}
+          </p>
+        )}
+
+        {/* Test Email Dispatch */}
+        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex-1 w-full sm:w-auto">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Send Live Test Email</label>
+            <input
+              type="email"
+              placeholder="Enter your personal email to verify delivery..."
+              value={testEmailRecipient}
+              onChange={(e) => setTestEmailRecipient(e.target.value)}
+              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            />
+          </div>
+          <div className="flex items-end w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleTestSmtp}
+              disabled={testingSmtp || !testEmailRecipient.trim()}
+              className="w-full sm:w-auto px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {testingSmtp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              <span>Send Test Email</span>
+            </button>
+          </div>
+        </div>
+
+        {smtpTestResult && (
+          <div className={`mt-3 p-3 rounded-xl border text-xs font-mono ${
+            smtpTestResult.sent ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-200 text-amber-800"
+          }`}>
+            {smtpTestResult.message}
+          </div>
+        )}
+      </div>
+            </div>
+          )}
+
+          {activeTab === 'audit' && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* Live System Logs & Agent Telemetry Console */}
+      <div className="bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl p-6 text-slate-100 overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-800/80">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-indigo-900/50 border border-indigo-700/50 flex items-center justify-center text-indigo-400">
+              <Terminal className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-bold text-white text-base">Live Agent Telemetry & Audit Logs</h2>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold flex items-center gap-1 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  STREAM ACTIVE
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">Deterministic traces across LangGraph Supervisor, Policy Engine, and Razorpay SDK</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              onClick={fetchLogs}
+              disabled={logsLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? "animate-spin text-indigo-400" : ""}`} />
+              <span>Refresh</span>
+            </button>
+
+            <button
+              onClick={handleExportLogs}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all shadow-xs"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export JSON</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 text-xs">
+          <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0 mr-1" />
+          {["ALL", "POLICY_BLOCK", "PAYMENT", "SUCCESS"].map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setLogFilter(filter)}
+              className={`px-3 py-1 rounded-xl font-bold transition-all shrink-0 ${
+                logFilter === filter
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+              }`}
+            >
+              {filter === "ALL" ? `All Traces (${logs.length})` : 
+               filter === "POLICY_BLOCK" ? "Policy Blocks" :
+               filter === "PAYMENT" ? "Payments" : "AI Decisions"}
+            </button>
+          ))}
+        </div>
+
+        {/* Terminal Logs Table */}
+        <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-3 font-mono text-xs max-h-[380px] overflow-y-auto space-y-2">
+          {filteredLogs.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">
+              No telemetry events recorded matching the selected filter.
+            </div>
+          ) : (
+            filteredLogs.map((log) => (
+              <div key={log.id} className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60 hover:border-slate-700 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-start sm:items-center gap-2.5">
+                  <span className="text-slate-500 text-[11px] shrink-0">
+                    {new Date(log.timestamp).toLocaleTimeString()}
+                  </span>
+
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+                    log.level === "POLICY_BLOCK"
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                      : log.level === "PAYMENT"
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                        : "bg-blue-500/20 text-blue-300 border border-blue-500/40"
+                  }`}>
+                    {log.level}
+                  </span>
+
+                  <span className="text-indigo-400 font-bold text-xs shrink-0">
+                    [{log.component}]
+                  </span>
+
+                  <span className="text-slate-200 text-xs line-clamp-1">
+                    {log.message}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto text-[11px]">
+                  <span className="text-slate-500 font-mono">
+                    {log.trace_id}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">
+                    {log.latency_ms}ms
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+            </div>
+          )}
+
+        </main>
+      </div>
+
 
       {/* Launch New Store Modal Dialog */}
       {showNewStoreModal && (
@@ -1705,16 +1892,50 @@ export default function MerchantDashboard() {
             <h3 className="font-black text-slate-900 text-lg">{currentStoreName}</h3>
             <p className="text-xs text-slate-500 mb-4">Scan with any smartphone camera to launch the AI Shopping Concierge</p>
 
-            {/* Live Generated QR Code */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 inline-block mb-4 shadow-xs">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(agentShareUrl)}`}
-                alt="Storefront QR Code"
-                className="w-48 h-48 rounded-xl mx-auto"
-              />
+            {/* Live Generated QR Code Card */}
+            <div id="printable-qr-poster" className="bg-white p-6 rounded-3xl border border-slate-200 text-center mb-4 shadow-xs">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-xs">
+                <QrCode className="w-6 h-6" />
+              </div>
+
+              <h3 className="font-black text-slate-900 text-lg">{currentStoreName}</h3>
+              <p className="text-xs text-slate-500 mb-4">Scan with any smartphone camera to launch the AI Shopping Concierge</p>
+
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 inline-block mb-4 shadow-xs">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(agentShareUrl)}`}
+                  alt="Storefront QR Code"
+                  className="w-52 h-52 rounded-xl mx-auto"
+                />
+              </div>
+
+              <p className="text-[11px] text-slate-400 font-mono mb-1 truncate px-2">{agentShareUrl}</p>
+              <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Verified Razorpay AI Storefront</p>
             </div>
 
-            <p className="text-[11px] text-slate-400 font-mono mb-4 truncate px-2">{agentShareUrl}</p>
+            {/* Print Styles for Exactly 1-Page Poster Printing */}
+            <style jsx global>{`
+              @media print {
+                body * {
+                  visibility: hidden !important;
+                }
+                #printable-qr-poster, #printable-qr-poster * {
+                  visibility: visible !important;
+                }
+                #printable-qr-poster {
+                  position: fixed !important;
+                  left: 50% !important;
+                  top: 50% !important;
+                  transform: translate(-50%, -50%) !important;
+                  width: 380px !important;
+                  border: 2px solid #0f172a !important;
+                  box-shadow: none !important;
+                  padding: 24px !important;
+                  page-break-inside: avoid !important;
+                  margin: 0 !important;
+                }
+              }
+            `}</style>
 
             <div className="flex items-center gap-2">
               <button
@@ -1728,9 +1949,9 @@ export default function MerchantDashboard() {
               </button>
               <button
                 onClick={() => window.print()}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
+                className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
               >
-                Print Poster
+                <span>Print Poster (1 Page)</span>
               </button>
             </div>
           </div>
@@ -1740,7 +1961,7 @@ export default function MerchantDashboard() {
       {/* Add Product Modal Dialog */}
       {showAddProductModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-8 relative">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-8 relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setShowAddProductModal(false)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-xl"
@@ -1817,14 +2038,54 @@ export default function MerchantDashboard() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Image URL (Optional)</label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={newProdImage}
-                  onChange={(e) => setNewProdImage(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase">Product Image</label>
+                  <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setImageUploadMode("file")}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                        imageUploadMode === "file" ? "bg-white text-indigo-600 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                      }`}
+                    >
+                      Upload File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageUploadMode("url")}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                        imageUploadMode === "url" ? "bg-white text-indigo-600 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                      }`}
+                    >
+                      Image URL
+                    </button>
+                  </div>
+                </div>
+
+                {imageUploadMode === "file" ? (
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageFileChange}
+                      className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                    />
+                    {newProdImage && (
+                      <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                        <img src={newProdImage} alt="Preview" className="w-10 h-10 object-cover rounded-lg border border-slate-200" />
+                        <span className="text-[11px] text-emerald-600 font-bold">✓ Image loaded from your computer</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/..."
+                    value={newProdImage}
+                    onChange={(e) => setNewProdImage(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">

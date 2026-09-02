@@ -51,6 +51,27 @@ function ChatContent() {
   const [trackingData, setTrackingData] = useState<any>(null);
   const [trackingError, setTrackingError] = useState("");
   
+  // Toggle View: AI Concierge vs Store Catalog
+  const [viewMode, setViewMode] = useState<"chat" | "catalog">("chat");
+  const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
+
+  const fetchStoreCatalog = async () => {
+    setLoadingCatalog(true);
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/products/merchant/${merchantParam}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCatalogProducts(data);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch store catalog:", err);
+    } finally {
+      setLoadingCatalog(false);
+    }
+  };
+
   const suggestedPrompts = [
     "Show me accessories for my laptop setup",
     "Find me a high performance gaming laptop under ₹150,000",
@@ -73,6 +94,7 @@ function ChatContent() {
       }
     };
     fetchMerchantData();
+    fetchStoreCatalog();
   }, [merchantParam]);
 
   useEffect(() => {
@@ -512,6 +534,37 @@ function ChatContent() {
           </div>
         </div>
 
+        {/* Switch between AI Concierge and Store Product Catalog */}
+        <div className="flex items-center bg-white p-1 rounded-2xl border border-slate-200 shadow-xs hidden md:flex">
+          <button
+            type="button"
+            onClick={() => setViewMode("chat")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              viewMode === "chat" 
+                ? "bg-indigo-600 text-white shadow-xs" 
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Bot className="w-3.5 h-3.5" />
+            <span>AI Concierge</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode("catalog");
+              if (catalogProducts.length === 0) fetchStoreCatalog();
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              viewMode === "catalog" 
+                ? "bg-indigo-600 text-white shadow-xs" 
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Store className="w-3.5 h-3.5" />
+            <span>Browse Catalog ({catalogProducts.length || merchantInfo?.product_count || 0})</span>
+          </button>
+        </div>
+
         <div className="flex items-center gap-2.5">
           {/* Voice Output Toggle */}
           <button
@@ -562,7 +615,113 @@ function ChatContent() {
         </div>
       </div>
       
-      {/* Chat Messages Area */}
+            {viewMode === "catalog" ? (
+        <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-slate-50/40">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+            <div>
+              <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                <Store className="w-5 h-5 text-indigo-600" />
+                <span>{merchantInfo?.name || "Store"} Official Catalog</span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Browse available items. You can buy directly or ask the AI Concierge for recommendations.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setViewMode("chat")}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+            >
+              <Bot className="w-4 h-4" />
+              <span>Ask AI Concierge</span>
+            </button>
+          </div>
+
+          {loadingCatalog ? (
+            <div className="py-20 text-center">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-2" />
+              <p className="text-xs text-slate-500 font-semibold">Loading store catalog...</p>
+            </div>
+          ) : catalogProducts.length === 0 ? (
+            <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-slate-300 p-8">
+              <div className="w-12 h-12 bg-slate-100 rounded-2xl mx-auto flex items-center justify-center text-slate-400 mb-3">
+                <Package className="w-6 h-6" />
+              </div>
+              <h4 className="font-bold text-slate-800 text-sm mb-1">No Products in Catalog Yet</h4>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4">
+                This store has not published any items yet. You can still ask the AI Concierge general shopping queries.
+              </p>
+              <button
+                onClick={() => setViewMode("chat")}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors"
+              >
+                Switch to AI Concierge
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {catalogProducts.map((prod) => (
+                <div key={prod.id} className="bg-white rounded-3xl border border-slate-200 p-4 shadow-xs hover:shadow-md hover:border-indigo-300 transition-all flex flex-col justify-between group">
+                  <div>
+                    <div className="w-full h-44 bg-slate-100 rounded-2xl mb-3 overflow-hidden flex items-center justify-center relative">
+                      {prod.image_url ? (
+                        <img src={prod.image_url} alt={prod.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <Package className="w-10 h-10 text-slate-300" />
+                      )}
+                      <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-slate-800 backdrop-blur-xs border border-slate-200 shadow-xs">
+                        {prod.category}
+                      </span>
+                    </div>
+
+                    <h4 className="font-extrabold text-slate-900 text-sm mb-1 group-hover:text-indigo-600 transition-colors line-clamp-1">{prod.title}</h4>
+                    <p className="text-[11px] text-slate-500 line-clamp-2 mb-3 leading-relaxed">{prod.description || "High-performance verified tech item."}</p>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Price</span>
+                        <p className="text-base font-black text-slate-900">₹{Number(prod.price).toLocaleString("en-IN")}</p>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        Number(prod.stock || prod.inventory || 1) > 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                      }`}>
+                        {Number(prod.stock || prod.inventory || 1) > 0 ? "In Stock" : "Out of Stock"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => {
+                          setViewMode("chat");
+                          handleSend(`Tell me more about the ${prod.title} and why I should buy it.`);
+                        }}
+                        className="py-2 px-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200 flex items-center justify-center gap-1"
+                        title="Ask AI Assistant about this product"
+                      >
+                        <Bot className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Ask AI</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleInstantBuy(prod)}
+                        disabled={instantBuyingId === prod.id}
+                        className="py-2 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shadow-indigo-600/20 flex items-center justify-center gap-1 disabled:opacity-50"
+                      >
+                        {instantBuyingId === prod.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />}
+                        <span>Buy Now</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+{/* Chat Messages Area */}
       <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-slate-50/40">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-6 py-8">
@@ -875,6 +1034,8 @@ function ChatContent() {
           </div>
         </form>
       </div>
+        </>
+      )}
 
       {/* In-Chat OTP Verification Modal */}
       {showOtpModal && (

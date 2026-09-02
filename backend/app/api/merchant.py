@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from pydantic import BaseModel
 from app.database import get_db
 from app.services.analytics import AnalyticsService
@@ -123,9 +124,48 @@ def onboard_merchant(req: MerchantOnboardRequest, db: Session = Depends(get_db))
     }
 
 @router.get("/stores")
-def list_stores(db: Session = Depends(get_db)):
+def list_stores(db: Session = Depends(get_db), authorization: str | None = Header(None)):
     from app.models import Merchant, Product, MerchantPolicy
-    merchants = db.query(Merchant).order_by(Merchant.created_at.desc()).limit(20).all()
+    import jwt
+    from app.core.config import settings
+
+    target_merchant_ids = []
+    user_id = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+        try:
+            payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=["HS256"])
+            user_id = payload.get("sub")
+            if user_id:
+                target_merchant_ids.append(user_id)
+                # Also find any merchants whose ID is prefixed or matches user_id
+                sub_merchants = db.query(Merchant).filter(
+                    or_(
+                        Merchant.id == user_id,
+                        Merchant.id.like(f"{user_id}%"),
+                        Merchant.id.like(f"%{user_id}%")
+                    )
+                ).all()
+                for sm in sub_merchants:
+                    if sm.id not in target_merchant_ids:
+                        target_merchant_ids.append(sm.id)
+        except Exception:
+            pass
+
+    if target_merchant_ids:
+        merchants = db.query(Merchant).filter(Merchant.id.in_(target_merchant_ids)).all()
+        # If no store found, ensure primary user merchant exists
+        if not merchants and user_id:
+            m = db.query(Merchant).filter(Merchant.id == user_id).first()
+            if not m:
+                m = Merchant(id=user_id, name="My Store", currency="INR")
+                db.add(m)
+                db.commit()
+            merchants = [m]
+    else:
+        # Default fallback: only return demo_merchant
+        merchants = db.query(Merchant).filter(Merchant.id == "demo_merchant").all()
+
     result = []
     for m in merchants:
         prod_count = db.query(Product).filter(Product.merchant_id == m.id).count()
