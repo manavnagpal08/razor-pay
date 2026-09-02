@@ -5,13 +5,15 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ShoppingBag, ArrowRight, Loader2, Lock, Mail } from "lucide-react";
+import { GoogleAuthModal } from "@/components/ui/GoogleAuthModal";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const { login, loginWithGoogle } = useAuth();
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const { login } = useAuth();
   const router = useRouter();
   
   const handleLogin = async (e: React.FormEvent) => {
@@ -34,22 +36,9 @@ export default function Login() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
+  const handleGoogleSignIn = () => {
     setError("");
-    try {
-      await loginWithGoogle("customer");
-      const savedRole = localStorage.getItem("user_role");
-      if (savedRole === "merchant") {
-        router.push("/merchant");
-      } else {
-        router.push("/shop");
-      }
-    } catch (err: any) {
-      setError(err.message || "Google sign-in failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    setShowGoogleModal(true);
   };
 
   return (
@@ -141,6 +130,13 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      {/* 1-Click Google Authentication Modal */}
+      <GoogleAuthModal 
+        isOpen={showGoogleModal} 
+        onClose={() => setShowGoogleModal(false)} 
+        defaultRole="customer" 
+      />
     </div>
   );
 }

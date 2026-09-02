@@ -19,6 +19,7 @@ interface AuthContextType {
   login: (email: string, pass: string) => Promise<void>;
   register: (email: string, pass: string, role: string, name: string) => Promise<void>;
   loginWithGoogle: (role?: "customer" | "merchant") => Promise<void>;
+  loginWithGoogleEmail: (email: string, name?: string, userRole?: "customer" | "merchant") => Promise<void>;
   logout: () => Promise<void>;
   refreshCartCount: () => Promise<void>;
   setMerchantId: (id: string) => void;
@@ -34,6 +35,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => {},
   register: async () => {},
   loginWithGoogle: async () => {},
+  loginWithGoogleEmail: async () => {},
   logout: async () => {},
   refreshCartCount: async () => {},
   setMerchantId: () => {},
@@ -225,6 +227,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fetchCartCount(jwtToken);
   };
 
+  const loginWithGoogleEmail = async (
+    email: string,
+    name: string = "Google User",
+    userRole: "customer" | "merchant" = "customer"
+  ) => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      throw new Error("Please provide a valid Google email address.");
+    }
+
+    const apiUrl = getApiUrl();
+    const res = await fetch(`${apiUrl}/api/auth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: cleanEmail,
+        name: name.trim() || cleanEmail.split("@")[0],
+        role: userRole
+      })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to authenticate with Google.");
+    }
+
+    const data = await res.json();
+    const jwtToken = data.access_token;
+    const assignedRole = (data.role as "customer" | "merchant") || userRole;
+    const assignedName = data.name || cleanEmail.split("@")[0];
+
+    setToken(jwtToken);
+    setRole(assignedRole);
+    setUser({ uid: jwtToken, email: cleanEmail, displayName: assignedName });
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("token", jwtToken);
+      localStorage.setItem("user_email", cleanEmail);
+      localStorage.setItem("user_name", assignedName);
+      localStorage.setItem("user_role", assignedRole);
+    }
+
+    await fetchCartCount(jwtToken);
+  };
+
   const logout = async () => {
     setUser(null);
     setToken(null);
@@ -255,6 +302,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       loginWithGoogle,
+      loginWithGoogleEmail,
       logout,
       refreshCartCount,
       setMerchantId,
