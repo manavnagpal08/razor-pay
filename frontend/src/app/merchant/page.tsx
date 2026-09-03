@@ -6,7 +6,7 @@ import {
   Lock, LogIn, Sliders, CheckCircle2, Loader2, Share2, Copy, ExternalLink, Code, 
   MessageSquare, Terminal, RefreshCw, Download, Filter, PlusCircle, Store, X, ChevronDown,
   QrCode, AlertTriangle, Cpu, Layers, ShieldCheck, Zap, Mail, Trash2, Inbox, Package, Search,
-  Users, Phone, Calendar, Tag, Building2
+  Users, Phone, Calendar, Tag, Building2, MapPin, ArrowRight, ArrowLeft, Check
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useAuth } from "@/context/AuthContext";
@@ -69,6 +69,25 @@ export default function MerchantDashboard() {
   const [creatingStore, setCreatingStore] = useState(false);
   const [createdStoreResult, setCreatedStoreResult] = useState<any>(null);
   const [showStoreDropdown, setShowStoreDropdown] = useState(false);
+
+  // Onboarding Wizard States
+  const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 3>(1);
+  const [onboardingStoreName, setOnboardingStoreName] = useState("");
+  const [onboardingCategory, setOnboardingCategory] = useState("Fashion & Apparel");
+  const [onboardingAddress, setOnboardingAddress] = useState("");
+  const [onboardingPhone, setOnboardingPhone] = useState("");
+  const [onboardingDescription, setOnboardingDescription] = useState("");
+  const [onboardingMaxDiscount, setOnboardingMaxDiscount] = useState(15);
+  const [onboardingGreeting, setOnboardingGreeting] = useState("");
+  const [hasFirstProduct, setHasFirstProduct] = useState(true);
+  const [firstProdName, setFirstProdName] = useState("");
+  const [firstProdCategory, setFirstProdCategory] = useState("Fashion");
+  const [firstProdPrice, setFirstProdPrice] = useState<number | "">(1999);
+  const [firstProdInventory, setFirstProdInventory] = useState<number | "">(25);
+  const [firstProdDescription, setFirstProdDescription] = useState("");
+  const [firstProdImageUrl, setFirstProdImageUrl] = useState("");
+  const [submittingOnboarding, setSubmittingOnboarding] = useState(false);
 
   // Security & Failure Simulation States
   const [showQrModal, setShowQrModal] = useState(false);
@@ -309,6 +328,68 @@ export default function MerchantDashboard() {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCompleteOnboarding = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!onboardingStoreName.trim()) {
+      showToast("Store name is required to launch your store.", "error");
+      return;
+    }
+    setSubmittingOnboarding(true);
+    try {
+      const apiUrl = getApiUrl();
+      const payload: any = {
+        store_name: onboardingStoreName.trim(),
+        category: onboardingCategory,
+        address: onboardingAddress.trim() || undefined,
+        phone: onboardingPhone.trim() || undefined,
+        description: onboardingDescription.trim() || undefined,
+        max_discount_percent: Number(onboardingMaxDiscount) || 15,
+      };
+
+      if (hasFirstProduct && firstProdName.trim() && Number(firstProdPrice) > 0) {
+        payload.first_product = {
+          name: firstProdName.trim(),
+          category: firstProdCategory.trim() || onboardingCategory,
+          price: Number(firstProdPrice),
+          inventory: Number(firstProdInventory) || 10,
+          description: firstProdDescription.trim() || `Featured ${firstProdName.trim()}`,
+          image_url: firstProdImageUrl.trim() || undefined
+        };
+      }
+
+      const res = await fetch(`${apiUrl}/api/merchant/setup-store`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`store_onboarded_${merchantId}`, "true");
+        }
+        showToast(`Store "${data.store_name}" configured and live!`, "success");
+        setShowOnboardingWizard(false);
+        // Refresh stores & catalog
+        await Promise.all([
+          fetchDashboard(),
+          fetchMerchantProducts(),
+          fetchStoreCustomers()
+        ]);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || "Failed to save store setup.", "error");
+      }
+    } catch (err: any) {
+      showToast("Network error saving store setup.", "error");
+    } finally {
+      setSubmittingOnboarding(false);
     }
   };
 
@@ -899,13 +980,14 @@ export default function MerchantDashboard() {
           <button
             type="button"
             onClick={() => {
-              setCreatedStoreResult(null);
-              setShowNewStoreModal(true);
+              setOnboardingStoreName(currentStoreName === "BuyFlow Store" || currentStoreName === "My Store" ? "" : currentStoreName);
+              setOnboardingStep(1);
+              setShowOnboardingWizard(true);
             }}
-            className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center gap-2"
+            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
-            <span>Launch New Store</span>
+            <span>Store Setup & Launch</span>
           </button>
         </div>
       </div>
@@ -2982,140 +3064,354 @@ export default function MerchantDashboard() {
       </div>
 
 
-      {/* Launch New Store Modal Dialog */}
-      {showNewStoreModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-8 relative overflow-hidden">
+      {/* Merchant Store Onboarding & Setup Wizard */}
+      {showOnboardingWizard && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-xl w-full p-6 sm:p-8 relative max-h-[92vh] overflow-y-auto">
             <button
-              onClick={() => setShowNewStoreModal(false)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1 rounded-xl hover:bg-slate-100 transition-colors"
+              type="button"
+              onClick={() => setShowOnboardingWizard(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
-            {!createdStoreResult ? (
-              <form onSubmit={handleCreateStore} className="space-y-4">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-extrabold uppercase tracking-wide border border-indigo-100">
-                    <Sparkles className="w-3 h-3 text-amber-500" />
-                    <span>Instant Tenant Provisioning</span>
-                  </div>
-                  <h3 className="text-xl font-extrabold text-slate-900">Launch Autonomous Storefront</h3>
-                  <p className="text-xs text-slate-500">Deploy a dedicated AI agent, policy boundaries, and catalog in seconds.</p>
+            {/* Stepper Header */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
+                  <Store className="w-4 h-4" />
                 </div>
-
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Storefront Brand Name
+                  <h3 className="font-black text-slate-900 text-lg">Merchant Store Onboarding</h3>
+                  <p className="text-xs text-slate-500">Configure your business profile, initial catalog, and autonomous shopping rules.</p>
+                </div>
+              </div>
+
+              {/* Progress Tabs */}
+              <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 text-center text-xs">
+                <button
+                  type="button"
+                  onClick={() => setOnboardingStep(1)}
+                  className={`p-2 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition-colors ${
+                    onboardingStep === 1 
+                      ? "bg-indigo-50 border-indigo-300 text-indigo-700" 
+                      : onboardingStep > 1 
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
+                        : "bg-slate-50 border-slate-200 text-slate-400"
+                  }`}
+                >
+                  {onboardingStep > 1 ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <span>1</span>}
+                  <span>Store Profile</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onboardingStoreName.trim()) setOnboardingStep(2);
+                  }}
+                  className={`p-2 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition-colors ${
+                    onboardingStep === 2 
+                      ? "bg-indigo-50 border-indigo-300 text-indigo-700" 
+                      : onboardingStep > 2 
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
+                        : "bg-slate-50 border-slate-200 text-slate-400"
+                  }`}
+                >
+                  {onboardingStep > 2 ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <span>2</span>}
+                  <span>Add Product</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onboardingStoreName.trim()) setOnboardingStep(3);
+                  }}
+                  className={`p-2 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition-colors ${
+                    onboardingStep === 3 
+                      ? "bg-indigo-50 border-indigo-300 text-indigo-700" 
+                      : "bg-slate-50 border-slate-200 text-slate-400"
+                  }`}
+                >
+                  <span>3</span>
+                  <span>AI Guardrails</span>
+                </button>
+              </div>
+            </div>
+
+            {/* STEP 1: Store & Business Profile */}
+            {onboardingStep === 1 && (
+              <div className="space-y-4 animate-in fade-in">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Shop / Store Name <span className="text-rose-500">* (Mandatory)</span>
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Apex Esports Lab or SoundCraft Audio"
-                    value={newStoreName}
-                    onChange={(e) => setNewStoreName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    placeholder="e.g. Kaaysha Luxury Apparel, Apex Tech Store..."
+                    value={onboardingStoreName}
+                    onChange={(e) => setOnboardingStoreName(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Max AI Discount (%)
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Business Category <span className="text-rose-500">*</span>
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={newStoreDiscount}
-                      onChange={(e) => setNewStoreDiscount(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    />
+                    <select
+                      value={onboardingCategory}
+                      onChange={(e) => {
+                        setOnboardingCategory(e.target.value);
+                        setFirstProdCategory(e.target.value);
+                      }}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="Fashion & Apparel">Fashion & Apparel</option>
+                      <option value="Electronics & Tech">Electronics & Tech</option>
+                      <option value="Beauty & Personal Care">Beauty & Personal Care</option>
+                      <option value="Home & Kitchen">Home & Kitchen</option>
+                      <option value="Health & Wellness">Health & Wellness</option>
+                      <option value="Food & Gourmet">Food & Gourmet</option>
+                      <option value="General Merchandise">General Merchandise</option>
+                    </select>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Catalog Preset
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Support Contact / Phone <span className="text-slate-400 font-normal">(Optional)</span>
                     </label>
-                    <select
-                      value={newStorePreset}
-                      onChange={(e) => setNewStorePreset(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    >
-                      <option value="all">Full Catalog (6 Items)</option>
-                      <option value="laptops">Laptops Only (2 Items)</option>
-                      <option value="audio">Audio Only (2 Items)</option>
-                    </select>
+                    <input
+                      type="text"
+                      placeholder="e.g. +91 98765 43210"
+                      value={onboardingPhone}
+                      onChange={(e) => setOnboardingPhone(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                    />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Custom AI Agent Greeting (Optional)
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Physical / Business Address <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Welcome! I can help customize high-end audio setups."
-                    value={newStoreGreeting}
-                    onChange={(e) => setNewStoreGreeting(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    placeholder="e.g. 100 Feet Road, Indiranagar, Bangalore, Karnataka 560038"
+                    value={onboardingAddress}
+                    onChange={(e) => setOnboardingAddress(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
-                <div className="pt-2 flex items-center justify-end gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Store Tagline / Bio <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Handcrafted designer garments, custom stitching, and premium express delivery across India."
+                    value={onboardingDescription}
+                    onChange={(e) => setOnboardingDescription(e.target.value)}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="pt-3 flex items-center justify-end">
                   <button
                     type="button"
-                    onClick={() => setShowNewStoreModal(false)}
-                    className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={creatingStore}
-                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {creatingStore ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                    <span>{creatingStore ? "Deploying..." : "Launch Store & AI Agent"}</span>
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-4 text-center py-2">
-                <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl mx-auto flex items-center justify-center">
-                  <CheckCircle2 className="w-7 h-7" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-extrabold text-slate-900">Store & AI Agent Live!</h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    <strong>{createdStoreResult.store_name}</strong> is now live with {createdStoreResult.product_count} items and a {createdStoreResult.max_discount_percent}% discount guardrail.
-                  </p>
-                </div>
-
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-left">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Your Shareable AI Agent Link</p>
-                  <p className="text-xs font-mono text-indigo-700 break-all">{createdStoreResult.shareable_chat_url}</p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
-                  <button
                     onClick={() => {
-                      navigator.clipboard.writeText(createdStoreResult.shareable_chat_url);
-                      showToast("Copied store agent URL to clipboard!", "success");
+                      if (!onboardingStoreName.trim()) {
+                        showToast("Please enter a Shop / Store name to proceed.", "error");
+                        return;
+                      }
+                      setOnboardingStep(2);
                     }}
-                    className="w-full sm:flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer"
                   >
-                    Copy Agent Link
+                    <span>Next: Add Products</span>
+                    <ArrowRight className="w-4 h-4" />
                   </button>
-                  <a
-                    href={createdStoreResult.shareable_chat_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full sm:flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: Optional Initial Product */}
+            {onboardingStep === 2 && (
+              <div className="space-y-4 animate-in fade-in">
+                <div className="p-3 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl flex items-center justify-between text-xs">
+                  <div>
+                    <p className="font-bold text-indigo-900">Add Your First Product Now</p>
+                    <p className="text-[11px] text-indigo-700">Your AI agent will index this item immediately to recommend it to shoppers.</p>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={hasFirstProduct}
+                      onChange={(e) => setHasFirstProduct(e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600 accent-indigo-600"
+                    />
+                    <span className="font-bold text-slate-700 text-xs">Include Item</span>
+                  </label>
+                </div>
+
+                {hasFirstProduct ? (
+                  <div className="space-y-3 pt-1">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Product Title</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Silk Floral Maxi Dress, Noise Cancelling Headphones..."
+                        value={firstProdName}
+                        onChange={(e) => setFirstProdName(e.target.value)}
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Price (₹ INR)</label>
+                        <input
+                          type="number"
+                          placeholder="2999"
+                          value={firstProdPrice}
+                          onChange={(e) => setFirstProdPrice(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Inventory Quantity</label>
+                        <input
+                          type="number"
+                          placeholder="25"
+                          value={firstProdInventory}
+                          onChange={(e) => setFirstProdInventory(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Description</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Short description highlighting material, fit, features, or warranties..."
+                        value={firstProdDescription}
+                        onChange={(e) => setFirstProdDescription(e.target.value)}
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Product Image URL (Optional)</label>
+                      <input
+                        type="url"
+                        placeholder="https://images.unsplash.com/..."
+                        value={firstProdImageUrl}
+                        onChange={(e) => setFirstProdImageUrl(e.target.value)}
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                    <p className="text-xs font-semibold text-slate-600">Product creation skipped.</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">You can add products anytime from your Product Catalog tab.</p>
+                  </div>
+                )}
+
+                <div className="pt-3 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setOnboardingStep(1)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors flex items-center gap-1.5"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Open Live Store</span>
-                  </a>
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOnboardingStep(3)}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Next: AI Safety Rules</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: AI Safety Rules & Launch */}
+            {onboardingStep === 3 && (
+              <div className="space-y-4 animate-in fade-in">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Maximum Allowed AI Bargaining Discount
+                    </label>
+                    <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                      {onboardingMaxDiscount}% Max
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="40"
+                    step="1"
+                    value={onboardingMaxDiscount}
+                    onChange={(e) => setOnboardingMaxDiscount(Number(e.target.value))}
+                    className="w-full accent-indigo-600 cursor-pointer"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">Autonomous AI negotiation will never exceed this merchant discount threshold.</p>
+                </div>
+
+                {/* Review summary */}
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-xs">
+                  <div className="flex items-center justify-between font-bold border-b border-slate-200/80 pb-2">
+                    <span className="text-slate-500">Store Name:</span>
+                    <span className="text-slate-900 text-sm">{onboardingStoreName}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Category:</span>
+                    <span className="font-semibold text-slate-800">{onboardingCategory}</span>
+                  </div>
+                  {onboardingAddress && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Address:</span>
+                      <span className="font-medium text-slate-700 truncate max-w-[220px]">{onboardingAddress}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Initial Product:</span>
+                    <span className="font-semibold text-emerald-700">
+                      {hasFirstProduct && firstProdName.trim() ? `${firstProdName.trim()} (₹${firstProdPrice})` : "Will add later"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-3 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setOnboardingStep(2)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors flex items-center gap-1.5"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCompleteOnboarding}
+                    disabled={submittingOnboarding}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {submittingOnboarding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    <span>{submittingOnboarding ? "Configuring Store & AI Agent..." : "Complete Setup & Launch Store"}</span>
+                  </button>
                 </div>
               </div>
             )}

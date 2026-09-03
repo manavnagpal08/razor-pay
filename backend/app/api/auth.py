@@ -108,7 +108,6 @@ def register_user(req: UserCreate, db: Session = Depends(get_db)):
             currency="INR"
         )
         db.add(merchant)
-        ensure_merchant_starter_catalog(db, user.id)
 
     db.commit()
 
@@ -275,15 +274,12 @@ def google_auth_login(req: GoogleAuthPayload, db: Session = Depends(get_db)):
         if req.role == "merchant":
             merchant = Merchant(id=user_id, name=f"{user.name}'s Store", currency="INR")
             db.add(merchant)
-            ensure_merchant_starter_catalog(db, user_id)
         else:
             customer = Customer(id=str(uuid.uuid4()), user_id=user_id, segment="new")
             db.add(customer)
             
         db.commit()
         db.refresh(user)
-    elif user.role == "merchant":
-        ensure_merchant_starter_catalog(db, user.id)
 
     token = create_access_token(subject=user.id)
     return {

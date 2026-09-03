@@ -55,11 +55,111 @@ def get_logs(db: Session = Depends(get_db), merchant_id: str = Depends(get_curre
     service = AnalyticsService(db)
     return service.get_system_logs(merchant_id)
 
+class FirstProductPayload(BaseModel):
+    name: str
+    category: str = "General"
+    price: float = 999.0
+    inventory: int = 20
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+
+class StoreSetupRequest(BaseModel):
+    store_name: str
+    category: Optional[str] = "General"
+    address: Optional[str] = None
+    description: Optional[str] = None
+    phone: Optional[str] = None
+    max_discount_percent: float = 15.0
+    first_product: Optional[FirstProductPayload] = None
+
+@router.post("/setup-store")
+def setup_store_profile(
+    req: StoreSetupRequest, 
+    db: Session = Depends(get_db), 
+    merchant_id: str = Depends(get_current_merchant)
+):
+    """
+    Onboarding wizard endpoint for merchants to set up their shop name, address, rules, and first product.
+    """
+    import uuid
+    from app.models import Merchant, MerchantPolicy, Product
+
+    clean_name = req.store_name.strip()
+    merchant = db.query(Merchant).filter(Merchant.id == merchant_id).first()
+    if not merchant:
+        merchant = Merchant(id=merchant_id, name=clean_name, currency="INR")
+        db.add(merchant)
+    else:
+        merchant.name = clean_name
+    
+    policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+    store_profile = {
+        "category": req.category,
+        "address": req.address,
+        "description": req.description,
+        "phone": req.phone
+    }
+    if not policy:
+        policy = MerchantPolicy(
+            id=str(uuid.uuid4()),
+            merchant_id=merchant_id,
+            max_discount_percent=req.max_discount_percent,
+            max_discount_amount=req.max_discount_percent * 500,
+            approval_rules={"store_profile": store_profile}
+        )
+        db.add(policy)
+    else:
+        policy.max_discount_percent = req.max_discount_percent
+        rules = policy.approval_rules if isinstance(policy.approval_rules, dict) else {}
+        rules["store_profile"] = store_profile
+        policy.approval_rules = rules
+
+    # If first product is provided, create it
+    created_product = None
+    if req.first_product and req.first_product.name.strip():
+        prod_id = f"prod_{str(uuid.uuid4())[:8]}"
+        fp = req.first_product
+        img_url = fp.image_url or "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80"
+        product = Product(
+            id=prod_id,
+            merchant_id=merchant_id,
+            name=fp.name.strip(),
+            category=fp.category.strip() or "General",
+            price=fp.price,
+            inventory=fp.inventory or 10,
+            description=fp.description or f"Featured {fp.name}",
+            currency="INR",
+            features={"verified": True, "featured": True},
+            use_cases=["Everyday", "Store Exclusive"],
+            metadata_={"image_url": img_url}
+        )
+        db.add(product)
+        created_product = {
+            "id": product.id,
+            "name": product.name,
+            "price": float(product.price)
+        }
+
+    db.commit()
+    db.refresh(merchant)
+
+    base_url = "https://razorpay-buildthon.vercel.app"
+    shareable_chat_url = f"{base_url}/chat?merchant={merchant_id}"
+    
+    return {
+        "success": True,
+        "merchant_id": merchant_id,
+        "store_name": merchant.name,
+        "store_profile": store_profile,
+        "first_product": created_product,
+        "shareable_chat_url": shareable_chat_url
+    }
+
 class MerchantOnboardRequest(BaseModel):
     store_name: str
     currency: str = "INR"
     max_discount_percent: float = 20.0
-    catalog_preset: str = "all"
+    catalog_preset: str = "custom"
     welcome_message: str | None = None
 
 @router.post("/onboard")
@@ -85,34 +185,6 @@ def onboard_merchant(req: MerchantOnboardRequest, db: Session = Depends(get_db))
         max_discount_amount=req.max_discount_percent * 500
     )
     db.add(policy)
-    
-    base_products = db.query(Product).filter(Product.merchant_id == "demo_merchant").all()
-    if not base_products:
-        base_products = db.query(Product).all()
-        
-    created_count = 0
-    for p in base_products:
-        if req.catalog_preset == "audio" and p.category != "Audio":
-            continue
-        if req.catalog_preset == "laptops" and p.category != "Laptops":
-            continue
-            
-        new_prod = Product(
-            id=f"{merchant_id}_{p.id[:8]}",
-            merchant_id=merchant_id,
-            name=p.name,
-            category=p.category,
-            description=p.description,
-            price=p.price,
-            currency=p.currency or "INR",
-            inventory=25,
-            features=p.features,
-            use_cases=p.use_cases,
-            metadata_=p.metadata_
-        )
-        db.add(new_prod)
-        created_count += 1
-        
     db.commit()
     
     base_url = "https://razorpay-buildthon.vercel.app"
@@ -124,7 +196,7 @@ def onboard_merchant(req: MerchantOnboardRequest, db: Session = Depends(get_db))
         "success": True,
         "merchant_id": merchant_id,
         "store_name": merchant.name,
-        "product_count": created_count,
+        "product_count": 0,
         "max_discount_percent": req.max_discount_percent,
         "shareable_chat_url": shareable_chat_url,
         "manifest_url": manifest_url,
