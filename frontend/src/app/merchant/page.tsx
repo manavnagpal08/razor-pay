@@ -730,8 +730,8 @@ export default function MerchantDashboard() {
         if (data.active_provider) setActiveEmailProvider(data.active_provider);
         setSmtpUser(data.gmail_user || "");
         setSmtpPassword(data.has_password ? "••••••••••••••••" : "");
-        setResendApiKey(data.has_resend_key ? "••••••••••••••••" : "");
-        setBrevoApiKey(data.has_brevo_key ? "••••••••••••••••" : "");
+        setResendApiKey(data.resend_api_key || "");
+        setBrevoApiKey(data.brevo_api_key || "");
         setBrevoSenderEmail(data.brevo_sender_email || "");
       }
     } catch (e) {
@@ -3176,15 +3176,32 @@ export default function MerchantDashboard() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Brevo API Key (<code className="font-mono">xkeysib-...</code>)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-bold text-slate-700 uppercase">
+                      Brevo API Key (<code className="font-mono text-emerald-700">xkeysib-...</code>)
+                    </label>
+                    {brevoApiKey && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                        brevoApiKey.startsWith("xkeysib-") 
+                          ? "bg-emerald-100 text-emerald-800" 
+                          : "bg-amber-100 text-amber-800"
+                      }`}>
+                        {brevoApiKey.startsWith("xkeysib-") ? "✓ REST API Key" : "SMTP Password"}
+                      </span>
+                    )}
+                  </div>
                   <input
-                    type="password"
+                    type="text"
                     placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxx"
                     value={brevoApiKey}
-                    onFocus={() => { if (brevoApiKey.startsWith("•")) setBrevoApiKey(""); }}
-                    onChange={(e) => setBrevoApiKey(e.target.value)}
+                    onChange={(e) => setBrevoApiKey(e.target.value.trim())}
                     className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-emerald-500"
                   />
+                  {brevoApiKey.startsWith("xsmtpsib-") && (
+                    <p className="text-[10px] text-amber-700 font-medium mt-1">
+                      ⚠️ You pasted an SMTP password (<code className="font-mono">xsmtpsib-...</code>). Please generate an <strong>API Key</strong> (<code className="font-mono text-emerald-800">xkeysib-...</code>) from the <a href="https://app.brevo.com/settings/keys/api" target="_blank" rel="noopener noreferrer" className="underline font-bold">API Keys tab</a> for 100% free delivery.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -3193,9 +3210,10 @@ export default function MerchantDashboard() {
                     type="email"
                     placeholder="e.g. yourname@gmail.com"
                     value={brevoSenderEmail}
-                    onChange={(e) => setBrevoSenderEmail(e.target.value)}
+                    onChange={(e) => setBrevoSenderEmail(e.target.value.trim())}
                     className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">Must match your verified Brevo account email</p>
                 </div>
               </div>
             </div>

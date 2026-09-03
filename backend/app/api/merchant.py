@@ -587,6 +587,8 @@ def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(ge
         "has_password": bool(pwd),
         "has_resend_key": bool(resend_key),
         "has_brevo_key": bool(brevo_key),
+        "brevo_api_key": brevo_key,
+        "resend_api_key": resend_key,
         "brevo_sender_email": brevo_sender
     }
 

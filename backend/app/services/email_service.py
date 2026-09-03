@@ -78,88 +78,98 @@ class EmailService:
                     "message": "Brevo API key is not configured. Please paste your Brevo Key in the Email Setup tab."
                 }
 
-            # Method 1A: Brevo HTTPS REST API (Port 443 - zero block)
-            try:
-                import urllib.request
-                import urllib.error
-                import json
-                payload = json.dumps({
-                    "sender": {"name": sender_name, "email": sender_email_brevo},
-                    "to": [{"email": to_email}],
-                    "subject": subject,
-                    "htmlContent": html_body
-                }).encode("utf-8")
-                req_obj = urllib.request.Request(
-                    "https://api.brevo.com/v3/smtp/email",
-                    data=payload,
-                    headers={
-                        "api-key": brevo_key.strip(),
-                        "accept": "application/json",
-                        "content-type": "application/json"
-                    }
-                )
-                with urllib.request.urlopen(req_obj, timeout=10) as resp:
-                    if resp.status in (200, 201, 202):
-                        logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Brevo HTTPS")
-                        return {
-                            "sent": True,
-                            "mode": "BREVO_HTTPS",
-                            "message": f"Free live email delivered successfully to {to_email} via Brevo!",
-                            "to": to_email
-                        }
-            except urllib.error.HTTPError as e_brevo_http:
-                err_body = e_brevo_http.read().decode('utf-8', errors='ignore')
-                logger.error(f"[BREVO HTTPS HTTP ERROR {e_brevo_http.code}] {err_body}")
+            # Method 1A: Brevo HTTPS REST API (Port 443) - For xkeysib- API keys
+            if not brevo_key.strip().startswith("xsmtpsib-"):
                 try:
+                    import urllib.request
+                    import urllib.error
                     import json
-                    parsed_err = json.loads(err_body)
-                    err_msg = parsed_err.get("message") or err_body
-                except Exception:
-                    err_msg = err_body
-                return {
-                    "sent": False,
-                    "mode": "BREVO_HTTP_ERROR",
-                    "code": e_brevo_http.code,
-                    "message": f"Brevo API error ({e_brevo_http.code}): {err_msg}. Ensure your Sender Email ({sender_email_brevo}) is verified in your Brevo account."
-                }
-            except Exception as e_brevo_api:
-                logger.warning(f"Brevo HTTPS attempt returned: {e_brevo_api}. Trying Brevo SMTP relay...")
-
-            # Method 1B: Brevo SMTP Relay on smtp-relay.brevo.com (Port 587) for xsmtpsib- keys
-            try:
-                brevo_msg = MIMEMultipart("alternative")
-                brevo_msg["Subject"] = subject
-                brevo_msg["From"] = f"{sender_name} <{sender_email_brevo}>"
-                brevo_msg["To"] = to_email
-                brevo_msg.attach(MIMEText(html_body, "html"))
-
-                b_server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=6)
-                b_server.ehlo()
-                b_server.starttls(context=ssl.create_default_context())
-                b_server.ehlo()
-                b_server.login(sender_email_brevo, brevo_key.strip())
-                b_server.sendmail(sender_email_brevo, [to_email], brevo_msg.as_string())
-                b_server.quit()
-                logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Brevo SMTP Relay")
-                return {
-                    "sent": True,
-                    "mode": "BREVO_SMTP_RELAY",
-                    "message": f"Free live email delivered successfully to {to_email} via Brevo SMTP Relay!",
-                    "to": to_email
-                }
-            except Exception as e_brevo_smtp:
-                logger.warning(f"Brevo SMTP Relay attempt failed: {e_brevo_smtp}")
-                if brevo_key.startswith("xsmtpsib-"):
+                    payload = json.dumps({
+                        "sender": {"name": sender_name, "email": sender_email_brevo},
+                        "to": [{"email": to_email}],
+                        "subject": subject,
+                        "htmlContent": html_body
+                    }).encode("utf-8")
+                    req_obj = urllib.request.Request(
+                        "https://api.brevo.com/v3/smtp/email",
+                        data=payload,
+                        headers={
+                            "api-key": brevo_key.strip(),
+                            "accept": "application/json",
+                            "content-type": "application/json"
+                        }
+                    )
+                    with urllib.request.urlopen(req_obj, timeout=10) as resp:
+                        if resp.status in (200, 201, 202):
+                            logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Brevo HTTPS")
+                            return {
+                                "sent": True,
+                                "mode": "BREVO_HTTPS",
+                                "message": f"Free live email delivered successfully to {to_email} via Brevo!",
+                                "to": to_email
+                            }
+                except urllib.error.HTTPError as e_brevo_http:
+                    err_body = e_brevo_http.read().decode('utf-8', errors='ignore')
+                    logger.error(f"[BREVO HTTPS HTTP ERROR {e_brevo_http.code}] {err_body}")
+                    try:
+                        import json
+                        parsed_err = json.loads(err_body)
+                        err_msg = parsed_err.get("message") or err_body
+                    except Exception:
+                        err_msg = err_body
                     return {
                         "sent": False,
-                        "mode": "BREVO_SMTP_RESTRICTION",
-                        "message": "Brevo Setup Notice: You pasted an SMTP key (xsmtpsib-...). Cloud servers block SMTP port 587. Please generate an API Key (starts with 'xkeysib-...') from the 'API Keys' tab at https://app.brevo.com/settings/keys/api for 100% free delivery over HTTPS port 443!"
+                        "mode": "BREVO_HTTP_ERROR",
+                        "code": e_brevo_http.code,
+                        "message": f"Brevo API error ({e_brevo_http.code}): {err_msg}. Note: API Key must start with 'xkeysib-...' from the 'API Keys' tab at https://app.brevo.com/settings/keys/api."
                     }
+                except Exception as e_brevo_api:
+                    logger.warning(f"Brevo HTTPS attempt returned: {e_brevo_api}")
+
+            # Method 1B: Brevo SMTP Relay on smtp-relay.brevo.com (Port 587 or 465) for xsmtpsib- keys
+            smtp_err = ""
+            for port in [587, 465]:
+                try:
+                    brevo_msg = MIMEMultipart("alternative")
+                    brevo_msg["Subject"] = subject
+                    brevo_msg["From"] = f"{sender_name} <{sender_email_brevo}>"
+                    brevo_msg["To"] = to_email
+                    brevo_msg.attach(MIMEText(html_body, "html"))
+
+                    if port == 465:
+                        b_server = IPv4SMTP_SSL("smtp-relay.brevo.com", 465, timeout=8)
+                    else:
+                        b_server = IPv4SMTP("smtp-relay.brevo.com", 587, timeout=8)
+                        b_server.ehlo()
+                        b_server.starttls(context=ssl.create_default_context())
+                        b_server.ehlo()
+
+                    b_server.login(sender_email_brevo, brevo_key.strip())
+                    b_server.sendmail(sender_email_brevo, [to_email], brevo_msg.as_string())
+                    b_server.quit()
+                    logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Brevo SMTP Relay (Port {port})")
+                    return {
+                        "sent": True,
+                        "mode": "BREVO_SMTP_RELAY",
+                        "message": f"Free live email delivered successfully to {to_email} via Brevo SMTP Relay (Port {port})!",
+                        "to": to_email
+                    }
+                except Exception as e_relay:
+                    smtp_err = str(e_relay)
+                    logger.warning(f"Brevo SMTP Relay on port {port} failed: {e_relay}")
+
+            if brevo_key.strip().startswith("xsmtpsib-"):
                 return {
                     "sent": False,
-                    "mode": "BREVO_ERROR",
-                    "message": f"Brevo delivery failed: {e_brevo_smtp}. Please verify your Brevo Key (xkeysib-...) and Sender Email."
+                    "mode": "BREVO_SMTP_KEY_NOTICE",
+                    "message": f"You entered a Brevo SMTP key (xsmtpsib-...), but Brevo rejected authentication ({smtp_err}). For 100% guaranteed delivery on cloud hosts, please generate a REST API key (starts with 'xkeysib-...') from Brevo ➔ 'API Keys' tab at https://app.brevo.com/settings/keys/api"
                 }
+
+            return {
+                "sent": False,
+                "mode": "BREVO_ERROR",
+                "message": f"Brevo delivery failed: {smtp_err}. Please ensure your API key starts with 'xkeysib-...' from https://app.brevo.com/settings/keys/api"
+            }
 
         # 2. GMAIL SMTP PROVIDER
         elif provider == "gmail":
