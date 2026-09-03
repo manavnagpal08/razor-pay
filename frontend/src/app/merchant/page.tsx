@@ -2026,70 +2026,81 @@ export default function MerchantDashboard() {
               <Mail className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-slate-900 text-sm">Production Email Delivery (Gmail SMTP)</h3>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                  smtpUser ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"
-                }`}>
-                  {smtpUser ? "LIVE SMTP CONNECTED" : "SIMULATION FALLBACK"}
-                </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-extrabold text-slate-900 text-sm">Production Email Delivery (Resend HTTPS & Gmail SMTP)</h3>
+                {resendApiKey && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    ⚡ RESEND HTTPS CONNECTED
+                  </span>
+                )}
+                {smtpUser && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                    📧 GMAIL SMTP CONNECTED
+                  </span>
+                )}
+                {!resendApiKey && !smtpUser && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                    SYSTEM DEFAULT ACTIVE
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-slate-500">Configure your Google Gmail address and 16-character App Password to send live OTP codes and order receipts.</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Send live OTP codes and order receipts. Configure your Resend API Key (recommended, port 443) and/or Gmail SMTP credentials.
+              </p>
             </div>
           </div>
         </div>
 
-        <form onSubmit={handleSaveSmtp} className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Gmail Address</label>
-            <input
-              type="email"
-              required
-              placeholder="e.g. store@gmail.com"
-              value={smtpUser}
-              onChange={(e) => setSmtpUser(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
+        <form onSubmit={handleSaveSmtp} className="space-y-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Gmail Address (Optional)</label>
+              <input
+                type="email"
+                placeholder="e.g. store@gmail.com"
+                value={smtpUser}
+                onChange={(e) => setSmtpUser(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Google App Password (16 chars)</label>
+              <input
+                type="password"
+                placeholder="xxxx xxxx xxxx xxxx"
+                value={smtpPassword}
+                onChange={(e) => setSmtpPassword(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Google App Password (16 chars)</label>
-            <input
-              type="password"
-              placeholder="xxxx xxxx xxxx xxxx"
-              value={smtpPassword}
-              onChange={(e) => setSmtpPassword(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
-
-          <div className="flex items-end">
-            <button
-              type="submit"
-              disabled={savingSmtp}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
-            >
-              {savingSmtp ? "Saving..." : "Save Email Credentials"}
-            </button>
-          </div>
-
-          <div className="sm:col-span-3 pt-2 border-t border-slate-100">
+          <div className="pt-2 border-t border-slate-100">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
               <label className="block text-[11px] font-bold text-slate-700 uppercase">
-                Optional: Resend API Key (Instant HTTPS Port 443 Delivery)
+                Resend HTTPS API Key (Recommended for Cloud / Render)
               </label>
-              <span className="text-[10px] text-indigo-600 font-medium bg-indigo-50 px-2 py-0.5 rounded-md">
-                Bypasses all cloud firewall restrictions
+              <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md">
+                ⚡ Instant Port 443 Delivery • Bypasses Cloud SMTP Firewalls
               </span>
             </div>
             <input
               type="password"
-              placeholder="re_xxxxxxxxxxxxxx"
+              placeholder="re_xxxxxxxxxxxxxxxxxxxx"
               value={resendApiKey}
               onChange={(e) => setResendApiKey(e.target.value)}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
             />
           </div>
+
+          <button
+            type="submit"
+            disabled={savingSmtp}
+            className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
+          >
+            {savingSmtp ? "Saving..." : "Save Delivery Configuration"}
+          </button>
         </form>
 
         {smtpMessage && (

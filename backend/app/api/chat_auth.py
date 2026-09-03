@@ -81,8 +81,7 @@ def send_chat_otp(req: SendOtpRequest, db: Session = Depends(get_db)):
     return {
         "success": True,
         "email": email,
-        "message": f"Verification code sent to {email}.",
-        "otp_hint": otp,
+        "message": f"Verification code sent to {email}. Please check your inbox.",
         "email_delivery": email_dispatch.get("mode"),
         "delivery_message": email_dispatch.get("message"),
         "expires_in_seconds": 600
@@ -93,11 +92,10 @@ def verify_chat_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
     email = req.email.strip().lower()
     cached = OTP_CACHE.get(email)
 
-    # Validate OTP (cached or emergency demo code 482910)
-    is_valid_otp = (cached and cached["otp"] == req.otp.strip()) or req.otp.strip() == "482910"
-    if not is_valid_otp:
+    # Validate OTP strictly against cache
+    if not cached or cached["otp"] != req.otp.strip():
         raise HTTPException(status_code=400, detail="Invalid OTP code. Please enter the 6-digit code sent to your email.")
-    if cached and datetime.now(timezone.utc) > cached["expires_at"]:
+    if datetime.now(timezone.utc) > cached["expires_at"]:
         raise HTTPException(status_code=400, detail="OTP has expired. Please request a new code.")
 
     # Find or auto-create User & Customer record

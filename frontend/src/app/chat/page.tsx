@@ -43,10 +43,19 @@ function ChatContent() {
   const [otpName, setOtpName] = useState("");
   const [otpPhone, setOtpPhone] = useState("");
   const [otpCode, setOtpCode] = useState("");
+  const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [otpSent, setOtpSent] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
   const [pendingProductToBuy, setPendingProductToBuy] = useState<any>(null);
+
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown((prev) => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   // In-Chat Order Tracking States
   const [showTrackingModal, setShowTrackingModal] = useState(false);
@@ -258,10 +267,14 @@ function ChatContent() {
       const data = await res.json();
       if (res.ok) {
         setOtpSent(true);
-        showToast(`Verification code sent to ${otpEmail}!`, "success");
-        if (data.otp_hint) {
-          setOtpCode(data.otp_hint); // Pre-fill test OTP for instantaneous test flow
-        }
+        setOtpDigits(["", "", "", "", "", ""]);
+        setOtpCode("");
+        setResendCooldown(60);
+        showToast(`Verification code sent to ${otpEmail}! Check your inbox.`, "success");
+        setTimeout(() => {
+          const firstInput = document.getElementById("otp-digit-0");
+          firstInput?.focus();
+        }, 150);
       } else {
         setOtpError(data.detail || "Failed to send verification code.");
       }
@@ -269,6 +282,41 @@ function ChatContent() {
       setOtpError("Connection error while sending verification code.");
     } finally {
       setOtpLoading(false);
+    }
+  };
+
+  const handleDigitChange = (index: number, val: string) => {
+    const clean = val.replace(/\D/g, "");
+    const newDigits = [...otpDigits];
+    
+    // Handle pasting 6 digits
+    if (clean.length > 1) {
+      const chars = clean.slice(0, 6).split("");
+      for (let i = 0; i < 6; i++) {
+        newDigits[i] = chars[i] || "";
+      }
+      setOtpDigits(newDigits);
+      setOtpCode(newDigits.join(""));
+      const targetIdx = Math.min(chars.length, 5);
+      const nextEl = document.getElementById(`otp-digit-${targetIdx}`);
+      nextEl?.focus();
+      return;
+    }
+
+    newDigits[index] = clean;
+    setOtpDigits(newDigits);
+    setOtpCode(newDigits.join(""));
+
+    if (clean && index < 5) {
+      const nextEl = document.getElementById(`otp-digit-${index + 1}`);
+      nextEl?.focus();
+    }
+  };
+
+  const handleDigitKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      const prevEl = document.getElementById(`otp-digit-${index - 1}`);
+      prevEl?.focus();
     }
   };
 
@@ -1063,29 +1111,42 @@ function ChatContent() {
             ) : (
               <div className="space-y-4 animate-in fade-in duration-200">
                 <div className="text-center p-3.5 bg-blue-50/70 rounded-2xl border border-blue-200/80">
-                  <p className="text-xs text-slate-600">Verification code sent to</p>
-                  <p className="text-xs font-bold text-blue-700 font-mono mt-0.5">{otpEmail}</p>
+                  <div className="flex items-center justify-center gap-1.5 text-xs text-blue-600 font-semibold mb-0.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping"></span>
+                    <span>Live Verification Code Sent</span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-800 font-mono">{otpEmail}</p>
+                  <p className="text-[11px] text-slate-500 mt-1 font-medium">Please check your inbox or spam folder for your 6-digit code.</p>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-2 text-center tracking-wider">
-                    Enter 6-Digit Verification Code
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-2.5 text-center tracking-wider">
+                    Enter 6-Digit Code
                   </label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.trim())}
-                    placeholder="• • • • • •"
-                    className="w-full text-center tracking-[0.5em] text-2xl font-mono py-3 bg-slate-50 border border-slate-200 rounded-2xl text-blue-600 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-black"
-                  />
+                  
+                  {/* 6 Individual PIN Digit Boxes */}
+                  <div className="flex items-center justify-center gap-2">
+                    {[0, 1, 2, 3, 4, 5].map((idx) => (
+                      <input
+                        key={idx}
+                        id={`otp-digit-${idx}`}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={otpDigits[idx] || ""}
+                        onChange={(e) => handleDigitChange(idx, e.target.value)}
+                        onKeyDown={(e) => handleDigitKeyDown(idx, e)}
+                        className="w-11 h-13 text-center text-xl font-bold font-mono bg-slate-50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-500/15 rounded-xl text-slate-900 transition-all outline-none"
+                      />
+                    ))}
+                  </div>
                 </div>
 
                 <button
                   type="button"
-                  disabled={otpLoading || otpCode.length < 6}
+                  disabled={otpLoading || otpDigits.join("").length < 6}
                   onClick={handleVerifyOtp}
-                  className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-[0.99]"
+                  className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-[0.99] mt-2"
                 >
                   {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                   <span>Verify & Start Shopping</span>
@@ -1096,6 +1157,7 @@ function ChatContent() {
                     type="button"
                     onClick={() => {
                       setOtpSent(false);
+                      setOtpDigits(["", "", "", "", "", ""]);
                       setOtpCode("");
                     }}
                     className="text-slate-500 hover:text-blue-600 font-medium cursor-pointer"
@@ -1105,11 +1167,15 @@ function ChatContent() {
 
                   <button
                     type="button"
-                    disabled={otpLoading}
+                    disabled={otpLoading || resendCooldown > 0}
                     onClick={handleSendOtp}
-                    className="text-blue-600 hover:underline font-bold cursor-pointer"
+                    className={`font-bold transition-colors ${
+                      resendCooldown > 0 
+                        ? "text-slate-400 cursor-not-allowed" 
+                        : "text-blue-600 hover:underline cursor-pointer"
+                    }`}
                   >
-                    Resend Code
+                    {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend Code"}
                   </button>
                 </div>
               </div>
