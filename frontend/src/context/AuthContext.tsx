@@ -171,52 +171,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fetchCartCount(jwtToken);
   };
 
-  const loginWithGoogle = async (userRole: "customer" | "merchant" = "customer") => {
-    const { signInWithPopup } = await import("firebase/auth");
-    const { auth, googleProvider } = await import("@/lib/firebase");
-    
-    const result = await signInWithPopup(auth, googleProvider);
-    const googleUser = result.user;
-    if (!googleUser || !googleUser.email) {
-      throw new Error("No Google email received from Firebase authentication.");
+  const loginWithGoogle = async (userRole: "customer" | "merchant" = "merchant") => {
+    try {
+      const { signInWithPopup } = await import("firebase/auth");
+      const { auth, googleProvider } = await import("@/lib/firebase");
+      
+      const result = await signInWithPopup(auth, googleProvider);
+      const googleUser = result.user;
+      if (!googleUser || !googleUser.email) {
+        throw new Error("No Google email received from Firebase authentication.");
+      }
+
+      const googleEmail = googleUser.email;
+      const googleName = googleUser.displayName || googleEmail.split("@")[0];
+
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: googleEmail,
+          name: googleName,
+          role: userRole
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to authenticate with Google");
+      }
+
+      const data = await res.json();
+      const jwtToken = data.access_token;
+      const assignedRole = (data.role as "customer" | "merchant") || userRole;
+      const assignedName = data.name || googleName;
+
+      setToken(jwtToken);
+      setRole(assignedRole);
+      setUser({ uid: jwtToken, email: googleEmail, displayName: assignedName });
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("token", jwtToken);
+        localStorage.setItem("user_email", googleEmail);
+        localStorage.setItem("user_name", assignedName);
+        localStorage.setItem("user_role", assignedRole);
+      }
+
+      await fetchCartCount(jwtToken);
+    } catch (err: any) {
+      if (err.code === "auth/operation-not-allowed") {
+        throw new Error("Google Sign-In is not toggled ON in your Firebase Console yet. Please sign in with your merchant email/password or toggle Google Provider ON in Firebase Console > Authentication > Sign-in method.");
+      }
+      throw err;
     }
-
-    const googleEmail = googleUser.email;
-    const googleName = googleUser.displayName || googleEmail.split("@")[0];
-
-    const apiUrl = getApiUrl();
-    const res = await fetch(`${apiUrl}/api/auth/google`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: googleEmail,
-        name: googleName,
-        role: userRole
-      })
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.detail || "Failed to authenticate with Google");
-    }
-
-    const data = await res.json();
-    const jwtToken = data.access_token;
-    const assignedRole = (data.role as "customer" | "merchant") || userRole;
-    const assignedName = data.name || googleName;
-
-    setToken(jwtToken);
-    setRole(assignedRole);
-    setUser({ uid: jwtToken, email: googleEmail, displayName: assignedName });
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("token", jwtToken);
-      localStorage.setItem("user_email", googleEmail);
-      localStorage.setItem("user_name", assignedName);
-      localStorage.setItem("user_role", assignedRole);
-    }
-
-    await fetchCartCount(jwtToken);
   };
 
   const loginWithGoogleEmail = async (

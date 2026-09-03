@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ShoppingBag, ArrowRight, Loader2, Lock, Mail } from "lucide-react";
+import { ShoppingBag, ArrowRight, Loader2, Lock, Mail, Store } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -21,14 +21,9 @@ export default function Login() {
     
     try {
       await login(email, password);
-      const savedRole = localStorage.getItem("user_role");
-      if (savedRole === "merchant") {
-        router.push("/merchant");
-      } else {
-        router.push("/shop");
-      }
+      router.push("/merchant");
     } catch (err: any) {
-      setError(err.message || "Failed to sign in. Please verify your email and password.");
+      setError(err.message || "Failed to sign in. Please verify your merchant email and password.");
     } finally {
       setLoading(false);
     }
@@ -38,13 +33,8 @@ export default function Login() {
     setLoading(true);
     setError("");
     try {
-      await loginWithGoogle("customer");
-      const savedRole = localStorage.getItem("user_role");
-      if (savedRole === "merchant") {
-        router.push("/merchant");
-      } else {
-        router.push("/shop");
-      }
+      await loginWithGoogle("merchant");
+      router.push("/merchant");
     } catch (err: any) {
       setError(err.message || "Google sign-in failed. Please try again.");
     } finally {
@@ -61,8 +51,8 @@ export default function Login() {
             alt="BuyFlow" 
             className="mx-auto w-14 h-14 rounded-2xl mb-3 shadow-md shadow-blue-500/10 object-contain" 
           />
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Welcome to BuyFlow</h2>
-          <p className="text-slate-500 text-xs mt-1 font-medium">Shop • Chat • Pay • Flow</p>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Merchant Portal Login</h2>
+          <p className="text-slate-500 text-xs mt-1 font-medium">BuyFlow • Merchant Control Center</p>
         </div>
         
         <div className="p-8">
@@ -77,7 +67,7 @@ export default function Login() {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full mb-4 py-3 px-4 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2.5 hover:border-slate-300 active:scale-[0.99]"
+            className="w-full mb-4 py-3 px-4 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2.5 hover:border-slate-300 active:scale-[0.99] cursor-pointer"
           >
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -95,15 +85,15 @@ export default function Login() {
           
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Email Address</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Merchant Email</label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input 
                   type="email" 
                   value={email} 
                   onChange={e => setEmail(e.target.value)} 
-                  placeholder="you@example.com" 
-                  className="w-full border border-slate-200 pl-10 pr-4 py-3 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm text-slate-800" 
+                  placeholder="merchant@example.com" 
+                  className="w-full border border-slate-200 pl-10 pr-4 py-3 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm text-slate-800 font-medium" 
                   required 
                 />
               </div>
@@ -120,7 +110,7 @@ export default function Login() {
                   value={password} 
                   onChange={e => setPassword(e.target.value)} 
                   placeholder="••••••••" 
-                  className="w-full border border-slate-200 pl-10 pr-4 py-3 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm text-slate-800" 
+                  className="w-full border border-slate-200 pl-10 pr-4 py-3 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm text-slate-800 font-medium" 
                   required 
                 />
               </div>
@@ -129,15 +119,15 @@ export default function Login() {
             <button 
               type="submit" 
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 group disabled:opacity-70 shadow-md shadow-blue-500/20 mt-2"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 group disabled:opacity-70 shadow-md shadow-blue-500/20 mt-2 cursor-pointer"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Sign In"}
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Sign In to Merchant Dashboard"}
               {!loading && <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
             </button>
           </form>
           
           <div className="mt-8 text-center text-sm text-slate-500">
-            Don't have an account? <Link href="/register" className="text-blue-600 font-bold hover:underline">Create Account</Link>
+            Need a merchant account? <Link href="/register" className="text-blue-600 font-bold hover:underline">Register Merchant Account</Link>
           </div>
         </div>
       </div>
