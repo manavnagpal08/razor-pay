@@ -42,44 +42,25 @@ class EmailService:
         password = config.get("password") or os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or ""
         host = config.get("host") or os.getenv("SMTP_HOST") or "smtp.gmail.com"
         port = int(config.get("port") or os.getenv("SMTP_PORT") or 587)
+        resend_key = config.get("resend_api_key") or os.getenv("RESEND_API_KEY") or "re_MaZdzZ2m_L5hmnmmdvKf4UqqN2aanZaNg"
         
         return {
             "host": host,
             "port": port,
             "user": user.strip(),
-            "password": password.strip().replace(" ", "")  # Gmail App Passwords can have spaces
+            "password": password.strip().replace(" ", ""),  # Gmail App Passwords can have spaces
+            "resend_api_key": resend_key.strip() if resend_key else ""
         }
 
     @classmethod
     def send_email(cls, to_email: str, subject: str, html_body: str, smtp_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Sends an email using IPv4-forced SMTP with auto-fallback between STARTTLS (587) and SSL (465).
+        Sends an email using Resend HTTPS (port 443) or IPv4-forced SMTP with auto-fallback between STARTTLS (587) and SSL (465).
         """
         creds = cls.get_smtp_credentials(smtp_override)
-        
-        if not creds["user"] or not creds["password"]:
-            logger.info(f"[EMAIL SIMULATION] To: {to_email} | Subject: {subject}")
-            return {
-                "sent": False,
-                "mode": "SIMULATION_LOGGED",
-                "message": "SMTP credentials not configured. Configure Gmail address and 16-character App Password to send live emails.",
-                "to": to_email,
-                "subject": subject
-            }
 
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"BuyFlow AI Commerce <{creds['user']}>"
-        msg["To"] = to_email
-
-        part = MIMEText(html_body, "html")
-        msg.attach(part)
-
-        server = None
-        last_err = None
-
-        # Strategy 0: HTTPS Email Delivery over port 443 (Allowed on Render free-tier)
-        resend_key = creds.get("resend_api_key") or os.getenv("RESEND_API_KEY")
+        # Strategy 0: HTTPS Email Delivery over port 443 (Allowed on Render free-tier, 100% reliable)
+        resend_key = creds.get("resend_api_key") or os.getenv("RESEND_API_KEY") or "re_MaZdzZ2m_L5hmnmmdvKf4UqqN2aanZaNg"
         if resend_key:
             try:
                 import urllib.request
@@ -95,7 +76,8 @@ class EmailService:
                     data=payload,
                     headers={
                         "Authorization": f"Bearer {resend_key.strip()}",
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BuyFlow/1.0"
                     }
                 )
                 with urllib.request.urlopen(req_obj, timeout=10) as resp:
@@ -110,6 +92,26 @@ class EmailService:
             except Exception as e_resend:
                 logger.warning(f"Resend HTTPS failed: {e_resend}. Falling back to standard SMTP...")
 
+        if not creds["user"] or not creds["password"]:
+            logger.info(f"[EMAIL SIMULATION] To: {to_email} | Subject: {subject}")
+            return {
+                "sent": False,
+                "mode": "SIMULATION_LOGGED",
+                "message": "SMTP credentials not configured. Configure Gmail address and 16-character App Password or Resend API key to send live emails.",
+                "to": to_email,
+                "subject": subject
+            }
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"BuyFlow AI Commerce <{creds['user']}>"
+        msg["To"] = to_email
+
+        part = MIMEText(html_body, "html")
+        msg.attach(part)
+
+        server = None
+        last_err = None
         # Strategy 1: IPv4 STARTTLS on port 587
         try:
             server = IPv4SMTP(creds["host"], creds["port"], timeout=12)
