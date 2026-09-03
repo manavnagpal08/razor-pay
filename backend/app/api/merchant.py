@@ -57,9 +57,9 @@ def get_logs(db: Session = Depends(get_db), merchant_id: str = Depends(get_curre
 
 class FirstProductPayload(BaseModel):
     name: str
-    category: str = "General"
+    category: Optional[str] = "General"
     price: float = 999.0
-    inventory: int = 20
+    inventory: Optional[int] = 20
     description: Optional[str] = None
     image_url: Optional[str] = None
 
@@ -71,6 +71,7 @@ class StoreSetupRequest(BaseModel):
     phone: Optional[str] = None
     max_discount_percent: float = 15.0
     first_product: Optional[FirstProductPayload] = None
+    products: Optional[List[FirstProductPayload]] = None
 
 @router.post("/setup-store")
 def setup_store_profile(
@@ -79,7 +80,7 @@ def setup_store_profile(
     merchant_id: str = Depends(get_current_merchant)
 ):
     """
-    Onboarding wizard endpoint for merchants to set up their shop name, address, rules, and first product.
+    Onboarding wizard endpoint for merchants to set up their shop name, address, rules, and multiple products.
     """
     import uuid
     from app.models import Merchant, MerchantPolicy, Product
@@ -114,31 +115,37 @@ def setup_store_profile(
         rules["store_profile"] = store_profile
         policy.approval_rules = rules
 
-    # If first product is provided, create it
-    created_product = None
-    if req.first_product and req.first_product.name.strip():
-        prod_id = f"prod_{str(uuid.uuid4())[:8]}"
-        fp = req.first_product
-        img_url = fp.image_url or "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80"
-        product = Product(
-            id=prod_id,
-            merchant_id=merchant_id,
-            name=fp.name.strip(),
-            category=fp.category.strip() or "General",
-            price=fp.price,
-            inventory=fp.inventory or 10,
-            description=fp.description or f"Featured {fp.name}",
-            currency="INR",
-            features={"verified": True, "featured": True},
-            use_cases=["Everyday", "Store Exclusive"],
-            metadata_={"image_url": img_url}
-        )
-        db.add(product)
-        created_product = {
-            "id": product.id,
-            "name": product.name,
-            "price": float(product.price)
-        }
+    # Process all incoming products (either list or single)
+    input_products = []
+    if req.products and isinstance(req.products, list):
+        input_products.extend(req.products)
+    if req.first_product and req.first_product not in input_products:
+        input_products.append(req.first_product)
+
+    created_products = []
+    for fp in input_products:
+        if fp and fp.name and fp.name.strip():
+            prod_id = f"prod_{str(uuid.uuid4())[:8]}"
+            img_url = fp.image_url or "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80"
+            product = Product(
+                id=prod_id,
+                merchant_id=merchant_id,
+                name=fp.name.strip(),
+                category=(fp.category or req.category or "General").strip(),
+                price=float(fp.price) if fp.price else 999.0,
+                inventory=int(fp.inventory) if fp.inventory else 20,
+                description=fp.description or f"Featured {fp.name.strip()}",
+                currency="INR",
+                features={"verified": True, "featured": True},
+                use_cases=["Everyday", "Store Exclusive"],
+                metadata_={"image_url": img_url}
+            )
+            db.add(product)
+            created_products.append({
+                "id": product.id,
+                "name": product.name,
+                "price": float(product.price)
+            })
 
     db.commit()
     db.refresh(merchant)
@@ -151,7 +158,8 @@ def setup_store_profile(
         "merchant_id": merchant_id,
         "store_name": merchant.name,
         "store_profile": store_profile,
-        "first_product": created_product,
+        "created_products": created_products,
+        "product_count": len(created_products),
         "shareable_chat_url": shareable_chat_url
     }
 

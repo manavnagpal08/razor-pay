@@ -81,12 +81,25 @@ export default function MerchantDashboard() {
   const [onboardingMaxDiscount, setOnboardingMaxDiscount] = useState(15);
   const [onboardingGreeting, setOnboardingGreeting] = useState("");
   const [hasFirstProduct, setHasFirstProduct] = useState(true);
-  const [firstProdName, setFirstProdName] = useState("");
-  const [firstProdCategory, setFirstProdCategory] = useState("Fashion");
-  const [firstProdPrice, setFirstProdPrice] = useState<number | "">(1999);
-  const [firstProdInventory, setFirstProdInventory] = useState<number | "">(25);
-  const [firstProdDescription, setFirstProdDescription] = useState("");
-  const [firstProdImageUrl, setFirstProdImageUrl] = useState("");
+  const [onboardingProducts, setOnboardingProducts] = useState<{
+    id: string;
+    name: string;
+    category: string;
+    price: number | "";
+    inventory: number | "";
+    description: string;
+    image_url: string;
+  }[]>([
+    {
+      id: "prod_draft_1",
+      name: "",
+      category: "Fashion & Apparel",
+      price: 1999,
+      inventory: 25,
+      description: "",
+      image_url: ""
+    }
+  ]);
   const [submittingOnboarding, setSubmittingOnboarding] = useState(false);
 
   // Security & Failure Simulation States
@@ -340,6 +353,17 @@ export default function MerchantDashboard() {
     setSubmittingOnboarding(true);
     try {
       const apiUrl = getApiUrl();
+      const validProducts = hasFirstProduct ? onboardingProducts
+        .filter(p => p.name && p.name.trim().length > 0)
+        .map(p => ({
+          name: p.name.trim(),
+          category: p.category.trim() || onboardingCategory,
+          price: Number(p.price) || 999,
+          inventory: Number(p.inventory) || 20,
+          description: p.description.trim() || `Featured ${p.name.trim()}`,
+          image_url: p.image_url.trim() || undefined
+        })) : [];
+
       const payload: any = {
         store_name: onboardingStoreName.trim(),
         category: onboardingCategory,
@@ -347,18 +371,8 @@ export default function MerchantDashboard() {
         phone: onboardingPhone.trim() || undefined,
         description: onboardingDescription.trim() || undefined,
         max_discount_percent: Number(onboardingMaxDiscount) || 15,
+        products: validProducts.length > 0 ? validProducts : undefined
       };
-
-      if (hasFirstProduct && firstProdName.trim() && Number(firstProdPrice) > 0) {
-        payload.first_product = {
-          name: firstProdName.trim(),
-          category: firstProdCategory.trim() || onboardingCategory,
-          price: Number(firstProdPrice),
-          inventory: Number(firstProdInventory) || 10,
-          description: firstProdDescription.trim() || `Featured ${firstProdName.trim()}`,
-          image_url: firstProdImageUrl.trim() || undefined
-        };
-      }
 
       const res = await fetch(`${apiUrl}/api/merchant/setup-store`, {
         method: "POST",
@@ -3164,8 +3178,9 @@ export default function MerchantDashboard() {
                     <select
                       value={onboardingCategory}
                       onChange={(e) => {
-                        setOnboardingCategory(e.target.value);
-                        setFirstProdCategory(e.target.value);
+                        const newCat = e.target.value;
+                        setOnboardingCategory(newCat);
+                        setOnboardingProducts(prev => prev.map(p => (!p.category || p.category === onboardingCategory) ? { ...p, category: newCat } : p));
                       }}
                       className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
                     >
@@ -3238,13 +3253,13 @@ export default function MerchantDashboard() {
               </div>
             )}
 
-            {/* STEP 2: Optional Initial Product */}
+            {/* STEP 2: Multi-Product Catalog Creation */}
             {onboardingStep === 2 && (
               <div className="space-y-4 animate-in fade-in">
                 <div className="p-3 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl flex items-center justify-between text-xs">
                   <div>
-                    <p className="font-bold text-indigo-900">Add Your First Product Now</p>
-                    <p className="text-[11px] text-indigo-700">Your AI agent will index this item immediately to recommend it to shoppers.</p>
+                    <p className="font-bold text-indigo-900">Add Products to Your Store Catalog</p>
+                    <p className="text-[11px] text-indigo-700">Add 1 or multiple items now. Your AI agent will index all of them immediately.</p>
                   </div>
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input
@@ -3253,68 +3268,147 @@ export default function MerchantDashboard() {
                       onChange={(e) => setHasFirstProduct(e.target.checked)}
                       className="w-4 h-4 rounded text-indigo-600 accent-indigo-600"
                     />
-                    <span className="font-bold text-slate-700 text-xs">Include Item</span>
+                    <span className="font-bold text-slate-700 text-xs">Add Items Now</span>
                   </label>
                 </div>
 
                 {hasFirstProduct ? (
-                  <div className="space-y-3 pt-1">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Product Title</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Silk Floral Maxi Dress, Noise Cancelling Headphones..."
-                        value={firstProdName}
-                        onChange={(e) => setFirstProdName(e.target.value)}
-                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
+                  <div className="space-y-4 max-h-[48vh] overflow-y-auto pr-1">
+                    {onboardingProducts.map((prod, idx) => (
+                      <div key={prod.id} className="p-4 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-3 relative shadow-2xs">
+                        <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                          <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold">
+                              {idx + 1}
+                            </span>
+                            <span>Product #{idx + 1} {prod.name ? `— ${prod.name}` : ""}</span>
+                          </span>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Price (₹ INR)</label>
-                        <input
-                          type="number"
-                          placeholder="2999"
-                          value={firstProdPrice}
-                          onChange={(e) => setFirstProdPrice(Number(e.target.value))}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
-                        />
+                          {onboardingProducts.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOnboardingProducts(prev => prev.filter(p => p.id !== prod.id));
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Remove item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                            Product Title <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Silk Floral Maxi Dress, Wireless ANC Headphones..."
+                            value={prod.name}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setOnboardingProducts(prev => prev.map(p => p.id === prod.id ? { ...p, name: val } : p));
+                            }}
+                            className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">Category</label>
+                            <input
+                              type="text"
+                              placeholder={onboardingCategory}
+                              value={prod.category}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setOnboardingProducts(prev => prev.map(p => p.id === prod.id ? { ...p, category: val } : p));
+                              }}
+                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">Price (₹ INR)</label>
+                            <input
+                              type="number"
+                              placeholder="2999"
+                              value={prod.price}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? "" : Number(e.target.value);
+                                setOnboardingProducts(prev => prev.map(p => p.id === prod.id ? { ...p, price: val } : p));
+                              }}
+                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">Stock</label>
+                            <input
+                              type="number"
+                              placeholder="25"
+                              value={prod.inventory}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? "" : Number(e.target.value);
+                                setOnboardingProducts(prev => prev.map(p => p.id === prod.id ? { ...p, inventory: val } : p));
+                              }}
+                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">Description (Optional)</label>
+                          <textarea
+                            rows={1}
+                            placeholder="Short description of fabric, specs, or features..."
+                            value={prod.description}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setOnboardingProducts(prev => prev.map(p => p.id === prod.id ? { ...p, description: val } : p));
+                            }}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">Image URL (Optional)</label>
+                          <input
+                            type="url"
+                            placeholder="https://images.unsplash.com/..."
+                            value={prod.image_url}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setOnboardingProducts(prev => prev.map(p => p.id === prod.id ? { ...p, image_url: val } : p));
+                            }}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
                       </div>
+                    ))}
 
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Inventory Quantity</label>
-                        <input
-                          type="number"
-                          placeholder="25"
-                          value={firstProdInventory}
-                          onChange={(e) => setFirstProdInventory(Number(e.target.value))}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Description</label>
-                      <textarea
-                        rows={2}
-                        placeholder="Short description highlighting material, fit, features, or warranties..."
-                        value={firstProdDescription}
-                        onChange={(e) => setFirstProdDescription(e.target.value)}
-                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Product Image URL (Optional)</label>
-                      <input
-                        type="url"
-                        placeholder="https://images.unsplash.com/..."
-                        value={firstProdImageUrl}
-                        onChange={(e) => setFirstProdImageUrl(e.target.value)}
-                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOnboardingProducts(prev => [
+                          ...prev,
+                          {
+                            id: `prod_draft_${Date.now()}_${prev.length + 1}`,
+                            name: "",
+                            category: onboardingCategory,
+                            price: 999,
+                            inventory: 20,
+                            description: "",
+                            image_url: ""
+                          }
+                        ]);
+                      }}
+                      className="w-full py-2.5 bg-white hover:bg-slate-50 text-indigo-600 border border-dashed border-indigo-300 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                      <span>+ Add Another Product</span>
+                    </button>
                   </div>
                 ) : (
                   <div className="py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
@@ -3323,7 +3417,7 @@ export default function MerchantDashboard() {
                   </div>
                 )}
 
-                <div className="pt-3 flex items-center justify-between">
+                <div className="pt-3 flex items-center justify-between border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setOnboardingStep(1)}
@@ -3386,9 +3480,11 @@ export default function MerchantDashboard() {
                     </div>
                   )}
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Initial Product:</span>
+                    <span className="text-slate-500">Products in Batch:</span>
                     <span className="font-semibold text-emerald-700">
-                      {hasFirstProduct && firstProdName.trim() ? `${firstProdName.trim()} (₹${firstProdPrice})` : "Will add later"}
+                      {hasFirstProduct && onboardingProducts.filter(p => p.name.trim()).length > 0 
+                        ? `${onboardingProducts.filter(p => p.name.trim()).length} Products configured`
+                        : "Will add later from catalog"}
                     </span>
                   </div>
                 </div>
