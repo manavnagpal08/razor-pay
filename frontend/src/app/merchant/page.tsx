@@ -458,11 +458,35 @@ export default function MerchantDashboard() {
       const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/products/merchant/${merchantId}`);
       if (res.ok) {
-        const data = await res.json();
+        let data = await res.json();
+        if (Array.isArray(data) && data.length === 0) {
+          try {
+            await fetch(`${apiUrl}/api/products/merchant/${merchantId}/seed`, { method: "POST" });
+            const retry = await fetch(`${apiUrl}/api/products/merchant/${merchantId}`);
+            if (retry.ok) data = await retry.json();
+          } catch (seedErr) {
+            console.warn("Auto-seed error:", seedErr);
+          }
+        }
         setMerchantProducts(data);
       }
     } catch (e) {
       console.warn("Failed to load merchant products:", e);
+    } finally {
+      setProductsLoading(false);
+    }
+  };
+
+  const handleSeedSampleCatalog = async () => {
+    setProductsLoading(true);
+    try {
+      const apiUrl = getApiUrl();
+      await fetch(`${apiUrl}/api/products/merchant/${merchantId}/seed`, { method: "POST" });
+      await fetchMerchantProducts();
+      showToast("Sample store products loaded successfully!", "success");
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load sample products", "error");
     } finally {
       setProductsLoading(false);
     }
@@ -833,7 +857,7 @@ export default function MerchantDashboard() {
               }`}
             >
               <Cpu className="w-4 h-4 shrink-0" />
-              <span>AI Buyer Simulator</span>
+              <span>Test AI Shopper</span>
             </button>
 
             <button
@@ -845,7 +869,7 @@ export default function MerchantDashboard() {
               }`}
             >
               <ShieldAlert className="w-4 h-4 shrink-0" />
-              <span>Security Defense</span>
+              <span>Store Protection</span>
             </button>
 
             <button
@@ -857,7 +881,7 @@ export default function MerchantDashboard() {
               }`}
             >
               <Sliders className="w-4 h-4 shrink-0" />
-              <span>Policy Safeguards</span>
+              <span>Discounts & Rules</span>
             </button>
 
             <button
@@ -869,7 +893,7 @@ export default function MerchantDashboard() {
               }`}
             >
               <Code className="w-4 h-4 shrink-0" />
-              <span>OMS Webhooks</span>
+              <span>Order Notifications</span>
             </button>
 
             <button
@@ -881,7 +905,7 @@ export default function MerchantDashboard() {
               }`}
             >
               <Mail className="w-4 h-4 shrink-0" />
-              <span>Gmail Delivery</span>
+              <span>Email Setup</span>
             </button>
 
             <button
@@ -893,7 +917,7 @@ export default function MerchantDashboard() {
               }`}
             >
               <Terminal className="w-4 h-4 shrink-0" />
-              <span>Audit Ledger</span>
+              <span>Activity History</span>
             </button>
           </nav>
 
@@ -1301,7 +1325,7 @@ export default function MerchantDashboard() {
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Catalog Size</p>
               <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="text-xl font-black text-slate-900">{merchantProducts.length}</span>
-                <span className="text-xs font-semibold text-slate-500">Active SKUs</span>
+                <span className="text-xs font-semibold text-slate-500">Products</span>
               </div>
             </div>
           </div>
@@ -1316,7 +1340,7 @@ export default function MerchantDashboard() {
                 <span className="text-xl font-black text-slate-900">
                   {merchantProducts.reduce((acc: number, p: any) => acc + (Number(p.inventory) || 0), 0)}
                 </span>
-                <span className="text-xs font-semibold text-slate-500">Units Available</span>
+                <span className="text-xs font-semibold text-slate-500">Units in Stock</span>
               </div>
             </div>
           </div>
@@ -1326,10 +1350,10 @@ export default function MerchantDashboard() {
               <Sparkles className="w-5 h-5 text-indigo-500" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Vector Search</p>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Store Search</p>
               <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-xl font-black text-indigo-600">100%</span>
-                <span className="text-xs font-semibold text-slate-500">Live & Synced</span>
+                <span className="text-xl font-black text-indigo-600">Active</span>
+                <span className="text-xs font-semibold text-slate-500">Ready to recommend</span>
               </div>
             </div>
           </div>
@@ -1341,12 +1365,12 @@ export default function MerchantDashboard() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-100">
             <div>
               <div className="flex items-center gap-2.5">
-                <h3 className="font-extrabold text-slate-900 text-lg tracking-tight">Store Product Catalog</h3>
+                <h3 className="font-extrabold text-slate-900 text-lg tracking-tight">Store Products</h3>
                 <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-black border border-blue-100">
-                  {merchantProducts.length} Items
+                  {merchantProducts.length} Products
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">Manage your catalog items, inventory levels, and AI product embeddings.</p>
+              <p className="text-xs text-slate-500 mt-0.5">Manage your items, prices, quantities, and descriptions.</p>
             </div>
 
             <div className="flex items-center gap-3">
@@ -1412,18 +1436,29 @@ export default function MerchantDashboard() {
               <div className="w-14 h-14 bg-white rounded-2xl shadow-xs border border-slate-200 flex items-center justify-center mx-auto mb-3 text-slate-400">
                 <Inbox className="w-7 h-7" />
               </div>
-              <h4 className="font-extrabold text-slate-900 text-sm">Your Catalog is Currently Empty</h4>
+              <h4 className="font-extrabold text-slate-900 text-sm">Your Store Catalog is Empty</h4>
               <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-5 leading-relaxed">
-                You haven't added any products to this storefront yet. Add your first product to enable autonomous AI shopping and instant checkout.
+                You haven't added any products to this store yet. You can add your own product or instantly load a starter collection of sample products.
               </p>
-              <button
-                type="button"
-                onClick={() => setShowAddProductModal(true)}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 inline-flex items-center gap-2 cursor-pointer"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>Add First Product</span>
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddProductModal(true)}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Add First Product</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSeedSampleCatalog}
+                  className="px-5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-xs inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <span>Load Sample Products</span>
+                </button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">

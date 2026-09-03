@@ -81,10 +81,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const savedRole = localStorage.getItem("user_role") as "customer" | "merchant" | null;
 
       if (savedToken && savedEmail) {
+        const savedUserId = localStorage.getItem("user_id") || savedEmail;
         setToken(savedToken);
-        setRole(savedRole || "customer");
+        setRole(savedRole || "merchant");
         setUser({ 
-          uid: savedToken,
+          uid: savedUserId,
           email: savedEmail, 
           displayName: savedName || savedEmail.split("@")[0] 
         });
@@ -113,15 +114,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const jwtToken = data.access_token;
-    const userRole = data.role || "customer";
+    const userRole = data.role as "customer" | "merchant";
     const userName = data.name || email.split("@")[0];
+    const userId = data.user_id || data.merchant_id || email;
 
     setToken(jwtToken);
     setRole(userRole);
-    setUser({ uid: jwtToken, email, displayName: userName });
+    setUser({ uid: userId, email, displayName: userName });
 
     if (typeof window !== "undefined") {
       localStorage.setItem("token", jwtToken);
+      localStorage.setItem("user_id", userId);
       localStorage.setItem("user_email", email);
       localStorage.setItem("user_name", userName);
       localStorage.setItem("user_role", userRole);
@@ -156,13 +159,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const jwtToken = data.access_token;
     const assignedRole = data.role || (userRole as "customer" | "merchant");
     const assignedName = data.name || name || email.split("@")[0];
+    const userId = data.user_id || data.merchant_id || email;
 
     setToken(jwtToken);
     setRole(assignedRole);
-    setUser({ uid: jwtToken, email, displayName: assignedName });
+    setUser({ uid: userId, email, displayName: assignedName });
 
     if (typeof window !== "undefined") {
       localStorage.setItem("token", jwtToken);
+      localStorage.setItem("user_id", userId);
       localStorage.setItem("user_email", email);
       localStorage.setItem("user_name", assignedName);
       localStorage.setItem("user_role", assignedRole);
@@ -205,13 +210,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const jwtToken = data.access_token;
       const assignedRole = (data.role as "customer" | "merchant") || userRole;
       const assignedName = data.name || googleName;
+      const userId = data.user_id || data.merchant_id || googleEmail;
 
       setToken(jwtToken);
       setRole(assignedRole);
-      setUser({ uid: jwtToken, email: googleEmail, displayName: assignedName });
+      setUser({ uid: userId, email: googleEmail, displayName: assignedName });
 
       if (typeof window !== "undefined") {
         localStorage.setItem("token", jwtToken);
+        localStorage.setItem("user_id", userId);
         localStorage.setItem("user_email", googleEmail);
         localStorage.setItem("user_name", assignedName);
         localStorage.setItem("user_role", assignedRole);

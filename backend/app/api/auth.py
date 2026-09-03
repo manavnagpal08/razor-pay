@@ -23,12 +23,45 @@ class Token(BaseModel):
     token_type: str = "bearer"
     role: str
     name: str
+    user_id: Optional[str] = None
+    merchant_id: Optional[str] = None
+    email: Optional[str] = None
+
+def ensure_merchant_starter_catalog(db: Session, merchant_id: str):
+    """
+    Auto-seeds the 14 verified starter catalog items into a new merchant's inventory.
+    """
+    from app.models import Product
+    count = db.query(Product).filter(Product.merchant_id == merchant_id).count()
+    if count == 0:
+        base_prods = db.query(Product).filter(Product.merchant_id == "demo_merchant").all()
+        if not base_prods:
+            base_prods = db.query(Product).all()
+        for p in base_prods:
+            new_p = Product(
+                id=f"{merchant_id[:8]}_{p.id[:8]}_{uuid.uuid4().hex[:4]}",
+                merchant_id=merchant_id,
+                name=p.name,
+                category=p.category,
+                description=p.description,
+                price=p.price,
+                currency=p.currency or "INR",
+                inventory=p.inventory or 25,
+                features=p.features or {},
+                use_cases=p.use_cases or [],
+                metadata_=p.metadata_ or {}
+            )
+            db.add(new_p)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
 
 class UserCreate(BaseModel):
     email: str
     password: str
     name: str
-    role: str = "customer"
+    role: str = "merchant"
 
 class LoginRequest(BaseModel):
     email: Optional[str] = None
@@ -75,6 +108,7 @@ def register_user(req: UserCreate, db: Session = Depends(get_db)):
             currency="INR"
         )
         db.add(merchant)
+        ensure_merchant_starter_catalog(db, user.id)
 
     db.commit()
 
@@ -83,7 +117,10 @@ def register_user(req: UserCreate, db: Session = Depends(get_db)):
         "access_token": token,
         "token_type": "bearer",
         "role": req.role,
-        "name": req.name
+        "name": req.name,
+        "user_id": user.id,
+        "merchant_id": user.id,
+        "email": user.email
     }
 
 @router.post("/login", response_model=Token)
@@ -129,7 +166,10 @@ async def login_user(
             "access_token": token,
             "token_type": "bearer",
             "role": "customer",
-            "name": "Test User"
+            "name": "Test User",
+            "user_id": "test-user-id",
+            "merchant_id": "test-user-id",
+            "email": "test@example.com"
         }
 
     if not user or not user.password_hash or not verify_password(password, user.password_hash):
@@ -138,12 +178,18 @@ async def login_user(
             detail="Invalid email or password."
         )
 
+    if user.role == "merchant":
+        ensure_merchant_starter_catalog(db, user.id)
+
     token = create_access_token(subject=user.id)
     return {
         "access_token": token,
         "token_type": "bearer",
         "role": user.role,
-        "name": user.name or email.split("@")[0]
+        "name": user.name or email.split("@")[0],
+        "user_id": user.id,
+        "merchant_id": user.id,
+        "email": user.email
     }
 
 @router.post("/sync")
@@ -193,6 +239,7 @@ def sync_user(req: SyncRequest, db: Session = Depends(get_db)):
         elif req.role == "merchant":
             merchant = Merchant(id=user_id, name=req.name)
             db.add(merchant)
+            ensure_merchant_starter_catalog(db, user_id)
 
         try:
             db.commit()
@@ -200,10 +247,11 @@ def sync_user(req: SyncRequest, db: Session = Depends(get_db)):
             db.rollback()
 
     return {"status": "synced", "user_id": user_id, "role": user.role}
+
 class GoogleAuthPayload(BaseModel):
     email: str
     name: Optional[str] = None
-    role: str = "customer"
+    role: str = "merchant"
 
 @router.post("/google", response_model=Token)
 def google_auth_login(req: GoogleAuthPayload, db: Session = Depends(get_db)):
@@ -227,17 +275,23 @@ def google_auth_login(req: GoogleAuthPayload, db: Session = Depends(get_db)):
         if req.role == "merchant":
             merchant = Merchant(id=user_id, name=f"{user.name}'s Store", currency="INR")
             db.add(merchant)
+            ensure_merchant_starter_catalog(db, user_id)
         else:
             customer = Customer(id=str(uuid.uuid4()), user_id=user_id, segment="new")
             db.add(customer)
             
         db.commit()
         db.refresh(user)
+    elif user.role == "merchant":
+        ensure_merchant_starter_catalog(db, user.id)
 
     token = create_access_token(subject=user.id)
     return {
         "access_token": token,
         "token_type": "bearer",
         "role": user.role,
-        "name": user.name or clean_email.split("@")[0]
+        "name": user.name or clean_email.split("@")[0],
+        "user_id": user.id,
+        "merchant_id": user.id,
+        "email": user.email
     }

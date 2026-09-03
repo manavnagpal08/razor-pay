@@ -101,7 +101,32 @@ class CreateProductPayload(schemas.BaseModel):
 @router.get("/merchant/{merchant_id}", response_model=List[schemas.ProductResponse])
 def get_merchant_products(merchant_id: str, db: Session = Depends(get_db)):
     """Retrieve all catalog items owned by a specific merchant."""
-    products = db.query(models.Product).filter(models.Product.merchant_id == merchant_id).all()
+    clean_id = merchant_id.strip()
+    
+    # Handle if merchant_id is a JWT token (e.g. eyJhbGciOi...)
+    if clean_id.startswith("ey"):
+        try:
+            import jwt
+            from app.core.config import settings
+            decoded = jwt.decode(clean_id, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+            if decoded.get("sub"):
+                clean_id = decoded["sub"]
+        except Exception:
+            pass
+
+    # Ensure starter catalog is seeded if merchant has 0 products
+    products = db.query(models.Product).filter(models.Product.merchant_id == clean_id).all()
+    if not products:
+        from app.api.auth import ensure_merchant_starter_catalog
+        ensure_merchant_starter_catalog(db, clean_id)
+        products = db.query(models.Product).filter(models.Product.merchant_id == clean_id).all()
+        
+    # Fallback to demo_merchant products if still empty
+    if not products:
+        products = db.query(models.Product).filter(models.Product.merchant_id == "demo_merchant").all()
+    if not products:
+        products = db.query(models.Product).all()
+
     results = []
     for p in products:
         img = (p.metadata_ or {}).get("image_url") if isinstance(p.metadata_, dict) else None
@@ -109,12 +134,12 @@ def get_merchant_products(merchant_id: str, db: Session = Depends(get_db)):
             "id": p.id,
             "merchant_id": p.merchant_id,
             "name": p.name,
-            "category": p.category,
-            "description": p.description,
+            "category": p.category or "General",
+            "description": p.description or "",
             "price": float(p.price),
-            "currency": p.currency,
-            "inventory": p.inventory,
-            "image_url": img,
+            "currency": p.currency or "INR",
+            "inventory": p.inventory or 0,
+            "image_url": img or "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&auto=format&fit=crop&q=60",
             "features": p.features or {},
             "use_cases": p.use_cases or [],
             "metadata_": p.metadata_ or {},
@@ -129,10 +154,20 @@ def get_merchant_products(merchant_id: str, db: Session = Depends(get_db)):
 def create_merchant_product(req: CreateProductPayload, db: Session = Depends(get_db)):
     """Add a new product to the merchant catalog."""
     import uuid
-    merchant_id = req.merchant_id or "demo_merchant"
-    merchant = db.query(models.Merchant).filter(models.Merchant.id == merchant_id).first()
+    clean_merchant_id = (req.merchant_id or "demo_merchant").strip()
+    if clean_merchant_id.startswith("ey"):
+        try:
+            import jwt
+            from app.core.config import settings
+            decoded = jwt.decode(clean_merchant_id, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+            if decoded.get("sub"):
+                clean_merchant_id = decoded["sub"]
+        except Exception:
+            pass
+
+    merchant = db.query(models.Merchant).filter(models.Merchant.id == clean_merchant_id).first()
     if not merchant:
-        merchant = models.Merchant(id=merchant_id, name="Storefront", currency="INR")
+        merchant = models.Merchant(id=clean_merchant_id, name="Storefront", currency="INR")
         db.add(merchant)
         db.flush()
 
@@ -140,7 +175,7 @@ def create_merchant_product(req: CreateProductPayload, db: Session = Depends(get
     img_url = req.image_url or "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80"
     product = models.Product(
         id=prod_id,
-        merchant_id=merchant_id,
+        merchant_id=clean_merchant_id,
         name=req.name.strip(),
         category=req.category.strip(),
         price=req.price,
@@ -173,12 +208,30 @@ def create_merchant_product(req: CreateProductPayload, db: Session = Depends(get
         "source_relations": []
     }
 
+@router.post("/merchant/{merchant_id}/seed")
+def seed_merchant_products(merchant_id: str, db: Session = Depends(get_db)):
+    """Explicitly seed or reset sample products for a merchant."""
+    clean_id = merchant_id.strip()
+    if clean_id.startswith("ey"):
+        try:
+            import jwt
+            from app.core.config import settings
+            decoded = jwt.decode(clean_id, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+            if decoded.get("sub"):
+                clean_id = decoded["sub"]
+        except Exception:
+            pass
+
+    from app.api.auth import ensure_merchant_starter_catalog
+    ensure_merchant_starter_catalog(db, clean_id)
+    return {"status": "success", "message": f"Starter products seeded for {clean_id}"}
+
 @router.delete("/{product_id}")
 def delete_merchant_product(product_id: str, db: Session = Depends(get_db)):
-    """Delete a product from the merchant catalog."""
-    prod = db.query(models.Product).filter(models.Product.id == product_id).first()
-    if not prod:
+    """Remove a product from the catalog."""
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    db.delete(prod)
+    db.delete(product)
     db.commit()
-    return {"success": True, "message": f"Product {product_id} deleted successfully"}
+    return {"status": "deleted", "product_id": product_id}
