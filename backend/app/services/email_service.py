@@ -59,15 +59,15 @@ class EmailService:
         }
 
     @classmethod
-    def send_email(cls, to_email: str, subject: str, html_body: str, smtp_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def send_email(cls, to_email: str, subject: str, html_body: str, smtp_override: Optional[Dict[str, Any]] = None, store_name: Optional[str] = None) -> Dict[str, Any]:
         """
-        Sends an email using the single chosen active_provider (Brevo, Resend, or Gmail).
+        Sends an email using the single chosen active_provider (Brevo, Resend, or Gmail) with store-specific branding.
         """
         creds = cls.get_smtp_credentials(smtp_override)
         provider = creds.get("active_provider", "brevo")
-        sender_name = creds.get("sender_name") or "BuyFlow Store"
+        sender_name = store_name or creds.get("sender_name") or "BuyFlow Store"
 
-        # 1. BREVO PROVIDER (Default / Recommended: 300 Free Emails/day to ANY recipient)
+        # 1. BREVO PROVIDER (Recommended: HTTPS Port 443 Safe)
         if provider == "brevo":
             brevo_key = creds.get("brevo_api_key") or os.getenv("BREVO_API_KEY")
             sender_email_brevo = creds.get("brevo_sender_email") or creds.get("user") or "manav.nagpal2005@gmail.com"
@@ -344,7 +344,7 @@ class EmailService:
         </body>
         </html>
         """
-        return cls.send_email(to_email, subject, html_body, smtp_override)
+        return cls.send_email(to_email, subject, html_body, smtp_override=smtp_override, store_name=store_name)
 
     @classmethod
     def send_order_confirmation_email(cls, to_email: str, order_id: str, amount: float, tracking_number: str, store_name: str = "Razorpay AI Storefront", smtp_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
