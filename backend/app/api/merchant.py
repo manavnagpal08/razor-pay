@@ -558,6 +558,7 @@ def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(ge
     rules = policy.approval_rules if policy and isinstance(policy.approval_rules, dict) else {}
     smtp = rules.get("smtp_config", {})
     user = smtp.get("user") or os.getenv("SMTP_USER") or os.getenv("GMAIL_USER") or ""
+    pwd = smtp.get("password") or os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or ""
     resend_key = smtp.get("resend_api_key") or os.getenv("RESEND_API_KEY") or ""
     brevo_key = smtp.get("brevo_api_key") or os.getenv("BREVO_API_KEY") or ""
     return {
@@ -565,6 +566,7 @@ def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(ge
         "is_configured": bool(user or resend_key or brevo_key),
         "smtp_host": smtp.get("host") or os.getenv("SMTP_HOST") or "smtp.gmail.com",
         "smtp_port": smtp.get("port") or int(os.getenv("SMTP_PORT") or 587),
+        "has_password": bool(pwd),
         "has_resend_key": bool(resend_key),
         "has_brevo_key": bool(brevo_key),
         "brevo_sender_email": smtp.get("brevo_sender_email") or os.getenv("BREVO_SENDER_EMAIL") or user or ""
@@ -580,13 +582,35 @@ def update_smtp_config(req: SMTPConfigRequest, db: Session = Depends(get_db), me
         db.add(policy)
 
     rules = policy.approval_rules if isinstance(policy.approval_rules, dict) else {}
+    existing_smtp = rules.get("smtp_config", {}) if isinstance(rules.get("smtp_config"), dict) else {}
+    
+    # Preserve existing password if user sent masked or empty password
+    raw_pwd = req.gmail_app_password.strip().replace(" ", "") if req.gmail_app_password else ""
+    if not raw_pwd or raw_pwd.startswith("•"):
+        final_password = existing_smtp.get("password", "")
+    else:
+        final_password = raw_pwd
+
+    # Preserve existing resend / brevo keys if masked
+    raw_resend = req.resend_api_key.strip() if req.resend_api_key else None
+    if raw_resend and raw_resend.startswith("•"):
+        final_resend = existing_smtp.get("resend_api_key")
+    else:
+        final_resend = raw_resend
+
+    raw_brevo = req.brevo_api_key.strip() if req.brevo_api_key else None
+    if raw_brevo and raw_brevo.startswith("•"):
+        final_brevo = existing_smtp.get("brevo_api_key")
+    else:
+        final_brevo = raw_brevo
+
     rules["smtp_config"] = {
         "user": req.gmail_user.strip(),
-        "password": req.gmail_app_password.strip().replace(" ", ""),
+        "password": final_password,
         "host": req.smtp_host or "smtp.gmail.com",
         "port": req.smtp_port or 587,
-        "resend_api_key": req.resend_api_key.strip() if req.resend_api_key else None,
-        "brevo_api_key": req.brevo_api_key.strip() if req.brevo_api_key else None,
+        "resend_api_key": final_resend,
+        "brevo_api_key": final_brevo,
         "brevo_sender_email": req.brevo_sender_email.strip() if req.brevo_sender_email else None
     }
     policy.approval_rules = rules

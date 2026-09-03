@@ -692,6 +692,7 @@ export default function MerchantDashboard() {
       if (res.ok) {
         const data = await res.json();
         if (data.gmail_user) setSmtpUser(data.gmail_user);
+        if (data.has_password) setSmtpPassword("••••••••••••••••");
         if (data.has_resend_key) setResendApiKey("••••••••••••••••");
         if (data.has_brevo_key) setBrevoApiKey("••••••••••••••••");
         if (data.brevo_sender_email) setBrevoSenderEmail(data.brevo_sender_email);
@@ -714,8 +715,8 @@ export default function MerchantDashboard() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          gmail_user: smtpUser,
-          gmail_app_password: smtpPassword,
+          gmail_user: smtpUser.trim(),
+          gmail_app_password: smtpPassword.startsWith("•") ? undefined : smtpPassword.trim() || undefined,
           resend_api_key: resendApiKey.startsWith("•") ? undefined : resendApiKey.trim() || undefined,
           brevo_api_key: brevoApiKey.startsWith("•") ? undefined : brevoApiKey.trim() || undefined,
           brevo_sender_email: brevoSenderEmail.trim() || undefined
@@ -2971,10 +2972,17 @@ export default function MerchantDashboard() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Google App Password (16 chars)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase">Google App Password (16 chars)</label>
+                  {smtpPassword && (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      ✓ Saved & Active
+                    </span>
+                  )}
+                </div>
                 <input
                   type="password"
-                  placeholder="xxxx xxxx xxxx xxxx"
+                  placeholder={smtpPassword ? "••••••••••••••••" : "xxxx xxxx xxxx xxxx"}
                   value={smtpPassword}
                   onChange={(e) => setSmtpPassword(e.target.value)}
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
