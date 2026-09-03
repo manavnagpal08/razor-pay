@@ -542,8 +542,9 @@ def test_webhook_dispatch(db: Session = Depends(get_db), merchant_id: str = Depe
     }
 
 class SMTPConfigRequest(BaseModel):
-    gmail_user: str
-    gmail_app_password: str
+    active_provider: str | None = "brevo"  # "brevo" | "resend" | "gmail" | "none"
+    gmail_user: str | None = ""
+    gmail_app_password: str | None = ""
     smtp_host: str | None = "smtp.gmail.com"
     smtp_port: int | None = 587
     resend_api_key: str | None = None
@@ -561,9 +562,23 @@ def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(ge
     pwd = smtp.get("password") or os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or ""
     resend_key = smtp.get("resend_api_key") or os.getenv("RESEND_API_KEY") or ""
     brevo_key = smtp.get("brevo_api_key") or os.getenv("BREVO_API_KEY") or ""
+    
+    # Infer active provider if not explicitly stored
+    stored_provider = smtp.get("active_provider")
+    if not stored_provider:
+        if brevo_key:
+            stored_provider = "brevo"
+        elif user and pwd:
+            stored_provider = "gmail"
+        elif resend_key:
+            stored_provider = "resend"
+        else:
+            stored_provider = "brevo"
+
     return {
+        "active_provider": stored_provider,
         "gmail_user": user,
-        "is_configured": bool(user or resend_key or brevo_key),
+        "is_configured": bool((stored_provider == "brevo" and brevo_key) or (stored_provider == "gmail" and user and pwd) or (stored_provider == "resend" and resend_key)),
         "smtp_host": smtp.get("host") or os.getenv("SMTP_HOST") or "smtp.gmail.com",
         "smtp_port": smtp.get("port") or int(os.getenv("SMTP_PORT") or 587),
         "has_password": bool(pwd),
@@ -605,7 +620,8 @@ def update_smtp_config(req: SMTPConfigRequest, db: Session = Depends(get_db), me
         final_brevo = raw_brevo
 
     rules["smtp_config"] = {
-        "user": req.gmail_user.strip(),
+        "active_provider": req.active_provider or "brevo",
+        "user": req.gmail_user.strip() if req.gmail_user else "",
         "password": final_password,
         "host": req.smtp_host or "smtp.gmail.com",
         "port": req.smtp_port or 587,
@@ -615,7 +631,16 @@ def update_smtp_config(req: SMTPConfigRequest, db: Session = Depends(get_db), me
     }
     policy.approval_rules = rules
     db.commit()
-    return {"success": True, "message": "Email delivery configuration saved successfully!"}
+    return {"success": True, "message": f"{req.active_provider.capitalize() if req.active_provider else 'Email'} delivery configuration saved successfully!"}
+
+@router.post("/smtp-config/disconnect")
+def disconnect_smtp_provider(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
+    from app.models import MerchantPolicy
+    policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+    if policy and isinstance(policy.approval_rules, dict):
+        policy.approval_rules["smtp_config"] = {"active_provider": "none"}
+        db.commit()
+    return {"success": True, "message": "Email provider disconnected successfully."}
 
 class TestEmailRequest(BaseModel):
     recipient_email: str

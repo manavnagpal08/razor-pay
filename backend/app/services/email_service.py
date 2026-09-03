@@ -38,15 +38,17 @@ class EmailService:
         Retrieves SMTP credentials from override dict, environment variables, or defaults.
         """
         config = smtp_override or {}
+        active_provider = config.get("active_provider") or "brevo"
         user = config.get("user") or os.getenv("SMTP_USER") or os.getenv("GMAIL_USER") or ""
         password = config.get("password") or os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or ""
         host = config.get("host") or os.getenv("SMTP_HOST") or "smtp.gmail.com"
         port = int(config.get("port") or os.getenv("SMTP_PORT") or 587)
-        resend_key = config.get("resend_api_key") or os.getenv("RESEND_API_KEY") or "re_MaZdzZ2m_L5hmnmmdvKf4UqqN2aanZaNg"
+        resend_key = config.get("resend_api_key") or os.getenv("RESEND_API_KEY") or ""
         brevo_key = config.get("brevo_api_key") or os.getenv("BREVO_API_KEY") or ""
         brevo_sender = config.get("brevo_sender_email") or os.getenv("BREVO_SENDER_EMAIL") or user or "manav.nagpal2005@gmail.com"
         
         return {
+            "active_provider": active_provider,
             "host": host,
             "port": port,
             "user": user.strip(),
@@ -59,14 +61,93 @@ class EmailService:
     @classmethod
     def send_email(cls, to_email: str, subject: str, html_body: str, smtp_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Sends an email using Brevo/Resend HTTPS (port 443) or IPv4-forced SMTP with auto-fallback between STARTTLS (587) and SSL (465).
+        Sends an email using the single chosen active_provider (Brevo, Resend, or Gmail).
         """
         creds = cls.get_smtp_credentials(smtp_override)
+        provider = creds.get("active_provider", "brevo")
         sender_name = creds.get("sender_name") or "BuyFlow Store"
 
-        # Strategy 1: Prioritize Gmail / Custom SMTP if credentials are explicitly configured by merchant
-        has_gmail_creds = bool(creds.get("user") and creds.get("password"))
-        if has_gmail_creds:
+        # 1. BREVO PROVIDER (Default / Recommended: 300 Free Emails/day to ANY recipient)
+        if provider == "brevo":
+            brevo_key = creds.get("brevo_api_key") or os.getenv("BREVO_API_KEY")
+            sender_email_brevo = creds.get("brevo_sender_email") or creds.get("user") or "manav.nagpal2005@gmail.com"
+            if not brevo_key:
+                return {
+                    "sent": False,
+                    "mode": "BREVO_KEY_MISSING",
+                    "message": "Brevo API key is not configured. Please paste your Brevo Key in the Email Setup tab."
+                }
+
+            # Method 1A: Brevo HTTPS REST API (Port 443 - zero block)
+            try:
+                import urllib.request
+                import json
+                payload = json.dumps({
+                    "sender": {"name": sender_name, "email": sender_email_brevo},
+                    "to": [{"email": to_email}],
+                    "subject": subject,
+                    "htmlContent": html_body
+                }).encode("utf-8")
+                req_obj = urllib.request.Request(
+                    "https://api.brevo.com/v3/smtp/email",
+                    data=payload,
+                    headers={
+                        "api-key": brevo_key.strip(),
+                        "accept": "application/json",
+                        "content-type": "application/json"
+                    }
+                )
+                with urllib.request.urlopen(req_obj, timeout=10) as resp:
+                    if resp.status in (200, 201, 202):
+                        logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Brevo HTTPS")
+                        return {
+                            "sent": True,
+                            "mode": "BREVO_HTTPS",
+                            "message": f"Free live email delivered successfully to {to_email} via Brevo!",
+                            "to": to_email
+                        }
+            except Exception as e_brevo_api:
+                logger.warning(f"Brevo HTTPS attempt returned: {e_brevo_api}. Trying Brevo SMTP relay...")
+
+            # Method 1B: Brevo SMTP Relay on smtp-relay.brevo.com (Port 587) for xsmtpsib- keys
+            try:
+                brevo_msg = MIMEMultipart("alternative")
+                brevo_msg["Subject"] = subject
+                brevo_msg["From"] = f"{sender_name} <{sender_email_brevo}>"
+                brevo_msg["To"] = to_email
+                brevo_msg.attach(MIMEText(html_body, "html"))
+
+                b_server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=6)
+                b_server.ehlo()
+                b_server.starttls(context=ssl.create_default_context())
+                b_server.ehlo()
+                b_server.login(sender_email_brevo, brevo_key.strip())
+                b_server.sendmail(sender_email_brevo, [to_email], brevo_msg.as_string())
+                b_server.quit()
+                logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Brevo SMTP Relay")
+                return {
+                    "sent": True,
+                    "mode": "BREVO_SMTP_RELAY",
+                    "message": f"Free live email delivered successfully to {to_email} via Brevo SMTP Relay!",
+                    "to": to_email
+                }
+            except Exception as e_brevo_smtp:
+                logger.warning(f"Brevo SMTP Relay attempt failed: {e_brevo_smtp}")
+                return {
+                    "sent": False,
+                    "mode": "BREVO_ERROR",
+                    "message": f"Brevo delivery failed: {e_brevo_smtp}. Please verify your Brevo Key and Sender Email."
+                }
+
+        # 2. GMAIL SMTP PROVIDER
+        elif provider == "gmail":
+            if not creds.get("user") or not creds.get("password"):
+                return {
+                    "sent": False,
+                    "mode": "GMAIL_CREDS_MISSING",
+                    "message": "Gmail Address or 16-character App Password missing. Please fill in both fields."
+                }
+
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
             msg["From"] = f"{sender_name} <{creds['user']}>"
@@ -125,72 +206,22 @@ class EmailService:
                     "message": "Gmail Authentication Failed: Please generate a 16-character App Password at https://myaccount.google.com/apppasswords"
                 }
             except Exception as e_ssl:
-                logger.warning(f"Gmail SSL 465 failed: {e_ssl}. Falling back to HTTPS strategies...")
-
-        # Strategy 2: Brevo (Sendinblue) Delivery (300 Free Emails/day to ANY recipient, no domain required)
-        brevo_key = creds.get("brevo_api_key") or os.getenv("BREVO_API_KEY")
-        if brevo_key:
-            sender_email_brevo = creds.get("brevo_sender_email") or creds.get("user") or "manav.nagpal2005@gmail.com"
-            # Try 1: Brevo HTTPS REST API (Port 443)
-            try:
-                import urllib.request
-                import json
-                payload = json.dumps({
-                    "sender": {"name": sender_name, "email": sender_email_brevo},
-                    "to": [{"email": to_email}],
-                    "subject": subject,
-                    "htmlContent": html_body
-                }).encode("utf-8")
-                req_obj = urllib.request.Request(
-                    "https://api.brevo.com/v3/smtp/email",
-                    data=payload,
-                    headers={
-                        "api-key": brevo_key.strip(),
-                        "accept": "application/json",
-                        "content-type": "application/json"
-                    }
-                )
-                with urllib.request.urlopen(req_obj, timeout=10) as resp:
-                    if resp.status in (200, 201, 202):
-                        logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Brevo HTTPS")
-                        return {
-                            "sent": True,
-                            "mode": "BREVO_HTTPS",
-                            "message": f"Free live email delivered successfully to {to_email} via Brevo!",
-                            "to": to_email
-                        }
-            except Exception as e_brevo_api:
-                logger.warning(f"Brevo HTTPS attempt returned: {e_brevo_api}. Trying Brevo SMTP relay...")
-
-            # Try 2: Brevo SMTP Relay on smtp-relay.brevo.com (Port 587) for xsmtpsib- keys
-            try:
-                brevo_msg = MIMEMultipart("alternative")
-                brevo_msg["Subject"] = subject
-                brevo_msg["From"] = f"{sender_name} <{sender_email_brevo}>"
-                brevo_msg["To"] = to_email
-                brevo_msg.attach(MIMEText(html_body, "html"))
-
-                b_server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=6)
-                b_server.ehlo()
-                b_server.starttls(context=ssl.create_default_context())
-                b_server.ehlo()
-                b_server.login(sender_email_brevo, brevo_key.strip())
-                b_server.sendmail(sender_email_brevo, [to_email], brevo_msg.as_string())
-                b_server.quit()
-                logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Brevo SMTP Relay")
                 return {
-                    "sent": True,
-                    "mode": "BREVO_SMTP_RELAY",
-                    "message": f"Free live email delivered successfully to {to_email} via Brevo SMTP Relay!",
-                    "to": to_email
+                    "sent": False,
+                    "mode": "GMAIL_ERROR",
+                    "message": f"Gmail delivery failed: {e_ssl}. If running on cloud free-tier, please use Brevo (300 free emails/day) for 100% reliable port 443 delivery."
                 }
-            except Exception as e_brevo_smtp:
-                logger.warning(f"Brevo SMTP Relay attempt failed: {e_brevo_smtp}")
 
-        # Strategy 3: Resend HTTPS Email Delivery over port 443
-        resend_key = creds.get("resend_api_key") or os.getenv("RESEND_API_KEY")
-        sender_email = creds.get("from_email") or os.getenv("RESEND_FROM_EMAIL") or "onboarding@resend.dev"
-        if resend_key:
+        # 3. RESEND HTTPS PROVIDER
+        elif provider == "resend":
+            resend_key = creds.get("resend_api_key") or os.getenv("RESEND_API_KEY")
+            sender_email = creds.get("from_email") or os.getenv("RESEND_FROM_EMAIL") or "onboarding@resend.dev"
+            if not resend_key:
+                return {
+                    "sent": False,
+                    "mode": "RESEND_KEY_MISSING",
+                    "message": "Resend API key is not configured. Please paste your Resend API Key."
+                }
             try:
                 import urllib.request
                 import json
@@ -220,23 +251,22 @@ class EmailService:
                         }
             except urllib.error.HTTPError as e_http:
                 err_content = e_http.read().decode('utf-8', errors='ignore')
-                logger.warning(f"Resend HTTP {e_http.code}: {err_content}")
+                return {
+                    "sent": False,
+                    "mode": "RESEND_ERROR",
+                    "message": f"Resend error: {err_content}"
+                }
             except Exception as e_resend:
-                logger.warning(f"Resend HTTPS failed: {e_resend}")
-
-        if not has_gmail_creds and not brevo_key and not resend_key:
-            return {
-                "sent": False,
-                "mode": "SIMULATION_LOGGED",
-                "message": "SMTP credentials not configured. Please enter your Gmail ID & 16-character App Password or free Brevo key.",
-                "to": to_email,
-                "subject": subject
-            }
+                return {
+                    "sent": False,
+                    "mode": "RESEND_ERROR",
+                    "message": f"Resend failed: {e_resend}"
+                }
 
         return {
             "sent": False,
-            "mode": "SMTP_ERROR",
-            "message": "Email delivery failed. For cloud deployment on Render/Vercel, we recommend connecting Brevo (300 free emails/day) in your dashboard settings for 100% reliable HTTPS delivery over port 443."
+            "mode": "SIMULATION_LOGGED",
+            "message": "No email delivery provider selected. Please select Brevo, Resend, or Gmail in your dashboard."
         }
 
     @classmethod

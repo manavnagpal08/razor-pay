@@ -166,12 +166,14 @@ export default function MerchantDashboard() {
   const [creatingProduct, setCreatingProduct] = useState(false);
 
   // SMTP Gmail & HTTPS Delivery States
+  const [activeEmailProvider, setActiveEmailProvider] = useState<"brevo" | "resend" | "gmail" | "none">("brevo");
   const [smtpUser, setSmtpUser] = useState("");
   const [smtpPassword, setSmtpPassword] = useState("");
   const [resendApiKey, setResendApiKey] = useState("");
   const [brevoApiKey, setBrevoApiKey] = useState("");
   const [brevoSenderEmail, setBrevoSenderEmail] = useState("");
   const [savingSmtp, setSavingSmtp] = useState(false);
+  const [disconnectingSmtp, setDisconnectingSmtp] = useState(false);
   const [smtpMessage, setSmtpMessage] = useState("");
   const [testEmailRecipient, setTestEmailRecipient] = useState("");
   const [testingSmtp, setTestingSmtp] = useState(false);
@@ -691,6 +693,7 @@ export default function MerchantDashboard() {
       });
       if (res.ok) {
         const data = await res.json();
+        if (data.active_provider) setActiveEmailProvider(data.active_provider);
         if (data.gmail_user) setSmtpUser(data.gmail_user);
         if (data.has_password) setSmtpPassword("••••••••••••••••");
         if (data.has_resend_key) setResendApiKey("••••••••••••••••");
@@ -715,6 +718,7 @@ export default function MerchantDashboard() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
+          active_provider: activeEmailProvider,
           gmail_user: smtpUser.trim(),
           gmail_app_password: smtpPassword.startsWith("•") ? undefined : smtpPassword.trim() || undefined,
           resend_api_key: resendApiKey.startsWith("•") ? undefined : resendApiKey.trim() || undefined,
@@ -723,13 +727,36 @@ export default function MerchantDashboard() {
         })
       });
       if (res.ok) {
-        setSmtpMessage("Email delivery credentials successfully saved! Real emails will now be sent.");
-        setTimeout(() => setSmtpMessage(""), 4000);
+        setSmtpMessage(`✓ ${activeEmailProvider.toUpperCase()} configuration saved successfully! Live emails will now send via ${activeEmailProvider}.`);
+        setTimeout(() => setSmtpMessage(""), 5000);
       }
     } catch (e) {
-      showToast("Failed to save SMTP credentials.", "error");
+      showToast("Failed to save email configuration.", "error");
     } finally {
       setSavingSmtp(false);
+    }
+  };
+
+  const handleDisconnectSmtp = async () => {
+    if (!confirm("Are you sure you want to disconnect your active email service?")) return;
+    setDisconnectingSmtp(true);
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/merchant/smtp-config/disconnect`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setActiveEmailProvider("brevo");
+        setBrevoApiKey("");
+        setResendApiKey("");
+        setSmtpPassword("");
+        showToast("Email provider disconnected.", "info");
+      }
+    } catch (e) {
+      showToast("Failed to disconnect provider.", "error");
+    } finally {
+      setDisconnectingSmtp(false);
     }
   };
 
@@ -2853,151 +2880,237 @@ export default function MerchantDashboard() {
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-extrabold text-slate-900 text-sm">Production Email Delivery (Brevo, Resend HTTPS & Gmail)</h3>
-                {brevoApiKey && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    ⚡ BREVO (100% FREE 300 EMAILS/DAY) CONNECTED
+                <h3 className="font-extrabold text-slate-900 text-sm">Production Email Delivery</h3>
+                {activeEmailProvider === "brevo" && brevoApiKey && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    ● ACTIVE PROVIDER: BREVO (100% FREE 300 EMAILS/DAY)
                   </span>
                 )}
-                {resendApiKey && !brevoApiKey && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    ⚡ RESEND HTTPS CONNECTED
+                {activeEmailProvider === "resend" && resendApiKey && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    ● ACTIVE PROVIDER: RESEND HTTPS
                   </span>
                 )}
-                {smtpUser && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                    📧 GMAIL SMTP CONNECTED
+                {activeEmailProvider === "gmail" && smtpUser && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                    ● ACTIVE PROVIDER: GMAIL SMTP
                   </span>
                 )}
-                {!resendApiKey && !smtpUser && !brevoApiKey && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                    SYSTEM DEFAULT ACTIVE
+                {(!activeEmailProvider || activeEmailProvider === "none") && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                    SYSTEM SIMULATION ACTIVE
                   </span>
                 )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Send live OTP codes and order receipts. Connect Brevo (300 free emails/day to any recipient, no domain required), Resend, or Gmail.
+                Choose ONE active email provider for sending OTP codes and order receipts. You can switch or disconnect anytime.
               </p>
             </div>
           </div>
         </div>
 
-        <form onSubmit={handleSaveSmtp} className="space-y-4 mb-4">
-          {/* Method 1: Brevo (100% Free, sends to ANY recipient without custom domain) */}
-          <div className="p-4 bg-emerald-50/50 border border-emerald-200/90 rounded-2xl space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">1</span>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Brevo Free Email Delivery (Recommended — 100% Free Forever)</h4>
-                  <p className="text-[11px] text-slate-500">Sends up to 300 emails/day to <strong>ANY email address worldwide</strong> with 0 domain setup required.</p>
-                </div>
-              </div>
-              <a 
-                href="https://app.brevo.com/settings/keys/api" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline inline-flex items-center gap-1"
-              >
-                <span>Get Free Brevo Key (1 min)</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+        {/* Step 1: Select Email Provider Card */}
+        <div className="mb-5">
+          <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
+            1. Select Your Email Service (Only 1 Active at a time)
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Option A: Brevo */}
+            <button
+              type="button"
+              onClick={() => setActiveEmailProvider("brevo")}
+              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                activeEmailProvider === "brevo"
+                  ? "bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
+                  : "bg-slate-50 hover:bg-slate-100 border-slate-200"
+              }`}
+            >
               <div>
-                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Brevo API Key (<code className="font-mono">xkeysib-...</code>)</label>
-                <input
-                  type="password"
-                  placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxx"
-                  value={brevoApiKey}
-                  onChange={(e) => setBrevoApiKey(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Brevo Verified Sender Email</label>
-                <input
-                  type="email"
-                  placeholder="e.g. yourname@gmail.com"
-                  value={brevoSenderEmail}
-                  onChange={(e) => setBrevoSenderEmail(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Method 2: Resend API Key */}
-          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">2</span>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Resend HTTPS API Key</h4>
-                  <p className="text-[11px] text-slate-500">Fast cloud delivery. Requires a verified domain in <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-bold underline">resend.com/domains</a> to send to any email.</p>
-                </div>
-              </div>
-            </div>
-            <input
-              type="password"
-              placeholder="re_xxxxxxxxxxxxxxxxxxxx"
-              value={resendApiKey}
-              onChange={(e) => setResendApiKey(e.target.value)}
-              className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Method 3: Gmail App Password */}
-          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">3</span>
-              <div>
-                <h4 className="text-xs font-bold text-slate-900">Gmail SMTP App Password</h4>
-                <p className="text-[11px] text-slate-500">Direct Gmail SMTP for local testing and unblocked SMTP hosts.</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Gmail Address</label>
-                <input
-                  type="email"
-                  placeholder="e.g. store@gmail.com"
-                  value={smtpUser}
-                  onChange={(e) => setSmtpUser(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[10px] font-bold text-slate-700 uppercase">Google App Password (16 chars)</label>
-                  {smtpPassword && (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                      ✓ Saved & Active
-                    </span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-extrabold text-xs text-slate-900">Brevo (Recommended)</span>
+                  {activeEmailProvider === "brevo" && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                   )}
                 </div>
-                <input
-                  type="password"
-                  placeholder={smtpPassword ? "••••••••••••••••" : "xxxx xxxx xxxx xxxx"}
-                  value={smtpPassword}
-                  onChange={(e) => setSmtpPassword(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
-                />
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  100% Free • 300 emails/day to <strong>ANY customer</strong> with 0 domain setup.
+                </p>
+              </div>
+              <span className="text-[10px] font-bold text-emerald-700 mt-2">⚡ HTTPS Port 443 Safe</span>
+            </button>
+
+            {/* Option B: Resend */}
+            <button
+              type="button"
+              onClick={() => setActiveEmailProvider("resend")}
+              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                activeEmailProvider === "resend"
+                  ? "bg-indigo-50/70 border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs"
+                  : "bg-slate-50 hover:bg-slate-100 border-slate-200"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-extrabold text-xs text-slate-900">Resend HTTPS</span>
+                  {activeEmailProvider === "resend" && (
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Cloud REST API. Requires verified custom domain at resend.com.
+                </p>
+              </div>
+              <span className="text-[10px] font-bold text-indigo-700 mt-2">⚡ Instant Port 443</span>
+            </button>
+
+            {/* Option C: Gmail */}
+            <button
+              type="button"
+              onClick={() => setActiveEmailProvider("gmail")}
+              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                activeEmailProvider === "gmail"
+                  ? "bg-blue-50/70 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
+                  : "bg-slate-50 hover:bg-slate-100 border-slate-200"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-extrabold text-xs text-slate-900">Gmail App Password</span>
+                  {activeEmailProvider === "gmail" && (
+                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Direct SMTP with 16-character Google App Password.
+                </p>
+              </div>
+              <span className="text-[10px] font-bold text-blue-700 mt-2">📧 Standard SMTP</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Step 2: Form Configuration for ONLY the Selected Provider */}
+        <form onSubmit={handleSaveSmtp} className="space-y-4 mb-4">
+          {activeEmailProvider === "brevo" && (
+            <div className="p-4 bg-emerald-50/40 border border-emerald-200/90 rounded-2xl space-y-3 animate-in fade-in duration-150">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Configure Brevo Free Email (300 emails/day)</h4>
+                  <p className="text-[11px] text-slate-500">Enter your Brevo API key (<code className="font-mono">xkeysib-...</code> or <code className="font-mono">xsmtpsib-...</code>) and verified sender email.</p>
+                </div>
+                <a 
+                  href="https://app.brevo.com/settings/keys/api" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline inline-flex items-center gap-1"
+                >
+                  <span>Get Free Key at Brevo.com</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Brevo API / SMTP Key</label>
+                  <input
+                    type="password"
+                    placeholder="xkeysib-... or xsmtpsib-..."
+                    value={brevoApiKey}
+                    onChange={(e) => setBrevoApiKey(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Brevo Sender Email</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. yourname@gmail.com"
+                    value={brevoSenderEmail}
+                    onChange={(e) => setBrevoSenderEmail(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          <button
-            type="submit"
-            disabled={savingSmtp}
-            className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
-          >
-            {savingSmtp ? "Saving..." : "Save Delivery Configuration"}
-          </button>
+          {activeEmailProvider === "resend" && (
+            <div className="p-4 bg-indigo-50/40 border border-indigo-200/90 rounded-2xl space-y-3 animate-in fade-in duration-150">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Configure Resend HTTPS API</h4>
+                  <p className="text-[11px] text-slate-500">Paste your Resend API Key. Note: requires custom domain verified at <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline font-bold">resend.com/domains</a> to send to any email.</p>
+                </div>
+              </div>
+              <input
+                type="password"
+                placeholder="re_xxxxxxxxxxxxxxxxxxxx"
+                value={resendApiKey}
+                onChange={(e) => setResendApiKey(e.target.value)}
+                className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          )}
+
+          {activeEmailProvider === "gmail" && (
+            <div className="p-4 bg-blue-50/40 border border-blue-200/90 rounded-2xl space-y-3 animate-in fade-in duration-150">
+              <div>
+                <h4 className="text-xs font-bold text-slate-900">Configure Gmail SMTP</h4>
+                <p className="text-[11px] text-slate-500">Requires a 16-character Google App Password from <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-bold">myaccount.google.com/apppasswords</a>.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Gmail Address</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. store@gmail.com"
+                    value={smtpUser}
+                    onChange={(e) => setSmtpUser(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold text-slate-700 uppercase">Google App Password (16 chars)</label>
+                    {smtpPassword && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        ✓ Saved & Active
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="password"
+                    placeholder={smtpPassword ? "••••••••••••••••" : "xxxx xxxx xxxx xxxx"}
+                    value={smtpPassword}
+                    onChange={(e) => setSmtpPassword(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={savingSmtp}
+              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
+            >
+              {savingSmtp ? "Saving..." : `Save & Activate ${activeEmailProvider.toUpperCase()}`}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDisconnectSmtp}
+              disabled={disconnectingSmtp}
+              className="px-4 py-2.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 border border-slate-200 hover:border-rose-200 text-slate-600 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              {disconnectingSmtp ? "Disconnecting..." : "Disconnect / Reset"}
+            </button>
+          </div>
         </form>
 
         {smtpMessage && (
