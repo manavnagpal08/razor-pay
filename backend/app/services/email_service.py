@@ -159,9 +159,9 @@ class EmailService:
 
         server = None
         last_err = None
-        # Strategy 1: IPv4 STARTTLS on port 587
+        # Strategy 1: IPv4 STARTTLS on port 587 (3s fast timeout)
         try:
-            server = IPv4SMTP(creds["host"], creds["port"], timeout=12)
+            server = IPv4SMTP(creds["host"], creds["port"], timeout=3)
             server.ehlo(creds["host"])
             server.starttls()
             server.ehlo(creds["host"])
@@ -179,10 +179,10 @@ class EmailService:
             last_err = e_starttls
             logger.warning(f"STARTTLS attempt on port {creds['port']} failed: {e_starttls}. Retrying via SSL on port 465...")
 
-        # Strategy 2: IPv4 direct SSL on port 465 fallback
+        # Strategy 2: IPv4 direct SSL on port 465 fallback (3s fast timeout)
         try:
             ssl_ctx = ssl.create_default_context()
-            server = IPv4SMTP_SSL(creds["host"], 465, timeout=12, context=ssl_ctx)
+            server = IPv4SMTP_SSL(creds["host"], 465, timeout=3, context=ssl_ctx)
             server.ehlo(creds["host"])
             server.login(creds["user"], creds["password"])
             server.sendmail(creds["user"], [to_email], msg.as_string())
