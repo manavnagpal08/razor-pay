@@ -6,7 +6,7 @@ import {
   Lock, LogIn, Sliders, CheckCircle2, Loader2, Share2, Copy, ExternalLink, Code, 
   MessageSquare, Terminal, RefreshCw, Download, Filter, PlusCircle, Store, X, ChevronDown,
   QrCode, AlertTriangle, Cpu, Layers, ShieldCheck, Zap, Mail, Trash2, Inbox, Package, Search,
-  Users, Phone, Calendar
+  Users, Phone, Calendar, Tag
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useAuth } from "@/context/AuthContext";
@@ -26,6 +26,30 @@ export default function MerchantDashboard() {
   const [maxDiscountInput, setMaxDiscountInput] = useState<number>(20);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [policyMessage, setPolicyMessage] = useState("");
+
+  // Rich Discounts & Rules States
+  const [maxDiscountPercent, setMaxDiscountPercent] = useState<number>(20);
+  const [maxDiscountAmount, setMaxDiscountAmount] = useState<number>(5000);
+  const [minCartAmount, setMinCartAmount] = useState<number>(1500);
+  const [firstTimeDiscount, setFirstTimeDiscount] = useState<number>(10);
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState<number>(999);
+  const [flashSaleActive, setFlashSaleActive] = useState<boolean>(false);
+  const [autoRejectNegativeMargin, setAutoRejectNegativeMargin] = useState<boolean>(true);
+  const [aiUpsellSensitivity, setAiUpsellSensitivity] = useState<string>("BALANCED");
+  const [promoCodes, setPromoCodes] = useState<any[]>([
+    { code: "WELCOME10", discount: 10, type: "percent", active: true },
+    { code: "BUYFLOW500", discount: 500, type: "flat", active: true },
+    { code: "FESTIVE15", discount: 15, type: "percent", active: true }
+  ]);
+  const [newPromoCode, setNewPromoCode] = useState("");
+  const [newPromoDiscount, setNewPromoDiscount] = useState<number>(10);
+  const [newPromoType, setNewPromoType] = useState<"percent" | "flat">("percent");
+
+  // Policy Simulator States
+  const [testCartTotal, setTestCartTotal] = useState<number>(10000);
+  const [testProposedDiscount, setTestProposedDiscount] = useState<number>(25);
+  const [testSimResult, setTestSimResult] = useState<any>(null);
+
   const [loading, setLoading] = useState(true);
   const [logsLoading, setLogsLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
@@ -53,8 +77,9 @@ export default function MerchantDashboard() {
 
   // M2M AI Buyer Simulator States
   const [simulatingM2M, setSimulatingM2M] = useState(false);
-  const [m2mBuyerAgent, setM2mBuyerAgent] = useState("Autonomous_Buyer_Bot_v1");
+  const [m2mBuyerAgent, setM2mBuyerAgent] = useState("Enterprise_Procurement_AI_v4");
   const [m2mDiscountOffer, setM2mDiscountOffer] = useState(15);
+  const [m2mTargetProduct, setM2mTargetProduct] = useState<string>("");
   const [m2mResult, setM2mResult] = useState<any>(null);
 
   // External Software / OMS Integration States
@@ -259,7 +284,17 @@ export default function MerchantDashboard() {
       if (policyRes.ok) {
         const pol = await policyRes.json();
         setPolicy(pol);
-        setMaxDiscountInput(Number(pol.max_discount_percent) || 20);
+        setMaxDiscountPercent(Number(pol.max_discount_percent) || 20);
+        setMaxDiscountAmount(Number(pol.max_discount_amount) || 5000);
+        setMinCartAmount(Number(pol.min_cart_amount) || 1500);
+        setFirstTimeDiscount(Number(pol.first_time_discount) || 10);
+        setFreeShippingThreshold(Number(pol.free_shipping_threshold) || 999);
+        setFlashSaleActive(Boolean(pol.flash_sale_active));
+        setAutoRejectNegativeMargin(pol.auto_reject_negative_margin !== false);
+        setAiUpsellSensitivity(pol.ai_upsell_sensitivity || "BALANCED");
+        if (Array.isArray(pol.promo_codes) && pol.promo_codes.length > 0) {
+          setPromoCodes(pol.promo_codes);
+        }
       }
       if (storesRes.ok) {
         const storeData = await storesRes.json();
@@ -304,7 +339,7 @@ export default function MerchantDashboard() {
     }
   };
 
-  const handleSimulateAttack = async (type: "ROGUE_DISCOUNT_EXPLOIT" | "PAYMENT_DROP_RECOVERY") => {
+  const handleSimulateAttack = async (type: "ROGUE_DISCOUNT_EXPLOIT" | "PAYMENT_DROP_RECOVERY" | "PROMPT_INJECTION_ATTACK" | "PRICE_FORGERY_ATTACK") => {
     setSimulatingAttack(true);
     setAttackResult(null);
     try {
@@ -331,9 +366,12 @@ export default function MerchantDashboard() {
     setM2mResult(null);
     try {
       const apiUrl = getApiUrl();
-      const prodRes = await fetch(`${apiUrl}/api/products`);
-      const prods = await prodRes.json();
-      const targetProduct = (prods && prods.length > 0) ? prods[0] : { id: "p1", name: "Pro Gaming Laptop", price: 125000 };
+      let targetProduct = merchantProducts.find(p => p.id === m2mTargetProduct);
+      if (!targetProduct) {
+        const prodRes = await fetch(`${apiUrl}/api/products/merchant/${merchantId}`);
+        const prods = await prodRes.json();
+        targetProduct = (prods && prods.length > 0) ? prods[0] : { id: "p1", name: "Pro Gaming Laptop", price: 125000 };
+      }
 
       const res = await fetch(`${apiUrl}/api/agent/transact`, {
         method: "POST",
@@ -612,8 +650,8 @@ export default function MerchantDashboard() {
     }
   };
 
-  const handleUpdatePolicy = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdatePolicy = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setSavingPolicy(true);
     setPolicyMessage("");
     try {
@@ -624,17 +662,98 @@ export default function MerchantDashboard() {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ max_discount_percent: maxDiscountInput })
+        body: JSON.stringify({
+          max_discount_percent: Number(maxDiscountPercent),
+          max_discount_amount: Number(maxDiscountAmount),
+          min_cart_amount: Number(minCartAmount),
+          first_time_discount: Number(firstTimeDiscount),
+          free_shipping_threshold: Number(freeShippingThreshold),
+          flash_sale_active: Boolean(flashSaleActive),
+          auto_reject_negative_margin: Boolean(autoRejectNegativeMargin),
+          ai_upsell_sensitivity: aiUpsellSensitivity,
+          promo_codes: promoCodes
+        })
       });
       if (res.ok) {
-        setPolicyMessage("Policy successfully updated! Gated at boundary.");
-        setTimeout(() => setPolicyMessage(""), 3000);
+        setPolicyMessage("Store rules and discount guardrails saved successfully!");
+        showToast("Discounts & Rules saved!", "success");
+        setTimeout(() => setPolicyMessage(""), 4000);
       }
     } catch (err) {
       console.error(err);
+      showToast("Error saving policies", "error");
     } finally {
       setSavingPolicy(false);
     }
+  };
+
+  const handleAddPromoCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPromoCode.trim() || !newPromoDiscount) return;
+    const cleanCode = newPromoCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+    if (promoCodes.some(p => p.code === cleanCode)) {
+      showToast("Coupon code already exists!", "error");
+      return;
+    }
+    const updated = [
+      ...promoCodes,
+      { code: cleanCode, discount: Number(newPromoDiscount), type: newPromoType, active: true }
+    ];
+    setPromoCodes(updated);
+    setNewPromoCode("");
+    setNewPromoDiscount(10);
+    showToast(`Coupon code ${cleanCode} added!`, "success");
+  };
+
+  const handleTogglePromoCode = (code: string) => {
+    const updated = promoCodes.map(p => p.code === code ? { ...p, active: !p.active } : p);
+    setPromoCodes(updated);
+  };
+
+  const handleDeletePromoCode = (code: string) => {
+    const updated = promoCodes.filter(p => p.code !== code);
+    setPromoCodes(updated);
+    showToast(`Coupon ${code} removed`, "info");
+  };
+
+  const handleRunPolicySimulation = () => {
+    const amount = Number(testCartTotal) || 0;
+    const proposed = Number(testProposedDiscount) || 0;
+    const discountVal = (amount * proposed) / 100;
+    const exceedsPercent = proposed > maxDiscountPercent;
+    const exceedsCap = discountVal > maxDiscountAmount;
+    const belowMinCart = amount < minCartAmount;
+
+    let allowed = true;
+    let reason = "Approved: Discount proposal is within merchant safety bounds.";
+    let finalDiscount = discountVal;
+    let finalPercent = proposed;
+
+    if (belowMinCart) {
+      allowed = false;
+      reason = `Rejected: Order total (₹${amount.toLocaleString()}) is below the required minimum cart threshold (₹${minCartAmount.toLocaleString()}) for AI discounts.`;
+    } else if (exceedsPercent) {
+      allowed = false;
+      reason = `Rejected: Proposed ${proposed}% discount exceeds the maximum allowed threshold (${maxDiscountPercent}%). Counter-offer clamped to ${maxDiscountPercent}%.`;
+      finalPercent = maxDiscountPercent;
+      finalDiscount = Math.min((amount * maxDiscountPercent) / 100, maxDiscountAmount);
+    } else if (exceedsCap) {
+      allowed = false;
+      reason = `Rejected: Calculated discount ₹${discountVal.toLocaleString()} exceeds the maximum allowed discount cap (₹${maxDiscountAmount.toLocaleString()}). Capped at ₹${maxDiscountAmount.toLocaleString()}.`;
+      finalDiscount = maxDiscountAmount;
+      finalPercent = Math.round((maxDiscountAmount / amount) * 100);
+    }
+
+    setTestSimResult({
+      allowed,
+      reason,
+      original_amount: amount,
+      demanded_percent: proposed,
+      approved_percent: allowed ? proposed : finalPercent,
+      approved_discount_inr: allowed ? discountVal : finalDiscount,
+      final_payable_inr: amount - (allowed ? discountVal : finalDiscount),
+      timestamp: new Date().toLocaleTimeString()
+    });
   };
 
   const sendCopilotQuery = async (e: React.FormEvent) => {
@@ -1887,224 +2006,634 @@ export default function MerchantDashboard() {
 
           {activeTab === 'simulator' && (
             <div className="space-y-6 animate-in fade-in">
-              {/* 1. M2M AI Buyer Simulator */}
-        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 border border-indigo-500/30 rounded-3xl p-6 shadow-xl text-white flex flex-col justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-400/30">
-                <Cpu className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Track 01 Core: Agent-to-Agent Commerce</span>
-              </div>
-              <span className="text-[10px] font-mono text-slate-400">UAP / AP2 Compliant</span>
-            </div>
+              {/* Header & Overview */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <Cpu className="w-5 h-5 text-indigo-600" />
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Test AI Shopper & Automated Orders</h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">
+                    Simulate external AI agents and autonomous buyers transacting with your store via standardized machine-readable commerce protocols.
+                  </p>
+                </div>
 
-            <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-              <span>M2M Autonomous AI Buyer Simulator</span>
-            </h2>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Demonstrates making this merchant transactable by external AI buyers end-to-end via machine-readable protocol (<code className="text-indigo-300">/.well-known/agent.json</code>).
-            </p>
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">External AI Buyer Persona</label>
-                <select
-                  value={m2mBuyerAgent}
-                  onChange={(e) => setM2mBuyerAgent(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none"
-                >
-                  <option value="Enterprise_Procurement_AI_v4">🏢 Enterprise Procurement Bot</option>
-                  <option value="Personal_Shopper_AutoGPT_v2">🤖 Autonomous Personal Shopper</option>
-                  <option value="Smart_Cart_Aggregator_Agent">🛒 Smart Cart Aggregator</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Programmatic Discount RFP</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="0"
-                    max="40"
-                    value={m2mDiscountOffer}
-                    onChange={(e) => setM2mDiscountOffer(Number(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none pr-8"
-                  />
-                  <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">%</span>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`${baseUrl}/.well-known/agent.json`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                  >
+                    <Code className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>View agent.json</span>
+                    <ExternalLink className="w-3 h-3 text-slate-400" />
+                  </a>
                 </div>
               </div>
-            </div>
 
-            <button
-              onClick={handleRunM2MTransaction}
-              disabled={simulatingM2M}
-              className="w-full mt-2 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {simulatingM2M ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />}
-              <span>{simulatingM2M ? "Executing Machine-to-Machine RFP..." : "Simulate Autonomous AI Buyer Transaction"}</span>
-            </button>
-          </div>
+              {/* Persona Selection & Simulation Config */}
+              <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 border border-indigo-500/30 rounded-3xl p-6 shadow-xl text-white space-y-6">
+                <div className="space-y-2">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-300 bg-indigo-500/20 px-2.5 py-0.5 rounded-full border border-indigo-400/30">
+                    Step 1: Choose Buyer Persona & Target Item
+                  </span>
+                  <h4 className="text-lg font-black text-white">Configure Automated Shopper</h4>
+                </div>
 
-          {/* M2M Result Dual Console */}
-          {m2mResult && (
-            <div className="mt-4 p-3.5 bg-slate-950 border border-slate-800 rounded-2xl font-mono text-[11px] space-y-1.5 animate-in fade-in">
-              <div className="flex items-center justify-between text-emerald-400 font-bold pb-1 border-b border-slate-800">
-                <span>✓ M2M ORDER CREATED: {m2mResult.razorpay_order_id}</span>
-                <span className="text-slate-400">{m2mResult.agent_id}</span>
+                {/* Persona Cards Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[
+                    { id: "Enterprise_Procurement_AI_v4", name: "🏢 Enterprise Buyer", desc: "Requests corporate quantity deals & pricing quotes" },
+                    { id: "Personal_Shopper_AutoGPT_v2", name: "🤖 AI Price Negotiator", desc: "Attempts discount bargaining within store safety limits" },
+                    { id: "Smart_Cart_Aggregator_Agent", name: "🛒 Cart Concierge", desc: "Searches bundles, upgrades, and complementary items" },
+                    { id: "Fast_Checkout_Agent_v1", name: "⚡ 1-Click Instant Buyer", desc: "Instant automated purchase with saved credentials" }
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setM2mBuyerAgent(p.id)}
+                      className={`p-4 rounded-2xl text-left transition-all border ${
+                        m2mBuyerAgent === p.id 
+                          ? "bg-indigo-600/30 border-indigo-400 text-white shadow-md shadow-indigo-600/20 ring-2 ring-indigo-500/30" 
+                          : "bg-slate-800/60 border-slate-700/80 text-slate-300 hover:bg-slate-800 hover:border-slate-600"
+                      }`}
+                    >
+                      <p className="font-extrabold text-xs text-white">{p.name}</p>
+                      <p className="text-[11px] text-slate-400 mt-1 leading-snug">{p.desc}</p>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Target Product & RFP Discount Settings */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1.5">Target Store Product</label>
+                    <select
+                      value={m2mTargetProduct}
+                      onChange={(e) => setM2mTargetProduct(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white focus:outline-none focus:border-indigo-400"
+                    >
+                      <option value="">⚡ First Available Catalog Item (Default)</option>
+                      {merchantProducts.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} — ₹{Number(p.price).toLocaleString()} ({p.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[11px] font-bold text-slate-300 uppercase">Requested Discount RFP</label>
+                      <span className="text-xs font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                        {m2mDiscountOffer}% Requested
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="40"
+                      step="1"
+                      value={m2mDiscountOffer}
+                      onChange={(e) => setM2mDiscountOffer(Number(e.target.value))}
+                      className="w-full accent-indigo-500 cursor-pointer"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Evaluated by server policy engine against merchant {maxDiscountPercent}% cap</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRunM2MTransaction}
+                  disabled={simulatingM2M}
+                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-extrabold transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {simulatingM2M ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />}
+                  <span>{simulatingM2M ? "Executing Machine-to-Machine Order RFP..." : "Execute Automated AI Shopper Transaction"}</span>
+                </button>
+
+                {/* Simulation Result Dual Stream */}
+                {m2mResult && (
+                  <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl font-mono text-xs space-y-2.5 animate-in fade-in">
+                    <div className="flex flex-wrap items-center justify-between text-emerald-400 font-bold pb-2 border-b border-slate-800 text-xs">
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        <span>RAZORPAY ORDER GENERATED: {m2mResult.razorpay_order_id}</span>
+                      </span>
+                      <span className="text-slate-400 text-[10px] font-mono">{m2mResult.agent_id}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-[11px]">
+                      <div>
+                        <span className="text-slate-400">Selected Product:</span>
+                        <p className="font-bold text-white mt-0.5">{m2mResult.product?.name || "Verified Store Item"}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Total Payable (Verified):</span>
+                        <p className="font-bold text-emerald-400 mt-0.5 text-sm">
+                          ₹{Number(m2mResult.financials?.total_amount || 0).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-300">
+                      <span className="text-indigo-400 font-bold">Policy Guardrail Evaluation: </span>
+                      <span>{m2mResult.policy_evaluation?.reason || "Authorized within store limits."}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <p className="text-slate-300">Target Item: <strong className="text-white">{m2mResult.product?.name}</strong></p>
-              <p className="text-indigo-300">Policy Evaluation: {m2mResult.policy_evaluation?.reason}</p>
-              <div className="flex items-center justify-between pt-1 text-slate-400">
-                <span>Total: <strong className="text-emerald-400">₹{Number(m2mResult.financials?.total_amount).toLocaleString()}</strong></span>
-                <span className="text-[10px] bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-800">Razorpay Test Mode Verified</span>
-              </div>
-            </div>
-          )}
-        </div>
             </div>
           )}
 
           {activeTab === 'security' && (
             <div className="space-y-6 animate-in fade-in">
-              {/* 2. Security Defense & Graceful Failure Suite ("The Bar") */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex flex-col justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
-                <span>The Bar: Failure Handled Gracefully</span>
-              </div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">100% Bounded & Gated</span>
-            </div>
-
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">
-              Security Defense & Failure Testbed
-            </h2>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Verify that rogue agent discount exploitation is strictly rejected at the server boundary, and payment network timeouts recover with zero cart loss.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              <button
-                onClick={() => handleSimulateAttack("ROGUE_DISCOUNT_EXPLOIT")}
-                disabled={simulatingAttack}
-                className="p-3.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-2xl text-left transition-all group disabled:opacity-50"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 group-hover:scale-110 transition-transform" />
-                  <span className="text-xs font-bold text-rose-900">Rogue 50% Exploit Attack</span>
+              {/* Header & Overview */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <ShieldAlert className="w-5 h-5 text-rose-600" />
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Store Protection & Threat Defense</h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">
+                    Verify that prompt injections, unauthorized discount exploits, and price forgery attacks are strictly neutralized at the server boundary.
+                  </p>
                 </div>
-                <p className="text-[11px] text-rose-700 leading-snug">
-                  Simulate buyer agent demanding an unauthorized 50% discount.
-                </p>
-              </button>
 
-              <button
-                onClick={() => handleSimulateAttack("PAYMENT_DROP_RECOVERY")}
-                disabled={simulatingAttack}
-                className="p-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-2xl text-left transition-all group disabled:opacity-50"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <RefreshCw className="w-4 h-4 text-amber-600 group-hover:rotate-180 transition-transform duration-500" />
-                  <span className="text-xs font-bold text-amber-900">Gateway Timeout Recovery</span>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>100% Protected</span>
+                  </span>
                 </div>
-                <p className="text-[11px] text-amber-700 leading-snug">
-                  Simulate network drop during checkout and test session recovery.
-                </p>
-              </button>
-            </div>
-          </div>
-
-          {/* Defense Result Display */}
-          {attackResult && (
-            <div className={`mt-4 p-4 rounded-2xl border text-xs space-y-2 animate-in fade-in ${
-              attackResult.threat_detected 
-                ? "bg-rose-50/70 border-rose-200 text-rose-950" 
-                : "bg-emerald-50/70 border-emerald-200 text-emerald-950"
-            }`}>
-              <div className="flex items-center justify-between font-bold">
-                <span className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  {attackResult.attack_type === "ROGUE_DISCOUNT_EXPLOIT" ? "POLICY BOUNDARY INTERCEPTION" : "SESSION STATE SECURED"}
-                </span>
-                <span className="font-mono text-[10px] text-slate-500">ID: {attackResult.audit_ledger_id?.slice(0, 8)}</span>
               </div>
 
-              {attackResult.attack_type === "ROGUE_DISCOUNT_EXPLOIT" ? (
-                <>
-                  <p className="text-rose-700 font-semibold">
-                    🚨 <strong>Threat Neutralized:</strong> Demanded {attackResult.demanded_discount} rejected by server policy engine.
+              {/* 4 Threat & Failure Test Scenario Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 1. Prompt Injection & Jailbreak */}
+                <button
+                  type="button"
+                  onClick={() => handleSimulateAttack("PROMPT_INJECTION_ATTACK")}
+                  disabled={simulatingAttack}
+                  className="p-5 bg-white hover:bg-slate-50 border border-slate-200 rounded-3xl text-left transition-all group shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                      <ShieldAlert className="w-5 h-5" />
+                    </div>
+                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
+                      JAILBREAK DEFENSE
+                    </span>
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-sm">System Prompt Injection Attack</h4>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Simulate a rogue buyer attempting to override system instructions and order products for ₹1.
                   </p>
-                  <p className="text-slate-700">
-                    ✓ <strong>Graceful Recovery:</strong> Supervisor offered policy-bounded {attackResult.graceful_recovery?.counter_offer_discount} + {attackResult.graceful_recovery?.added_perk}. Zero merchant margin compromised.
+                </button>
+
+                {/* 2. Rogue 50% Exploit Attack */}
+                <button
+                  type="button"
+                  onClick={() => handleSimulateAttack("ROGUE_DISCOUNT_EXPLOIT")}
+                  disabled={simulatingAttack}
+                  className="p-5 bg-white hover:bg-slate-50 border border-slate-200 rounded-3xl text-left transition-all group shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                      POLICY INTERCEPTION
+                    </span>
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-sm">Rogue 50% Discount Override</h4>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Simulate an external AI agent demanding an unauthorized 50% discount exceeding merchant limits.
                   </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-emerald-800 font-semibold">
-                    ✓ <strong>Cart Preserved:</strong> {attackResult.graceful_recovery?.cart_status}.
+                </button>
+
+                {/* 3. Payment Drop & Network Timeout */}
+                <button
+                  type="button"
+                  onClick={() => handleSimulateAttack("PAYMENT_DROP_RECOVERY")}
+                  disabled={simulatingAttack}
+                  className="p-5 bg-white hover:bg-slate-50 border border-slate-200 rounded-3xl text-left transition-all group shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                      <RefreshCw className="w-5 h-5" />
+                    </div>
+                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                      0 CART LOSS
+                    </span>
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-sm">Gateway Drop & Session Recovery</h4>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Simulate network drop during payment execution and verify instant 1-click cart resumption.
                   </p>
-                  <p className="text-slate-700">
-                    ✓ <strong>Fallback Rail:</strong> {attackResult.graceful_recovery?.alternative_rail_offered}. Customer resumed without re-adding items.
+                </button>
+
+                {/* 4. Price Forgery / Cart Tampering */}
+                <button
+                  type="button"
+                  onClick={() => handleSimulateAttack("PRICE_FORGERY_ATTACK")}
+                  disabled={simulatingAttack}
+                  className="p-5 bg-white hover:bg-slate-50 border border-slate-200 rounded-3xl text-left transition-all group shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                      <Lock className="w-5 h-5" />
+                    </div>
+                    <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100">
+                      IMMUTABLE PRICING
+                    </span>
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-sm">Client Price Tampering Attack</h4>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Shopper modifies frontend cart payload to submit ₹500 for a ₹49,999 item. Backend recalculation protects revenue.
                   </p>
-                </>
+                </button>
+              </div>
+
+              {/* Defense Result Console */}
+              {attackResult && (
+                <div className={`p-6 rounded-3xl border shadow-sm space-y-3 animate-in fade-in ${
+                  attackResult.threat_detected 
+                    ? "bg-rose-50/70 border-rose-200 text-rose-950" 
+                    : "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                }`}>
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="flex items-center gap-2 text-sm">
+                      <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                      <span>{attackResult.incident || "SECURITY BOUNDARY INTERCEPTION"}</span>
+                    </span>
+                    <span className="font-mono text-xs text-slate-500">
+                      Ledger ID: {attackResult.audit_ledger_id?.slice(0, 8)}
+                    </span>
+                  </div>
+
+                  <p className="text-xs font-mono bg-white/70 p-3 rounded-xl border border-slate-200/80">
+                    <strong>Policy Enforcement:</strong> {attackResult.policy_decision || "Neutralized by Server Policy Engine"}
+                  </p>
+
+                  <div className="text-xs space-y-1.5 pt-1">
+                    <p className="font-semibold text-slate-800">
+                      ✓ <strong>Graceful Recovery:</strong> {attackResult.graceful_recovery?.defense_action || attackResult.graceful_recovery?.fallback_strategy || attackResult.graceful_recovery?.cart_status}
+                    </p>
+                    <p className="text-slate-600">
+                      {attackResult.graceful_recovery?.customer_experience}
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
           )}
-        </div>
-      </div>
-    )}
 
           {activeTab === 'policy' && (
             <div className="space-y-6 animate-in fade-in">
-              {/* Policy Control Panel */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <Sliders className="w-5 h-5 text-indigo-600" />
-            <h2 className="font-bold text-slate-900 text-sm">Policy Engine Safeguards</h2>
-          </div>
-          <span className="text-xs text-slate-500 font-medium">Enforced at Server Boundary</span>
-        </div>
+              {/* Header & Save Action */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <Sliders className="w-5 h-5 text-indigo-600" />
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Discounts & Store Protection Rules</h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">
+                    Configure automated discount limits, coupon codes, and pricing guardrails enforced before any checkout order is generated.
+                  </p>
+                </div>
 
-        <form onSubmit={handleUpdatePolicy} className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="flex-1">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Maximum Allowed AI Discount (%)
-            </label>
-            <p className="text-xs text-slate-500">Any AI discount proposal exceeding this threshold is automatically rejected by the policy engine.</p>
-          </div>
+                <button
+                  type="button"
+                  onClick={() => handleUpdatePolicy()}
+                  disabled={savingPolicy}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {savingPolicy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  <span>Save All Store Rules</span>
+                </button>
+              </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="relative w-28">
-              <input 
-                type="number"
-                min="0"
-                max="100"
-                value={maxDiscountInput}
-                onChange={e => setMaxDiscountInput(Number(e.target.value))}
-                className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              />
-              <span className="absolute right-3 top-2 text-xs font-bold text-slate-400">%</span>
-            </div>
+              {policyMessage && (
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{policyMessage}</span>
+                </div>
+              )}
 
-            <button 
-              type="submit"
-              disabled={savingPolicy}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm shadow-indigo-500/20"
-            >
-              {savingPolicy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-              <span>Save Policy</span>
-            </button>
-          </div>
-        </form>
+              {/* 4 Quick Stat Metric Badges */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Max Discount</span>
+                  <p className="text-xl font-black text-indigo-600 mt-0.5">{maxDiscountPercent}%</p>
+                  <p className="text-[10px] text-slate-400">Per transaction cap</p>
+                </div>
 
-        {policyMessage && (
-          <p className="mt-3 text-xs font-semibold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
-            ✓ {policyMessage}
-          </p>
-        )}
-      </div>
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Max Flat Cap</span>
+                  <p className="text-xl font-black text-slate-900 mt-0.5">₹{maxDiscountAmount.toLocaleString()}</p>
+                  <p className="text-[10px] text-slate-400">Ceiling limit</p>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Min Cart Total</span>
+                  <p className="text-xl font-black text-slate-900 mt-0.5">₹{minCartAmount.toLocaleString()}</p>
+                  <p className="text-[10px] text-slate-400">Required for AI offers</p>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Free Delivery</span>
+                  <p className="text-xl font-black text-emerald-600 mt-0.5">Over ₹{freeShippingThreshold.toLocaleString()}</p>
+                  <p className="text-[10px] text-slate-400">Automated perk</p>
+                </div>
+              </div>
+
+              {/* Grid 2-Column: Core Discount Limits & Automated Promotion Rules */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* 1. Core Discount Guardrails */}
+                <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-5">
+                  <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                    <h4 className="font-extrabold text-slate-900 text-sm">Automated Discount Boundaries</h4>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-slate-700">Maximum Allowed AI Discount (%)</label>
+                        <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                          {maxDiscountPercent}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="50"
+                        step="1"
+                        value={maxDiscountPercent}
+                        onChange={(e) => setMaxDiscountPercent(Number(e.target.value))}
+                        className="w-full accent-indigo-600 cursor-pointer"
+                      />
+                      <p className="text-[11px] text-slate-400 mt-1">Any AI discount proposal exceeding this threshold is rejected automatically.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Max Flat Discount Cap (₹)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={maxDiscountAmount}
+                          onChange={(e) => setMaxDiscountAmount(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Min Cart for AI Discounts (₹)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={minCartAmount}
+                          onChange={(e) => setMinCartAmount(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Automated Promotional Rules */}
+                <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-5">
+                  <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <h4 className="font-extrabold text-slate-900 text-sm">Automated Promotion Perks</h4>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">New Customer Welcome (%)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="40"
+                          value={firstTimeDiscount}
+                          onChange={(e) => setFirstTimeDiscount(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">Offered on first OTP purchase</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Free Delivery Minimum (₹)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={freeShippingThreshold}
+                          onChange={(e) => setFreeShippingThreshold(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">Waives shipping charges</p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 space-y-2.5">
+                      <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200/80 cursor-pointer hover:bg-slate-100/70 transition-colors">
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">Flash Sale Campaign Mode</p>
+                          <p className="text-[11px] text-slate-500">Allows AI to propose time-sensitive extra perks during shopping</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={flashSaleActive}
+                          onChange={(e) => setFlashSaleActive(e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 rounded accent-indigo-600 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200/80 cursor-pointer hover:bg-slate-100/70 transition-colors">
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">Auto-Reject Below-Margin Requests</p>
+                          <p className="text-[11px] text-slate-500">Strictly blocks buyers from bargaining below cost floor</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={autoRejectNegativeMargin}
+                          onChange={(e) => setAutoRejectNegativeMargin(e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 rounded accent-indigo-600 cursor-pointer"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Active Store Coupons & Promo Codes Manager */}
+              <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-indigo-600" />
+                      <span>Store Promo Codes & Coupons</span>
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">Customers can redeem these discount codes in the storefront chat.</p>
+                  </div>
+                </div>
+
+                {/* Add New Promo Code Form */}
+                <form onSubmit={handleAddPromoCode} className="flex flex-col sm:flex-row items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="flex-1 w-full sm:w-auto">
+                    <input
+                      type="text"
+                      placeholder="e.g. SUMMER25"
+                      value={newPromoCode}
+                      onChange={(e) => setNewPromoCode(e.target.value.toUpperCase())}
+                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-indigo-500 uppercase"
+                    />
+                  </div>
+
+                  <div className="w-full sm:w-32">
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Discount"
+                      value={newPromoDiscount}
+                      onChange={(e) => setNewPromoDiscount(Number(e.target.value))}
+                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div className="w-full sm:w-36">
+                    <select
+                      value={newPromoType}
+                      onChange={(e) => setNewPromoType(e.target.value as "percent" | "flat")}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="percent">% Percent Off</option>
+                      <option value="flat">₹ Flat Discount</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full sm:w-auto px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Add Coupon</span>
+                  </button>
+                </form>
+
+                {/* Promo Code List */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {promoCodes.map((promo, idx) => (
+                    <div key={idx} className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-indigo-700 text-xs tracking-wider bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">
+                            {promo.code}
+                          </span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${promo.active ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"}`}>
+                            {promo.active ? "ACTIVE" : "PAUSED"}
+                          </span>
+                        </div>
+                        <p className="text-xs font-bold text-slate-900 mt-1">
+                          {promo.type === "percent" ? `${promo.discount}% Off` : `₹${promo.discount} Flat Off`}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePromoCode(promo.code)}
+                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
+                        >
+                          {promo.active ? "Pause" : "Enable"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePromoCode(promo.code)}
+                          className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          title="Delete code"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4. Real-Time Rule Outcome Simulator */}
+              <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white border border-indigo-500/30 rounded-3xl p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-indigo-500/20">
+                  <div className="flex items-center gap-2.5">
+                    <Terminal className="w-5 h-5 text-indigo-400" />
+                    <div>
+                      <h4 className="font-black text-white text-sm">Interactive Rule Outcome Tester</h4>
+                      <p className="text-[11px] text-slate-400">Test how your current discount rules evaluate real shopper requests</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                    Live Guardrail Check
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Test Order Amount (₹)</label>
+                    <input
+                      type="number"
+                      value={testCartTotal}
+                      onChange={(e) => setTestCartTotal(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Proposed Discount (%)</label>
+                    <input
+                      type="number"
+                      value={testProposedDiscount}
+                      onChange={(e) => setTestProposedDiscount(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={handleRunPolicySimulation}
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                      <span>Test Rule Outcome</span>
+                    </button>
+                  </div>
+                </div>
+
+                {testSimResult && (
+                  <div className={`p-4 rounded-2xl border text-xs font-mono space-y-2 animate-in fade-in ${
+                    testSimResult.allowed 
+                      ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-200" 
+                      : "bg-rose-950/60 border-rose-500/40 text-rose-200"
+                  }`}>
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="flex items-center gap-1.5">
+                        {testSimResult.allowed ? "✓ RULE PASSED (APPROVED)" : "🚨 RULE TRIGGERED (CLAMPED/REJECTED)"}
+                      </span>
+                      <span className="text-[10px] text-slate-400">{testSimResult.timestamp}</span>
+                    </div>
+                    <p className="text-slate-200 leading-relaxed font-sans">{testSimResult.reason}</p>
+                    <div className="pt-2 border-t border-white/10 flex flex-wrap gap-4 text-[11px]">
+                      <span>Original: <strong>₹{testSimResult.original_amount.toLocaleString()}</strong></span>
+                      <span>Approved Discount: <strong>₹{testSimResult.approved_discount_inr.toLocaleString()} ({testSimResult.approved_percent}%)</strong></span>
+                      <span>Final Payable: <strong className="text-emerald-400">₹{testSimResult.final_payable_inr.toLocaleString()}</strong></span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

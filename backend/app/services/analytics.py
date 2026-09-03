@@ -106,20 +106,64 @@ class AnalyticsService:
     def get_merchant_policy(self, merchant_id: str) -> Dict[str, Any]:
         policy = self.db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
         if not policy:
-            return {}
+            return {
+                "max_discount_percent": 20.0,
+                "max_discount_amount": 5000.0,
+                "min_cart_amount": 1500.0,
+                "first_time_discount": 10.0,
+                "free_shipping_threshold": 999.0,
+                "flash_sale_active": False,
+                "auto_reject_negative_margin": True,
+                "ai_upsell_sensitivity": "BALANCED",
+                "promo_codes": [
+                    {"code": "WELCOME10", "discount": 10, "type": "percent", "active": True},
+                    {"code": "BUYFLOW500", "discount": 500, "type": "flat", "active": True},
+                    {"code": "FESTIVE15", "discount": 15, "type": "percent", "active": True}
+                ]
+            }
+        
+        rules = policy.approval_rules if isinstance(policy.approval_rules, dict) else {}
         return {
             "id": policy.id,
-            "max_discount_percent": float(policy.max_discount_percent) if policy.max_discount_percent else 0,
-            "max_discount_amount": float(policy.max_discount_amount) if policy.max_discount_amount else 0,
+            "max_discount_percent": float(policy.max_discount_percent) if policy.max_discount_percent else 20.0,
+            "max_discount_amount": float(policy.max_discount_amount) if policy.max_discount_amount else 5000.0,
+            "min_cart_amount": float(rules.get("min_cart_amount", 1500.0)),
+            "first_time_discount": float(rules.get("first_time_discount", 10.0)),
+            "free_shipping_threshold": float(rules.get("free_shipping_threshold", 999.0)),
+            "flash_sale_active": bool(rules.get("flash_sale_active", False)),
+            "auto_reject_negative_margin": bool(rules.get("auto_reject_negative_margin", True)),
+            "ai_upsell_sensitivity": rules.get("ai_upsell_sensitivity", "BALANCED"),
+            "promo_codes": rules.get("promo_codes", [
+                {"code": "WELCOME10", "discount": 10, "type": "percent", "active": True},
+                {"code": "BUYFLOW500", "discount": 500, "type": "flat", "active": True},
+                {"code": "FESTIVE15", "discount": 15, "type": "percent", "active": True}
+            ])
         }
 
-    def update_merchant_policy(self, merchant_id: str, max_discount_percent: float) -> Dict[str, Any]:
+    def update_merchant_policy(self, merchant_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        import uuid
         policy = self.db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
         if not policy:
-            policy = MerchantPolicy(merchant_id=merchant_id, max_discount_percent=max_discount_percent)
+            policy = MerchantPolicy(
+                id=str(uuid.uuid4()),
+                merchant_id=merchant_id,
+                max_discount_percent=updates.get("max_discount_percent", 20.0),
+                max_discount_amount=updates.get("max_discount_amount", 5000.0),
+                approval_rules={}
+            )
             self.db.add(policy)
-        else:
-            policy.max_discount_percent = max_discount_percent
+        
+        if "max_discount_percent" in updates and updates["max_discount_percent"] is not None:
+            policy.max_discount_percent = updates["max_discount_percent"]
+        if "max_discount_amount" in updates and updates["max_discount_amount"] is not None:
+            policy.max_discount_amount = updates["max_discount_amount"]
+
+        rules = dict(policy.approval_rules or {})
+        for k in ["min_cart_amount", "first_time_discount", "free_shipping_threshold", "flash_sale_active", "auto_reject_negative_margin", "ai_upsell_sensitivity", "promo_codes"]:
+            if k in updates and updates[k] is not None:
+                rules[k] = updates[k]
+        policy.approval_rules = rules
+
         self.db.commit()
         return self.get_merchant_policy(merchant_id)
 

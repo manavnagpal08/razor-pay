@@ -98,6 +98,18 @@ def verify_chat_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
     if datetime.now(timezone.utc) > cached["expires_at"]:
         raise HTTPException(status_code=400, detail="OTP has expired. Please request a new code.")
 
+    # Clean merchant_id
+    clean_merchant_id = req.merchant_id
+    if clean_merchant_id and clean_merchant_id.startswith("ey"):
+        try:
+            import jwt
+            from app.core.config import settings
+            decoded = jwt.decode(clean_merchant_id, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+            if decoded.get("sub"):
+                clean_merchant_id = decoded["sub"]
+        except Exception:
+            pass
+
     # Find or auto-create User & Customer record
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -115,7 +127,7 @@ def verify_chat_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
         customer = Customer(
             id=str(uuid.uuid4()),
             user_id=user.id,
-            merchant_id=req.merchant_id,
+            merchant_id=clean_merchant_id,
             segment="conversational_buyer",
             preferences={"phone": req.phone}
         )
@@ -130,15 +142,15 @@ def verify_chat_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
             customer = Customer(
                 id=str(uuid.uuid4()),
                 user_id=user.id,
-                merchant_id=req.merchant_id,
+                merchant_id=clean_merchant_id,
                 segment="conversational_buyer",
                 preferences={"phone": req.phone}
             )
             db.add(customer)
             db.commit()
         else:
-            if req.merchant_id and not customer.merchant_id:
-                customer.merchant_id = req.merchant_id
+            if clean_merchant_id:
+                customer.merchant_id = clean_merchant_id
             if req.phone:
                 prefs = dict(customer.preferences or {})
                 prefs["phone"] = req.phone
