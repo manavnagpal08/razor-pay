@@ -951,14 +951,14 @@ function ChatContent() {
                           return (
                             <div 
                               key={prodId} 
-                              className="bg-white border border-slate-200/90 hover:border-blue-500 rounded-2xl p-3.5 flex items-center justify-between gap-3.5 shadow-sm hover:shadow-md transition-all group"
+                              className="bg-white border border-slate-200/90 hover:border-blue-500 rounded-2xl p-3 sm:p-3.5 flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2.5 sm:gap-3.5 shadow-sm hover:shadow-md transition-all group"
                             >
-                              <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <div className="w-14 h-14 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center relative">
+                              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 w-full">
+                                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center relative">
                                   {prodImg ? (
                                     <img src={prodImg} alt={prodName} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                   ) : (
-                                    <Package className="w-6 h-6 text-slate-400" />
+                                    <Package className="w-5 h-5 text-slate-400" />
                                   )}
                                 </div>
                                 <div className="min-w-0 flex-1">
@@ -966,16 +966,16 @@ function ChatContent() {
                                     {prodName}
                                   </h5>
                                   {prodReason && (
-                                    <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-medium">
+                                    <p className="text-[10px] sm:text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-medium">
                                       {prodReason}
                                     </p>
                                   )}
-                                  <div className="flex items-center gap-2 mt-1">
+                                  <div className="flex items-center gap-2 mt-0.5 sm:mt-1">
                                     <p className="text-xs sm:text-sm font-black text-blue-600">
                                       ₹{formattedPrice}
                                     </p>
                                     {prod.category && (
-                                      <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-semibold rounded-md uppercase tracking-wider">
+                                      <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[9px] sm:text-[10px] font-semibold rounded-md uppercase tracking-wider truncate max-w-[100px]">
                                         {prod.category}
                                       </span>
                                     )}
@@ -983,12 +983,12 @@ function ChatContent() {
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex items-center gap-2 w-full xs:w-auto shrink-0 justify-end pt-1 xs:pt-0 border-t xs:border-t-0 border-slate-100">
                                 <button
                                   type="button"
                                   onClick={() => handleInstantBuy(prod)}
                                   disabled={instantBuyingId === prodId}
-                                  className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs shadow-blue-500/20 active:scale-95 cursor-pointer disabled:opacity-50"
+                                  className="w-full xs:w-auto px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs shadow-blue-500/20 active:scale-95 cursor-pointer disabled:opacity-50 min-h-[36px]"
                                 >
                                   {instantBuyingId === prodId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5 fill-white" />}
                                   <span>Buy Now</span>

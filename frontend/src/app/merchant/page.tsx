@@ -263,7 +263,7 @@ export default function MerchantDashboard() {
   const currentStoreName = selectedStore?.name || (stores && stores.length > 0 ? stores[0].name : (user?.store_name || user?.name || (user?.email ? user.email.split('@')[0].toUpperCase() : "BuyFlow Store")));
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://razorpay-buildthon.vercel.app";
   const agentShareUrl = `${baseUrl}/chat?merchant=${merchantId}`;
-  const embedSnippet = `<iframe src="${agentShareUrl}" width="100%" height="700" frameborder="0" style="border-radius: 24px; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);"></iframe>`;
+  const embedSnippet = `<iframe src="${agentShareUrl}&embed=true" width="100%" height="100%" style="min-height: 600px; max-height: 90vh; border: none; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);" allow="payment"></iframe>`;
 
   // Realistic Zero-Data Chart (0 dummy hardcoded numbers!)
   const hasRevenue = metrics && Number(metrics.revenue) > 0;
