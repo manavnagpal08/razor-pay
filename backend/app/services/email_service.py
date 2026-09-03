@@ -127,13 +127,14 @@ class EmailService:
             except Exception as e_ssl:
                 logger.warning(f"Gmail SSL 465 failed: {e_ssl}. Falling back to HTTPS strategies...")
 
-        # Strategy 2: Brevo (Sendinblue) HTTPS API (300 Free Emails/day to ANY recipient, no domain required, port 443)
+        # Strategy 2: Brevo (Sendinblue) Delivery (300 Free Emails/day to ANY recipient, no domain required)
         brevo_key = creds.get("brevo_api_key") or os.getenv("BREVO_API_KEY")
         if brevo_key:
+            sender_email_brevo = creds.get("brevo_sender_email") or creds.get("user") or "manav.nagpal2005@gmail.com"
+            # Try 1: Brevo HTTPS REST API (Port 443)
             try:
                 import urllib.request
                 import json
-                sender_email_brevo = creds.get("brevo_sender_email") or creds.get("user") or "manav.nagpal2005@gmail.com"
                 payload = json.dumps({
                     "sender": {"name": sender_name, "email": sender_email_brevo},
                     "to": [{"email": to_email}],
@@ -158,8 +159,33 @@ class EmailService:
                             "message": f"Free live email delivered successfully to {to_email} via Brevo!",
                             "to": to_email
                         }
-            except Exception as e_brevo:
-                logger.warning(f"Brevo HTTPS attempt failed: {e_brevo}. Falling back to Resend...")
+            except Exception as e_brevo_api:
+                logger.warning(f"Brevo HTTPS attempt returned: {e_brevo_api}. Trying Brevo SMTP relay...")
+
+            # Try 2: Brevo SMTP Relay on smtp-relay.brevo.com (Port 587) for xsmtpsib- keys
+            try:
+                brevo_msg = MIMEMultipart("alternative")
+                brevo_msg["Subject"] = subject
+                brevo_msg["From"] = f"{sender_name} <{sender_email_brevo}>"
+                brevo_msg["To"] = to_email
+                brevo_msg.attach(MIMEText(html_body, "html"))
+
+                b_server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=6)
+                b_server.ehlo()
+                b_server.starttls(context=ssl.create_default_context())
+                b_server.ehlo()
+                b_server.login(sender_email_brevo, brevo_key.strip())
+                b_server.sendmail(sender_email_brevo, [to_email], brevo_msg.as_string())
+                b_server.quit()
+                logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Brevo SMTP Relay")
+                return {
+                    "sent": True,
+                    "mode": "BREVO_SMTP_RELAY",
+                    "message": f"Free live email delivered successfully to {to_email} via Brevo SMTP Relay!",
+                    "to": to_email
+                }
+            except Exception as e_brevo_smtp:
+                logger.warning(f"Brevo SMTP Relay attempt failed: {e_brevo_smtp}")
 
         # Strategy 3: Resend HTTPS Email Delivery over port 443
         resend_key = creds.get("resend_api_key") or os.getenv("RESEND_API_KEY")
