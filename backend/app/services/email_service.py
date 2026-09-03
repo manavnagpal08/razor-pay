@@ -239,10 +239,14 @@ class EmailService:
                 }
             except Exception as e_starttls:
                 logger.error(f"Gmail STARTTLS failed: {e_starttls}")
+                if "101" in str(e_starttls) or "unreachable" in str(e_starttls).lower():
+                    err_hint = "Render Cloud Firewall Notice: Render blocks outbound SMTP ports (465/587) on free web services. Your Gmail credentials are valid! To dispatch emails from Render over HTTPS (Port 443), please activate Brevo Cloud API."
+                else:
+                    err_hint = f"Gmail delivery failed: {e_starttls}. Please check your Gmail address and 16-character App Password."
                 return {
                     "sent": False,
                     "mode": "GMAIL_ERROR",
-                    "message": f"Gmail delivery failed: {e_starttls}. Please check your Gmail address and 16-character App Password."
+                    "message": err_hint
                 }
 
         # 3. RESEND HTTPS PROVIDER
