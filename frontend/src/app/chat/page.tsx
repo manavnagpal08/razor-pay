@@ -69,7 +69,6 @@ function ChatContent() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
   const [pendingProductToBuy, setPendingProductToBuy] = useState<any>(null);
-  const [devOtp, setDevOtp] = useState<string | null>(null);
 
   useEffect(() => {
     if (resendCooldown > 0) {
@@ -291,13 +290,7 @@ function ChatContent() {
         setOtpDigits(["", "", "", "", "", ""]);
         setOtpCode("");
         setResendCooldown(60);
-        if (data.dev_otp) {
-          setDevOtp(data.dev_otp);
-          showToast(`Verification code: ${data.dev_otp}`, "info");
-        } else {
-          setDevOtp(null);
-          showToast(`Verification code sent to ${otpEmail}! Check your inbox.`, "success");
-        }
+        showToast(`Verification code sent to ${otpEmail}! Check your inbox.`, "success");
         setTimeout(() => {
           const firstInput = document.getElementById("otp-digit-0");
           firstInput?.focus();
@@ -1200,21 +1193,6 @@ function ChatContent() {
                       />
                     ))}
                   </div>
-
-                  {devOtp && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const digits = devOtp.split("").slice(0, 6);
-                        setOtpDigits(digits);
-                        setOtpCode(devOtp);
-                      }}
-                      className="w-full mt-2.5 py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                    >
-                      <Zap className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Auto-Fill Code: <strong className="font-mono">{devOtp}</strong></span>
-                    </button>
-                  )}
                 </div>
 
                 <button
