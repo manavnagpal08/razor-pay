@@ -40,26 +40,7 @@ class AICommerceSupervisor:
         workflow.add_edge("recommend", "upsell_cross_sell")
         workflow.add_edge("upsell_cross_sell", END)
         
-        # Initialize PostgreSQL Conversational Memory Checkpointer
-        checkpointer = None
-        try:
-            from psycopg_pool import ConnectionPool
-            from langgraph.checkpoint.postgres import PostgresSaver
-            from app.core.config import settings
-            
-            # Avoid pool in tests where db URL might be memory SQLite
-            if "sqlite" not in settings.database_url:
-                self.pool = ConnectionPool(settings.database_url)
-                checkpointer = PostgresSaver(self.pool)
-                checkpointer.setup()
-                logger.info("Initialized PostgreSQL Conversational Memory.")
-        except Exception as e:
-            logger.warning(f"Could not initialize Postgres Checkpointer: {e}")
-            
-        if checkpointer:
-            self.graph = workflow.compile(checkpointer=checkpointer)
-        else:
-            self.graph = workflow.compile()
+        self.graph = workflow.compile()
         
     def _node_parse_intent(self, state: CommerceState) -> CommerceState:
         intent_resp = self.intent_service.process_intent(state["input_text"])
