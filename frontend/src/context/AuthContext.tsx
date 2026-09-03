@@ -7,6 +7,9 @@ interface UserProfile {
   id?: string;
   email: string;
   displayName: string;
+  merchant_id?: string;
+  store_name?: string;
+  name?: string;
 }
 
 interface AuthContextType {

@@ -223,8 +223,8 @@ export default function MerchantDashboard() {
     }
   };
 
-  const merchantId = selectedStore?.id || user?.uid || "demo_merchant";
-  const currentStoreName = selectedStore?.name || "Razorpay Demo Store";
+  const merchantId = selectedStore?.id || user?.merchant_id || user?.uid || "demo_merchant";
+  const currentStoreName = selectedStore?.name || (stores && stores.length > 0 ? stores[0].name : (user?.store_name || user?.name || (user?.email ? user.email.split('@')[0].toUpperCase() : "BuyFlow Store")));
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://razorpay-buildthon.vercel.app";
   const agentShareUrl = `${baseUrl}/chat?merchant=${merchantId}`;
   const embedSnippet = `<iframe src="${agentShareUrl}" width="100%" height="700" frameborder="0" style="border-radius: 24px; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);"></iframe>`;
@@ -298,7 +298,12 @@ export default function MerchantDashboard() {
       }
       if (storesRes.ok) {
         const storeData = await storesRes.json();
-        setStores(storeData);
+        if (Array.isArray(storeData)) {
+          setStores(storeData);
+          if (storeData.length > 0 && !selectedStore) {
+            setSelectedStore(storeData[0]);
+          }
+        }
       }
     } catch (e) {
       console.error(e);
@@ -876,7 +881,7 @@ export default function MerchantDashboard() {
               )}
             </div>
             
-            <span className="text-slate-400 text-xs hidden sm:inline">• {user.email}</span>
+            <span className="text-slate-400 text-xs hidden sm:inline">• {user?.email || ""}</span>
           </div>
         </div>
 

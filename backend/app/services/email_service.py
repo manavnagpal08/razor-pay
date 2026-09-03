@@ -77,7 +77,7 @@ class EmailService:
                     headers={
                         "Authorization": f"Bearer {resend_key.strip()}",
                         "Content-Type": "application/json",
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BuyFlow/1.0"
+                        "User-Agent": "resend-python/2.0.0"
                     }
                 )
                 with urllib.request.urlopen(req_obj, timeout=10) as resp:
@@ -89,6 +89,9 @@ class EmailService:
                             "message": f"Live email delivered successfully to {to_email} via Resend HTTPS!",
                             "to": to_email
                         }
+            except urllib.error.HTTPError as e_http:
+                err_content = e_http.read().decode('utf-8', errors='ignore')
+                logger.warning(f"Resend HTTP {e_http.code}: {err_content}. Falling back...")
             except Exception as e_resend:
                 logger.warning(f"Resend HTTPS failed: {e_resend}. Falling back to standard SMTP...")
 
