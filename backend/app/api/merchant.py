@@ -610,33 +610,41 @@ def update_smtp_config(req: SMTPConfigRequest, db: Session = Depends(get_db), me
     else:
         final_password = raw_pwd
 
-    # Handle resend / brevo keys
-    raw_resend = req.resend_api_key.strip() if req.resend_api_key else None
-    if raw_resend and raw_resend.startswith("•"):
+    # Handle resend key
+    raw_resend = req.resend_api_key.strip() if req.resend_api_key else ""
+    if not raw_resend or raw_resend.startswith("•"):
         final_resend = existing_smtp.get("resend_api_key")
     else:
         final_resend = raw_resend
 
-    raw_brevo = req.brevo_api_key.strip() if req.brevo_api_key else None
-    if raw_brevo and raw_brevo.startswith("•"):
+    # Handle brevo key
+    raw_brevo = req.brevo_api_key.strip() if req.brevo_api_key else ""
+    if not raw_brevo or raw_brevo.startswith("•"):
         final_brevo = existing_smtp.get("brevo_api_key")
     else:
         final_brevo = raw_brevo
 
+    # Handle brevo sender email
+    raw_brevo_sender = req.brevo_sender_email.strip() if req.brevo_sender_email else ""
+    if not raw_brevo_sender:
+        final_brevo_sender = existing_smtp.get("brevo_sender_email")
+    else:
+        final_brevo_sender = raw_brevo_sender
+
     rules["smtp_config"] = {
-        "active_provider": req.active_provider or "brevo",
-        "user": req.gmail_user.strip() if req.gmail_user else "",
+        "active_provider": req.active_provider or existing_smtp.get("active_provider") or "brevo",
+        "user": req.gmail_user.strip() if req.gmail_user else existing_smtp.get("user", ""),
         "password": final_password,
-        "host": req.smtp_host or "smtp.gmail.com",
-        "port": req.smtp_port or 587,
+        "host": req.smtp_host or existing_smtp.get("host") or "smtp.gmail.com",
+        "port": req.smtp_port or existing_smtp.get("port") or 587,
         "resend_api_key": final_resend,
         "brevo_api_key": final_brevo,
-        "brevo_sender_email": req.brevo_sender_email.strip() if req.brevo_sender_email else None
+        "brevo_sender_email": final_brevo_sender
     }
     policy.approval_rules = dict(rules)
     flag_modified(policy, "approval_rules")
     db.commit()
-    return {"success": True, "message": f"{req.active_provider.capitalize() if req.active_provider else 'Email'} delivery configuration saved successfully!"}
+    return {"success": True, "message": f"{rules['smtp_config']['active_provider'].capitalize()} delivery configuration saved successfully!"}
 
 @router.post("/smtp-config/disconnect")
 def disconnect_smtp_provider(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):

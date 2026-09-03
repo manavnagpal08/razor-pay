@@ -3026,6 +3026,7 @@ export default function MerchantDashboard() {
                     type="password"
                     placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxx"
                     value={brevoApiKey}
+                    onFocus={() => { if (brevoApiKey.startsWith("•")) setBrevoApiKey(""); }}
                     onChange={(e) => setBrevoApiKey(e.target.value)}
                     className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-emerald-500"
                   />
@@ -3057,6 +3058,7 @@ export default function MerchantDashboard() {
                 type="password"
                 placeholder="re_xxxxxxxxxxxxxxxxxxxx"
                 value={resendApiKey}
+                onFocus={() => { if (resendApiKey.startsWith("•")) setResendApiKey(""); }}
                 onChange={(e) => setResendApiKey(e.target.value)}
                 className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
               />
@@ -3095,6 +3097,7 @@ export default function MerchantDashboard() {
                     type="password"
                     placeholder={smtpPassword ? "••••••••••••••••" : "xxxx xxxx xxxx xxxx"}
                     value={smtpPassword}
+                    onFocus={() => { if (smtpPassword.startsWith("•")) setSmtpPassword(""); }}
                     onChange={(e) => setSmtpPassword(e.target.value)}
                     className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-blue-500"
                   />
