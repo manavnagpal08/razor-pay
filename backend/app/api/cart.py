@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
 from app.database import get_db
 from app.schemas import (
     CartResponse, AddItemRequest, UpdateItemRequest, ApplyOfferRequest
