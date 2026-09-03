@@ -72,6 +72,7 @@ export default function MerchantDashboard() {
   const [storeCustomers, setStoreCustomers] = useState<any[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
+  const [selectedCustomerLogs, setSelectedCustomerLogs] = useState<any>(null);
 
   const fetchStoreCustomers = async () => {
     if (!token) return;
@@ -1555,20 +1556,35 @@ export default function MerchantDashboard() {
                 </div>
               </div>
 
-              {/* 3 Metric Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* 4 Metric Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
                     <Users className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Store Shoppers</p>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Shoppers</p>
                     <p className="text-2xl font-black text-slate-900 mt-0.5">{storeCustomers.length}</p>
                   </div>
                 </div>
 
+                <div className="bg-white p-5 rounded-3xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/30 to-white shadow-xs flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-100/80 text-emerald-700 flex items-center justify-center font-bold">
+                    <Sparkles className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Today's Sign-ups</p>
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800">NEW</span>
+                    </div>
+                    <p className="text-2xl font-black text-emerald-600 mt-0.5">
+                      +{storeCustomers.filter(c => c.is_today).length} today
+                    </p>
+                  </div>
+                </div>
+
                 <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
                     <Bot className="w-6 h-6" />
                   </div>
                   <div>
@@ -1580,11 +1596,11 @@ export default function MerchantDashboard() {
                 </div>
 
                 <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <div className="w-12 h-12 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center font-bold">
                     <TrendingUp className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Customer GMV</p>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Customer GMV</p>
                     <p className="text-2xl font-black text-slate-900 mt-0.5">
                       ₹{storeCustomers.reduce((acc, c) => acc + (c.total_spend || 0), 0).toLocaleString()}
                     </p>
@@ -1595,14 +1611,19 @@ export default function MerchantDashboard() {
               {/* Customers List Table */}
               <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                  <h4 className="font-extrabold text-slate-900 text-sm">Verified Customer Roster</h4>
-                  <span className="text-xs text-slate-400 font-medium">Merchant Scoped</span>
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 text-sm">Customer Registry & Chat Logs</h4>
+                    <p className="text-[11px] text-slate-400 font-medium">Real-time profile, phone number, and conversation history</p>
+                  </div>
+                  <span className="text-xs text-slate-500 font-bold bg-slate-100 px-2.5 py-1 rounded-xl">
+                    {storeCustomers.length} Registered
+                  </span>
                 </div>
 
                 {loadingCustomers ? (
                   <div className="py-20 text-center">
                     <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-2" />
-                    <p className="text-xs text-slate-500 font-medium">Loading store customers...</p>
+                    <p className="text-xs text-slate-500 font-medium">Loading store customer profiles...</p>
                   </div>
                 ) : storeCustomers.length === 0 ? (
                   <div className="py-16 text-center p-6">
@@ -1626,11 +1647,11 @@ export default function MerchantDashboard() {
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-100">
                         <tr>
-                          <th className="px-5 py-3.5">Customer Name & Email</th>
-                          <th className="px-4 py-3.5">Phone</th>
-                          <th className="px-4 py-3.5">Segment</th>
-                          <th className="px-4 py-3.5">Orders & Spend</th>
-                          <th className="px-4 py-3.5">Verification</th>
+                          <th className="px-5 py-3.5">Customer Profile & ID</th>
+                          <th className="px-4 py-3.5">Phone Number</th>
+                          <th className="px-4 py-3.5">Joined Timestamp</th>
+                          <th className="px-4 py-3.5">Total Spend</th>
+                          <th className="px-4 py-3.5">Status</th>
                           <th className="px-5 py-3.5 text-right">Actions</th>
                         </tr>
                       </thead>
@@ -1642,61 +1663,80 @@ export default function MerchantDashboard() {
                             return (
                               c.name?.toLowerCase().includes(q) ||
                               c.email?.toLowerCase().includes(q) ||
-                              c.phone?.includes(q)
+                              c.phone?.includes(q) ||
+                              c.id?.toLowerCase().includes(q)
                             );
                           })
                           .map((cust) => (
                             <tr key={cust.id} className="hover:bg-slate-50/60 transition-colors">
                               <td className="px-5 py-4">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
                                     {(cust.name || cust.email || "C").charAt(0).toUpperCase()}
                                   </div>
                                   <div>
-                                    <p className="font-extrabold text-slate-900">{cust.name || "Verified Shopper"}</p>
-                                    <p className="text-[11px] text-slate-500 font-mono">{cust.email}</p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-extrabold text-slate-900 text-sm">{cust.name || "Verified Shopper"}</p>
+                                      {cust.is_today && (
+                                        <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-700">
+                                          TODAY
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 font-mono mt-0.5">{cust.email}</p>
+                                    <span className="text-[10px] text-slate-400 font-mono">ID: {cust.id?.slice(0, 12)}...</span>
                                   </div>
                                 </div>
                               </td>
 
-                              <td className="px-4 py-4 text-slate-600 font-mono">
-                                {cust.phone ? (
-                                  <span className="flex items-center gap-1.5">
-                                    <Phone className="w-3 h-3 text-slate-400" />
+                              <td className="px-4 py-4 text-slate-700 font-mono">
+                                {cust.phone && cust.phone !== "Not provided" ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold">
+                                    <Phone className="w-3.5 h-3.5 text-indigo-500" />
                                     <span>{cust.phone}</span>
                                   </span>
                                 ) : (
-                                  <span className="text-slate-400">—</span>
+                                  <span className="text-slate-400 text-xs">—</span>
                                 )}
                               </td>
 
-                              <td className="px-4 py-4">
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-indigo-50 text-indigo-700 border border-indigo-200/60">
-                                  {cust.segment?.replace("_", " ") || "Conversational Buyer"}
-                                </span>
+                              <td className="px-4 py-4 text-slate-600 font-medium">
+                                <p className="text-xs text-slate-800 font-semibold">{cust.joined_at || "Recently"}</p>
+                                <span className="text-[10px] text-slate-400">Via Storefront OTP</span>
                               </td>
 
                               <td className="px-4 py-4">
-                                <p className="font-extrabold text-slate-900">₹{(cust.total_spend || 0).toLocaleString()}</p>
+                                <p className="font-extrabold text-slate-900 text-sm">₹{(cust.total_spend || 0).toLocaleString()}</p>
                                 <p className="text-[10px] text-slate-400">{cust.orders_count || 0} orders placed</p>
                               </td>
 
                               <td className="px-4 py-4">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200/80">
                                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                                   <span>OTP Verified</span>
                                 </span>
                               </td>
 
                               <td className="px-5 py-4 text-right">
-                                <Link
-                                  href={`/chat?merchant=${merchantId}`}
-                                  target="_blank"
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                                >
-                                  <Bot className="w-3.5 h-3.5" />
-                                  <span>Open Chat</span>
-                                </Link>
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedCustomerLogs(cust)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                                  >
+                                    <Terminal className="w-3.5 h-3.5" />
+                                    <span>Chat Logs</span>
+                                  </button>
+
+                                  <Link
+                                    href={`/chat?merchant=${merchantId}`}
+                                    target="_blank"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                                    title="Open Storefront Chat"
+                                  >
+                                    <Bot className="w-3.5 h-3.5" />
+                                  </Link>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -1705,6 +1745,108 @@ export default function MerchantDashboard() {
                   </div>
                 )}
               </div>
+
+              {/* Interactive Customer Chat Logs Modal */}
+              {selectedCustomerLogs && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+                  <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[85vh]">
+                    {/* Modal Header */}
+                    <div className="p-6 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-white/10 flex items-center justify-center font-bold text-sm">
+                          {(selectedCustomerLogs.name || "C").charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-extrabold text-base">{selectedCustomerLogs.name}</h3>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                              OTP Verified
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-300 font-mono mt-0.5">
+                            {selectedCustomerLogs.email} {selectedCustomerLogs.phone && `• ${selectedCustomerLogs.phone}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setSelectedCustomerLogs(null)}
+                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Customer Quick Stats Bar */}
+                    <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-slate-400 font-bold uppercase text-[10px]">Customer ID:</span>
+                        <span className="font-mono ml-1 text-slate-700 font-semibold">{selectedCustomerLogs.id}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 font-bold uppercase text-[10px]">Joined:</span>
+                        <span className="ml-1 text-slate-700 font-semibold">{selectedCustomerLogs.joined_at}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 font-bold uppercase text-[10px]">Total Spend:</span>
+                        <span className="ml-1 font-bold text-indigo-600">₹{(selectedCustomerLogs.total_spend || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    {/* Chat Logs Stream */}
+                    <div className="p-6 overflow-y-auto space-y-3.5 flex-1 bg-slate-900 text-slate-100 font-mono text-xs">
+                      <div className="text-[11px] text-slate-400 uppercase tracking-wider font-bold mb-2 flex items-center gap-2">
+                        <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Conversational Agent Interaction History</span>
+                      </div>
+
+                      {(!selectedCustomerLogs.chat_logs || selectedCustomerLogs.chat_logs.length === 0) ? (
+                        <div className="p-8 text-center text-slate-500">
+                          No conversation records logged for this session yet.
+                        </div>
+                      ) : (
+                        selectedCustomerLogs.chat_logs.map((log: any, idx: number) => (
+                          <div key={idx} className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-bold uppercase">
+                                {log.type || "chat_query"}
+                              </span>
+                              <span className="text-slate-500">{log.timestamp}</span>
+                            </div>
+
+                            <div className="space-y-1">
+                              <p className="text-slate-400 text-[11px]">User Query:</p>
+                              <p className="text-emerald-400 font-semibold pl-2 border-l-2 border-emerald-500/50">
+                                {log.query}
+                              </p>
+                            </div>
+
+                            <div className="space-y-1 pt-1">
+                              <p className="text-slate-400 text-[11px]">AI Agent Response & Decision:</p>
+                              <p className="text-slate-300 pl-2 border-l-2 border-indigo-500/50 leading-relaxed text-[11px]">
+                                {log.response}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Modal Footer */}
+                    <div className="p-4 bg-white border-t border-slate-100 flex items-center justify-between">
+                      <p className="text-[11px] text-slate-400">
+                        🔒 Stored securely in Razorpay AI Action Ledger
+                      </p>
+                      <button
+                        onClick={() => setSelectedCustomerLogs(null)}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

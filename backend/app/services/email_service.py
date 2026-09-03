@@ -166,7 +166,7 @@ class EmailService:
     @classmethod
     def send_otp_email(cls, to_email: str, otp_code: str, store_name: str = "BuyFlow Store", smtp_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Sends formatted OTP verification email.
+        Sends formatted OTP verification email with prominent Store Branding.
         """
         subject = f"{otp_code} is your {store_name} Verification Code"
         html_body = f"""
@@ -175,24 +175,27 @@ class EmailService:
         <head>
           <meta charset="utf-8">
           <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; }}
-            .card {{ max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 32px; box-shadow: 0 4px 16px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }}
-            .logo {{ font-size: 20px; font-weight: 800; color: #4f46e5; margin-bottom: 20px; }}
-            .otp {{ font-size: 36px; font-weight: 900; letter-spacing: 6px; color: #1e1b4b; background: #eef2ff; border-radius: 12px; padding: 16px 24px; text-align: center; margin: 24px 0; border: 1px dashed #6366f1; font-family: monospace; }}
-            .footer {{ font-size: 12px; color: #94a3b8; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 16px; }}
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 32px 16px; }}
+            .card {{ max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 24px; padding: 40px 32px; box-shadow: 0 10px 25px rgba(0,0,0,0.04); border: 1px solid #e2e8f0; text-align: center; }}
+            .store-badge {{ display: inline-block; background: #eff6ff; color: #1d4ed8; padding: 8px 18px; border-radius: 9999px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 20px; border: 1px solid #dbeafe; }}
+            .title {{ font-size: 24px; font-weight: 900; color: #0f172a; margin: 0 0 12px; letter-spacing: -0.5px; }}
+            .desc {{ font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 24px; }}
+            .otp-box {{ font-size: 38px; font-weight: 900; letter-spacing: 8px; color: #1d4ed8; background: #f8fafc; border-radius: 16px; padding: 18px 24px; margin: 24px 0; border: 2px dashed #93c5fd; font-family: monospace; }}
+            .expiry {{ font-size: 12px; color: #94a3b8; margin: 0 0 24px; font-weight: 500; }}
+            .footer {{ font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }}
           </style>
         </head>
         <body>
           <div class="card">
-            <div class="logo">⚡ {store_name}</div>
-            <h2 style="color: #0f172a; margin-top: 0;">Confirm Your Verification Code</h2>
-            <p style="color: #475569; font-size: 14px; line-height: 1.6;">
-              Please use the verification code below to authorize your transaction or access live shipment tracking in the AI Shopping Assistant.
+            <div class="store-badge">🛍️ {store_name}</div>
+            <h1 class="title">Your Verification Code</h1>
+            <p class="desc">
+              Please enter the 6-digit code below to verify your account and start shopping with our AI concierge at <strong>{store_name}</strong>.
             </p>
-            <div class="otp">{otp_code}</div>
-            <p style="color: #64748b; font-size: 13px;">This code expires in 10 minutes. If you did not request this code, you can safely ignore this email.</p>
+            <div class="otp-box">{otp_code}</div>
+            <p class="expiry">🔒 Valid for 10 minutes • Keep this code private.</p>
             <div class="footer">
-              Powered by <strong>Razorpay AI Commerce OS</strong> • Secure In-Chat Checkout
+              Powered by <strong>BuyFlow AI Commerce OS</strong> • Secure In-Chat Checkout
             </div>
           </div>
         </body>

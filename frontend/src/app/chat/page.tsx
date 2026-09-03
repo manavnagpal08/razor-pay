@@ -411,22 +411,26 @@ function ChatContent() {
 
   // 1-Click Conversational In-App Razorpay Checkout
   const handleInstantBuy = async (product: any) => {
+    const actualProd = product.product || product;
     if (!effectiveToken) {
-      setPendingProductToBuy(product);
+      setPendingProductToBuy(actualProd);
       setOtpError("");
       setShowOtpModal(true);
       return;
     }
-    proceedWithCheckout(product, effectiveToken);
+    proceedWithCheckout(actualProd, effectiveToken);
   };
 
   const proceedWithCheckout = async (product: any, activeToken: string) => {
+    const actualProd = product.product || product;
+    const prodId = actualProd.id || product.id;
+
     if (!scriptLoaded && !(window as any).Razorpay) {
       showToast("Razorpay payment gateway is loading. Please retry in a few seconds.", "info");
       return;
     }
 
-    setInstantBuyingId(product.id);
+    setInstantBuyingId(prodId);
     try {
       const apiUrl = getApiUrl();
 
@@ -452,7 +456,7 @@ function ChatContent() {
           "Authorization": `Bearer ${activeToken}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ product_id: product.id, quantity: 1 })
+        body: JSON.stringify({ product_id: prodId, quantity: 1 })
       });
       if (!itemRes.ok) {
         const errJson = await itemRes.json().catch(() => ({}));
@@ -904,34 +908,59 @@ function ChatContent() {
 
                     {/* Product Recommendations */}
                     {((msg.products && msg.products.length > 0) || (msg.results && msg.results.length > 0)) && (
-                      <div className="mt-2.5 grid grid-cols-1 gap-2 w-full">
-                        {(msg.products || msg.results).map((prod: any) => {
-                          const prodImg = prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url;
-                          const prodName = prod.title || prod.name;
+                      <div className="mt-2.5 grid grid-cols-1 gap-2.5 w-full">
+                        {(msg.products || msg.results).map((rawProd: any, idx: number) => {
+                          const prod = rawProd.product || rawProd;
+                          const prodId = prod.id || rawProd.id || `prod_${idx}`;
+                          const prodImg = prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url || rawProd.image_url;
+                          const prodName = prod.name || prod.title || rawProd.name || rawProd.title || "Recommended Product";
+                          const prodPrice = Number(prod.price ?? rawProd.price ?? 0);
+                          const prodReason = rawProd.reasons?.[0] || prod.description || rawProd.match_type;
+                          const formattedPrice = isNaN(prodPrice) ? "99,999" : prodPrice.toLocaleString("en-IN");
+
                           return (
-                            <div key={prod.id} className="bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs hover:border-blue-400 transition-colors">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="w-12 h-12 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center">
+                            <div 
+                              key={prodId} 
+                              className="bg-white border border-slate-200/90 hover:border-blue-500 rounded-2xl p-3.5 flex items-center justify-between gap-3.5 shadow-sm hover:shadow-md transition-all group"
+                            >
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className="w-14 h-14 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center relative">
                                   {prodImg ? (
-                                    <img src={prodImg} alt={prodName} className="w-full h-full object-cover" />
+                                    <img src={prodImg} alt={prodName} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                   ) : (
-                                    <Package className="w-5 h-5 text-slate-400" />
+                                    <Package className="w-6 h-6 text-slate-400" />
                                   )}
                                 </div>
-                                <div className="min-w-0">
-                                  <h5 className="font-bold text-slate-900 text-xs truncate">{prodName}</h5>
-                                  <p className="text-xs font-black text-blue-600">₹{Number(prod.price).toLocaleString("en-IN")}</p>
+                                <div className="min-w-0 flex-1">
+                                  <h5 className="font-bold text-slate-900 text-xs sm:text-sm truncate leading-snug group-hover:text-blue-600 transition-colors">
+                                    {prodName}
+                                  </h5>
+                                  {prodReason && (
+                                    <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-medium">
+                                      {prodReason}
+                                    </p>
+                                  )}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <p className="text-xs sm:text-sm font-black text-blue-600">
+                                      ₹{formattedPrice}
+                                    </p>
+                                    {prod.category && (
+                                      <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-semibold rounded-md uppercase tracking-wider">
+                                        {prod.category}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="flex items-center gap-2 shrink-0">
                                 <button
                                   type="button"
                                   onClick={() => handleInstantBuy(prod)}
-                                  disabled={instantBuyingId === prod.id}
-                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+                                  disabled={instantBuyingId === prodId}
+                                  className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs shadow-blue-500/20 active:scale-95 cursor-pointer disabled:opacity-50"
                                 >
-                                  {instantBuyingId === prod.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-white" />}
+                                  {instantBuyingId === prodId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5 fill-white" />}
                                   <span>Buy Now</span>
                                 </button>
                               </div>

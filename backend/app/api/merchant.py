@@ -456,9 +456,11 @@ def test_smtp_delivery(req: TestEmailRequest, db: Session = Depends(get_db), mer
 @router.get("/customers")
 def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
     """
-    Returns all customers scoped to this specific merchant store.
+    Returns all customers scoped to this specific merchant store with chat logs & registration metrics.
     """
-    from app.models import Customer, User, Order
+    from app.models import Customer, User, Order, CustomerEvent, AgentAction
+    from datetime import datetime, timezone
+    
     # 1. Direct merchant-scoped customers
     customers = db.query(Customer).filter(Customer.merchant_id == merchant_id).all()
     
@@ -474,7 +476,10 @@ def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Dep
                 customers.append(cust)
                 existing_ids.add(cid)
 
-    # 3. Format customer profile response
+    # 3. Fetch all events & actions for chat logs
+    now_utc = datetime.now(timezone.utc)
+    today_date = now_utc.date()
+
     result = []
     for c in customers:
         user = db.query(User).filter(User.id == c.user_id).first() if c.user_id else None
@@ -482,7 +487,36 @@ def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Dep
         total_spent = sum(float(o.total_amount or 0) for o in cust_orders)
         
         prefs = c.preferences if isinstance(c.preferences, dict) else {}
-        phone = prefs.get("phone")
+        phone = prefs.get("phone") or "Not provided"
+
+        # Check if joined today
+        joined_at = c.created_at if hasattr(c, "created_at") and c.created_at else None
+        is_today = (joined_at.date() == today_date) if joined_at else False
+
+        # Gather customer-specific conversation history and chat logs
+        events = db.query(CustomerEvent).filter(
+            CustomerEvent.merchant_id == merchant_id,
+            CustomerEvent.customer_id == c.id
+        ).order_by(CustomerEvent.timestamp.desc()).limit(15).all()
+
+        chat_logs = []
+        for ev in events:
+            meta = ev.metadata_ if isinstance(ev.metadata_, dict) else {}
+            chat_logs.append({
+                "type": ev.event_type,
+                "query": meta.get("query") or meta.get("action") or ev.event_type,
+                "response": meta.get("summary") or meta.get("response") or "Interaction processed",
+                "timestamp": ev.timestamp.strftime("%Y-%m-%d %H:%M:%S") if ev.timestamp else "Recently"
+            })
+
+        # If no events found yet, include standard welcoming interaction log
+        if not chat_logs:
+            chat_logs.append({
+                "type": "account_verified",
+                "query": "Verified OTP Authentication",
+                "response": f"Customer authorized for AI concierge shopping session.",
+                "timestamp": joined_at.strftime("%Y-%m-%d %H:%M:%S") if joined_at else "Recently"
+            })
 
         result.append({
             "id": c.id,
@@ -492,7 +526,9 @@ def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Dep
             "segment": c.segment or "conversational_buyer",
             "orders_count": len(cust_orders),
             "total_spend": total_spent,
-            "joined_at": c.created_at.isoformat() if hasattr(c, "created_at") and c.created_at else None
+            "is_today": is_today,
+            "joined_at": joined_at.strftime("%b %d, %Y %I:%M %p") if joined_at else "Today",
+            "chat_logs": chat_logs
         })
 
-    return sorted(result, key=lambda x: x["total_spend"], reverse=True)
+    return sorted(result, key=lambda x: (x["is_today"], x["total_spend"]), reverse=True)
