@@ -94,6 +94,9 @@ class CartService:
         if product.inventory < quantity:
             raise ValueError("Not enough inventory")
             
+        if product.merchant_id:
+            cart.merchant_id = product.merchant_id
+
         item = self.db.query(CartItem).filter(CartItem.cart_id == cart_id, CartItem.product_id == product_id).first()
         if item:
             new_qty = item.quantity + quantity

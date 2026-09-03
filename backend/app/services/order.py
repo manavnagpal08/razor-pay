@@ -36,11 +36,19 @@ class OrderService:
             
         # Create Internal Order
         cart_model = self.db.query(Cart).filter(Cart.id == cart_id).first()
+        resolved_merchant_id = cart_model.merchant_id
+        first_item = self.db.query(CartItem).filter(CartItem.cart_id == cart_id).first()
+        if first_item:
+            item_prod = self.db.query(Product).filter(Product.id == first_item.product_id).first()
+            if item_prod and item_prod.merchant_id:
+                resolved_merchant_id = item_prod.merchant_id
+                cart_model.merchant_id = item_prod.merchant_id
+
         internal_order = Order(
             id=str(uuid.uuid4()),
             cart_id=cart_id,
             customer_id=cart_model.customer_id,
-            merchant_id=cart_model.merchant_id,
+            merchant_id=resolved_merchant_id,
             amount=cart_resp.total,
             currency="INR",
             status="CREATED"
@@ -49,7 +57,7 @@ class OrderService:
         self.db.commit()
         
         # Create Razorpay Order with merchant's specific Razorpay account
-        rzp_service = self._get_razorpay_service_for_merchant(cart_model.merchant_id)
+        rzp_service = self._get_razorpay_service_for_merchant(resolved_merchant_id)
         rzp_order_id, rzp_status = rzp_service.create_order(
             amount_inr=float(cart_resp.total),
             receipt=internal_order.id,
@@ -92,6 +100,14 @@ class OrderService:
         if order.razorpay_order_id != rzp_order_id:
             raise ValueError("Razorpay Order ID mismatch")
             
+        # Re-resolve merchant_id if needed
+        if order.merchant_id in ["demo_merchant", None]:
+            first_item = self.db.query(CartItem).filter(CartItem.cart_id == order.cart_id).first()
+            if first_item:
+                item_prod = self.db.query(Product).filter(Product.id == first_item.product_id).first()
+                if item_prod and item_prod.merchant_id:
+                    order.merchant_id = item_prod.merchant_id
+
         # Verify Signature with merchant's specific key secret
         rzp_service = self._get_razorpay_service_for_merchant(order.merchant_id)
         is_valid = rzp_service.verify_payment_signature(rzp_order_id, rzp_payment_id, signature)

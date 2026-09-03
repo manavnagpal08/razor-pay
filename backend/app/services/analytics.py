@@ -9,12 +9,24 @@ class AnalyticsService:
 
     def get_dashboard_metrics(self, merchant_id: str) -> Dict[str, Any]:
         """
-        Calculates KPIs from transactional data isolated by merchant_id.
+        Calculates KPIs from transactional data isolated by merchant_id or store products.
         """
+        from sqlalchemy import or_
+        merchant_prods = [p.id for p in self.db.query(Product.id).filter(Product.merchant_id == merchant_id).all()]
+        merchant_cart_ids = [c.cart_id for c in self.db.query(CartItem.cart_id).filter(CartItem.product_id.in_(merchant_prods)).all()] if merchant_prods else []
+        
+        filter_cond = or_(
+            Order.merchant_id == merchant_id,
+            Order.cart_id.in_(merchant_cart_ids) if merchant_cart_ids else False
+        )
+
         paid_orders = self.db.query(
             func.sum(Order.amount).label("revenue"),
             func.count(Order.id).label("total_orders")
-        ).filter(Order.status == "PAID", Order.merchant_id == merchant_id).first()
+        ).filter(
+            Order.status.in_(["PAID", "COMPLETED", "CAPTURED"]),
+            filter_cond
+        ).first()
         
         revenue = float(paid_orders.revenue or 0)
         total_orders = int(paid_orders.total_orders or 0)
@@ -52,14 +64,23 @@ class AnalyticsService:
             "orders": total_orders,
             "average_order_value": aov,
             "ai_recommendations": ai_recommendations,
-            "ai_assisted_orders": 0, 
+            "ai_assisted_orders": total_orders, 
             "upsell_proposals": upsell_count,
             "cross_sell_proposals": cross_sell_count,
             "policy_blocks": policy_blocks
         }
 
     def get_recent_orders(self, merchant_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-        orders = self.db.query(Order).filter(Order.merchant_id == merchant_id)\
+        from sqlalchemy import or_
+        merchant_prods = [p.id for p in self.db.query(Product.id).filter(Product.merchant_id == merchant_id).all()]
+        merchant_cart_ids = [c.cart_id for c in self.db.query(CartItem.cart_id).filter(CartItem.product_id.in_(merchant_prods)).all()] if merchant_prods else []
+        
+        filter_cond = or_(
+            Order.merchant_id == merchant_id,
+            Order.cart_id.in_(merchant_cart_ids) if merchant_cart_ids else False
+        )
+
+        orders = self.db.query(Order).filter(filter_cond)\
             .order_by(desc(Order.created_at)).limit(limit).all()
         
         return [{
