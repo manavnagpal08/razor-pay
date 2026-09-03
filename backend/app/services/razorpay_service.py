@@ -4,13 +4,13 @@ from typing import Dict, Any, Tuple
 
 class RazorpayService:
     """
-    Abstracts Razorpay Test Mode integration.
-    Falls back to a MOCK provider if no real credentials are set.
+    Abstracts Razorpay integration with multi-tenant custom merchant keys.
+    Falls back to system credentials if no custom key is provided.
     """
-    def __init__(self):
+    def __init__(self, key_id: str = None, key_secret: str = None):
         from app.core.config import settings
-        self.key_id = settings.razorpay_key_id
-        self.key_secret = settings.razorpay_key_secret
+        self.key_id = (key_id or "").strip() or settings.razorpay_key_id
+        self.key_secret = (key_secret or "").strip() or settings.razorpay_key_secret
         self.is_mock = self.key_id == "test" or not self.key_id
         
         if not self.is_mock:

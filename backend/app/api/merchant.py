@@ -666,6 +666,75 @@ def disconnect_smtp_provider(db: Session = Depends(get_db), merchant_id: str = D
         db.commit()
     return {"success": True, "message": "Email provider disconnected successfully."}
 
+class RazorpayConfigRequest(BaseModel):
+    key_id: str
+    key_secret: Optional[str] = None
+
+@router.get("/razorpay-config")
+def get_razorpay_config(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
+    from app.models import MerchantPolicy
+    from app.core.config import settings
+    policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+    rules = policy.approval_rules if policy and isinstance(policy.approval_rules, dict) else {}
+    rzp = rules.get("razorpay_credentials", {}) if isinstance(rules.get("razorpay_credentials"), dict) else {}
+    
+    custom_key_id = rzp.get("key_id", "")
+    custom_secret = rzp.get("key_secret", "")
+    
+    return {
+        "key_id": custom_key_id or settings.razorpay_key_id,
+        "is_custom": bool(custom_key_id and custom_secret),
+        "has_secret": bool(custom_secret or settings.razorpay_key_secret),
+        "key_type": "Live" if (custom_key_id or "").startswith("rzp_live") else "Test"
+    }
+
+@router.post("/razorpay-config")
+def update_razorpay_config(req: RazorpayConfigRequest, db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
+    from app.models import MerchantPolicy
+    from sqlalchemy.orm.attributes import flag_modified
+    policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+    if not policy:
+        import uuid
+        policy = MerchantPolicy(id=str(uuid.uuid4()), merchant_id=merchant_id, max_discount_percent=20.0)
+        db.add(policy)
+
+    rules = dict(policy.approval_rules) if isinstance(policy.approval_rules, dict) else {}
+    existing_rzp = rules.get("razorpay_credentials", {}) if isinstance(rules.get("razorpay_credentials"), dict) else {}
+
+    raw_key = req.key_id.strip() if req.key_id else ""
+    raw_secret = req.key_secret.strip() if req.key_secret else ""
+    
+    if not raw_secret or raw_secret.startswith("•"):
+        final_secret = existing_rzp.get("key_secret", "")
+    else:
+        final_secret = raw_secret
+
+    if not raw_key:
+        raise HTTPException(status_code=400, detail="Razorpay Key ID is required.")
+
+    rules["razorpay_credentials"] = {
+        "key_id": raw_key,
+        "key_secret": final_secret,
+        "is_active": True
+    }
+    policy.approval_rules = dict(rules)
+    flag_modified(policy, "approval_rules")
+    db.commit()
+    return {"success": True, "message": "Custom Razorpay Payment Gateway credentials saved successfully! Store checkout will now settle to your Razorpay account."}
+
+@router.post("/razorpay-config/disconnect")
+def disconnect_razorpay_config(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
+    from app.models import MerchantPolicy
+    from sqlalchemy.orm.attributes import flag_modified
+    policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+    if policy:
+        rules = dict(policy.approval_rules) if isinstance(policy.approval_rules, dict) else {}
+        rules["razorpay_credentials"] = None
+        policy.approval_rules = dict(rules)
+        flag_modified(policy, "approval_rules")
+        db.commit()
+    return {"success": True, "message": "Reset to default platform Razorpay test sandbox."}
+
 class TestEmailRequest(BaseModel):
     recipient_email: str
 

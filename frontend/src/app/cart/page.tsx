@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ShoppingCart, Trash2, ShieldCheck, ArrowRight, Loader2, LogIn } from "lucide-react";
+import { ShoppingCart, Trash2, ShieldCheck, ArrowRight, Loader2, LogIn, Tag, Check, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
 
@@ -11,6 +11,10 @@ export default function CartPage() {
   const [cart, setCart] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [promoCode, setPromoCode] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
+  const [applyingPromo, setApplyingPromo] = useState(false);
+  const [promoMsg, setPromoMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const { user, token, refreshCartCount } = useAuth();
   const router = useRouter();
 
@@ -21,6 +25,62 @@ export default function CartPage() {
       setLoading(false);
     }
   }, [token]);
+
+  const handleApplyPromo = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!promoCode.trim() || !cart || !token) return;
+    setApplyingPromo(true);
+    setPromoMsg(null);
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/cart/${cart.id}/apply-promo`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ code: promoCode.trim() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCart(data.cart);
+        setAppliedPromo(data.code || promoCode.trim().toUpperCase());
+        setPromoMsg({ type: "success", text: data.message || "Coupon applied!" });
+        setPromoCode("");
+      } else {
+        setPromoMsg({ type: "error", text: data.detail || "Invalid coupon code." });
+      }
+    } catch (e) {
+      setPromoMsg({ type: "error", text: "Failed to apply coupon." });
+    } finally {
+      setApplyingPromo(false);
+    }
+  };
+
+  const handleRemovePromo = async () => {
+    if (!cart || !token) return;
+    setApplyingPromo(true);
+    setPromoMsg(null);
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/cart/${cart.id}/remove-promo`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCart(data.cart);
+        setAppliedPromo(null);
+        setPromoMsg({ type: "success", text: "Coupon removed." });
+      }
+    } catch (e) {
+      setPromoMsg({ type: "error", text: "Failed to remove coupon." });
+    } finally {
+      setApplyingPromo(false);
+    }
+  };
 
   const fetchCart = async () => {
     try {
@@ -211,6 +271,52 @@ export default function CartPage() {
           {/* Order Summary & Checkout Action */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs h-fit space-y-6">
             <h2 className="text-lg font-bold text-slate-900">Summary</h2>
+
+            {/* Promo Code Input Card */}
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Promo Code & Coupons</span>
+                </span>
+                {appliedPromo && (
+                  <span className="text-[10px] font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    <span>{appliedPromo}</span>
+                    <button onClick={handleRemovePromo} className="text-slate-400 hover:text-red-600 ml-1">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+              </div>
+
+              {!appliedPromo ? (
+                <form onSubmit={handleApplyPromo} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. WELCOME10, SAVE15"
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                    className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase text-slate-900 placeholder:text-slate-400 placeholder:normal-case focus:outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={applyingPromo || !promoCode.trim()}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+                  >
+                    {applyingPromo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
+                  </button>
+                </form>
+              ) : null}
+
+              {promoMsg && (
+                <p className={`text-[11px] font-medium leading-tight ${
+                  promoMsg.type === "success" ? "text-emerald-600" : "text-red-500"
+                }`}>
+                  {promoMsg.text}
+                </p>
+              )}
+            </div>
             
             <div className="space-y-3 text-sm">
               <div className="flex justify-between text-slate-600">
@@ -219,7 +325,7 @@ export default function CartPage() {
               </div>
               {Number(cart.discount) > 0 && (
                 <div className="flex justify-between text-emerald-600 font-medium">
-                  <span>Merchant Discount</span>
+                  <span>Merchant Discount ({appliedPromo || "Coupon"})</span>
                   <span>-₹{Number(cart.discount).toLocaleString()}</span>
                 </div>
               )}

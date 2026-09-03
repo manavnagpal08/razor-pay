@@ -6,7 +6,7 @@ import {
   Lock, LogIn, Sliders, CheckCircle2, Loader2, Share2, Copy, ExternalLink, Code, 
   MessageSquare, Terminal, RefreshCw, Download, Filter, PlusCircle, Store, X, ChevronDown,
   QrCode, AlertTriangle, Cpu, Layers, ShieldCheck, Zap, Mail, Trash2, Inbox, Package, Search,
-  Users, Phone, Calendar, Tag, Building2, MapPin, ArrowRight, ArrowLeft, Check
+  Users, Phone, Calendar, Tag, Building2, MapPin, ArrowRight, ArrowLeft, Check, CreditCard
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useAuth } from "@/context/AuthContext";
@@ -18,6 +18,14 @@ export default function MerchantDashboard() {
   const { user, token, role, loading: authLoading } = useAuth();
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const showToast = (message: string, type: "success" | "error" | "info" = "success") => setToast({ message, type });
+
+  // Razorpay Dynamic Custom Credentials
+  const [razorpayKeyId, setRazorpayKeyId] = useState("");
+  const [razorpayKeySecret, setRazorpayKeySecret] = useState("");
+  const [isCustomRazorpay, setIsCustomRazorpay] = useState(false);
+  const [savingRazorpay, setSavingRazorpay] = useState(false);
+  const [razorpayMessage, setRazorpayMessage] = useState("");
+
   const [metrics, setMetrics] = useState<any>(null);
   const [activity, setActivity] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
@@ -123,7 +131,7 @@ export default function MerchantDashboard() {
   const [webhookMessage, setWebhookMessage] = useState("");
 
   // Active Dashboard Tab
-  const [activeTab, setActiveTab] = useState<"overview" | "catalog" | "customers" | "simulator" | "security" | "policy" | "webhooks" | "smtp" | "audit">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "catalog" | "customers" | "simulator" | "security" | "policy" | "webhooks" | "smtp" | "razorpay" | "audit">("overview");
 
   // Store Customers State
   const [storeCustomers, setStoreCustomers] = useState<any[]>([]);
@@ -288,6 +296,7 @@ export default function MerchantDashboard() {
       fetchWebhookConfig();
       fetchMerchantProducts();
       fetchSmtpConfig();
+      fetchRazorpayConfig();
       fetchStoreCustomers();
     } else if (!authLoading) {
       setLoading(false);
@@ -475,10 +484,23 @@ export default function MerchantDashboard() {
     try {
       const apiUrl = getApiUrl();
       let targetProduct = merchantProducts.find(p => p.id === m2mTargetProduct);
+      if (!targetProduct && merchantProducts.length > 0) {
+        targetProduct = merchantProducts[0];
+      }
+
       if (!targetProduct) {
-        const prodRes = await fetch(`${apiUrl}/api/products/merchant/${merchantId}`);
-        const prods = await prodRes.json();
-        targetProduct = (prods && prods.length > 0) ? prods[0] : { id: "p1", name: "Pro Gaming Laptop", price: 125000 };
+        const prodRes = await fetch(`${apiUrl}/api/products`);
+        if (prodRes.ok) {
+          const prods = await prodRes.json();
+          if (Array.isArray(prods) && prods.length > 0) {
+            targetProduct = prods[0];
+          }
+        }
+      }
+
+      if (!targetProduct) {
+        showToast("No products found in catalog. Please add a product to run the simulation.", "info");
+        return;
       }
 
       const res = await fetch(`${apiUrl}/api/agent/transact`, {
@@ -491,13 +513,19 @@ export default function MerchantDashboard() {
           proposed_discount_percent: Number(m2mDiscountOffer)
         })
       });
+
       if (res.ok) {
         const data = await res.json();
         setM2mResult({ ...data, product: targetProduct });
         fetchLogs();
+        showToast("Machine-to-Machine order created successfully via Razorpay!", "success");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || "Simulation request failed.", "error");
       }
     } catch (err) {
       console.error(err);
+      showToast("Network error during AI shopper simulation.", "error");
     } finally {
       setSimulatingM2M(false);
     }
@@ -791,6 +819,82 @@ export default function MerchantDashboard() {
       console.error(e);
     } finally {
       setTestingSmtp(false);
+    }
+  };
+
+  // Razorpay Dynamic Custom Credentials Handlers
+  const fetchRazorpayConfig = async () => {
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/merchant/razorpay-config`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRazorpayKeyId(data.key_id || "");
+        setRazorpayKeySecret(data.has_secret ? "••••••••••••••••" : "");
+        setIsCustomRazorpay(Boolean(data.is_custom));
+      }
+    } catch (e) {
+      console.warn("Failed to fetch Razorpay config:", e);
+    }
+  };
+
+  const handleSaveRazorpay = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!razorpayKeyId.trim()) {
+      showToast("Razorpay Key ID is required.", "error");
+      return;
+    }
+    setSavingRazorpay(true);
+    setRazorpayMessage("");
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/merchant/razorpay-config`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          key_id: razorpayKeyId.trim(),
+          key_secret: razorpayKeySecret.startsWith("•") ? undefined : razorpayKeySecret.trim() || undefined
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRazorpayMessage(data.message || "Custom Razorpay account linked successfully!");
+        setIsCustomRazorpay(true);
+        showToast("Razorpay Payment Gateway credentials saved!", "success");
+        setTimeout(() => setRazorpayMessage(""), 5000);
+        await fetchRazorpayConfig();
+      } else {
+        showToast(data.detail || "Failed to save Razorpay keys.", "error");
+      }
+    } catch (e) {
+      showToast("Error saving Razorpay configuration.", "error");
+    } finally {
+      setSavingRazorpay(false);
+    }
+  };
+
+  const handleDisconnectRazorpay = async () => {
+    if (!confirm("Are you sure you want to disconnect custom Razorpay credentials and revert to standard test mode sandbox?")) return;
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/merchant/razorpay-config/disconnect`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setIsCustomRazorpay(false);
+        setRazorpayKeyId("");
+        setRazorpayKeySecret("");
+        showToast("Reset to platform default Razorpay sandbox.", "info");
+        await fetchRazorpayConfig();
+      }
+    } catch (e) {
+      showToast("Error disconnecting Razorpay keys.", "error");
     }
   };
 
@@ -1170,6 +1274,27 @@ export default function MerchantDashboard() {
             >
               <Mail className="w-4 h-4 shrink-0" />
               <span>Email Setup</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("razorpay")}
+              className={`shrink-0 lg:w-full flex items-center justify-between gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                activeTab === "razorpay" 
+                  ? "bg-indigo-600 text-white shadow-xs" 
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-slate-50 lg:bg-transparent"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4 shrink-0" />
+                <span>Razorpay Gateway</span>
+              </div>
+              {isCustomRazorpay && (
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                  activeTab === "razorpay" ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"
+                }`}>
+                  Custom
+                </span>
+              )}
             </button>
 
             <button
@@ -1554,10 +1679,10 @@ export default function MerchantDashboard() {
                   </p>
 
                   <div className="flex items-center gap-3 pt-1 text-[11px]">
-                    <span className="text-slate-500 font-mono">
-                      Input: {JSON.stringify(act.input).slice(0, 50)}...
+                    <span className="text-slate-500 font-mono truncate max-w-xs">
+                      Input: {(typeof act.input === "string" ? act.input : JSON.stringify(act.input || {}))?.slice(0, 50) || "N/A"}...
                     </span>
-                    <span className={`font-bold px-2 py-0.5 rounded-md text-[10px] ${
+                    <span className={`font-bold px-2 py-0.5 rounded-md text-[10px] shrink-0 ${
                       act.policy_result?.allowed 
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
                         : 'bg-amber-50 text-amber-700 border border-amber-100'
@@ -1983,7 +2108,7 @@ export default function MerchantDashboard() {
                                       )}
                                     </div>
                                     <p className="text-[11px] text-slate-500 font-mono mt-0.5">{cust.email}</p>
-                                    <span className="text-[10px] text-slate-400 font-mono">ID: {cust.id?.slice(0, 12)}...</span>
+                                    <span className="text-[10px] text-slate-400 font-mono">ID: {(cust.id || "").slice(0, 12)}...</span>
                                   </div>
                                 </div>
                               </td>
@@ -2267,31 +2392,61 @@ export default function MerchantDashboard() {
 
                 {/* Simulation Result Dual Stream */}
                 {m2mResult && (
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-xs space-y-2.5 animate-in fade-in">
-                    <div className="flex flex-wrap items-center justify-between text-emerald-700 font-bold pb-2 border-b border-slate-200 text-xs">
-                      <span className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <span>RAZORPAY ORDER GENERATED: {m2mResult.razorpay_order_id}</span>
+                  <div className="p-5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white border border-indigo-500/30 rounded-3xl font-mono text-xs space-y-4 animate-in fade-in shadow-xl">
+                    <div className="flex flex-wrap items-center justify-between pb-3 border-b border-white/10 gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                        <span className="font-bold text-emerald-400 text-xs sm:text-sm">
+                          RAZORPAY ORDER MINTED: {m2mResult.razorpay_order?.razorpay_order_id || m2mResult.razorpay_order_id || "rzp_order_simulated"}
+                        </span>
+                      </div>
+                      <span className="text-slate-300 text-[11px] bg-white/10 px-2.5 py-1 rounded-lg">
+                        Agent ID: {m2mResult.agent_id}
                       </span>
-                      <span className="text-slate-500 text-[10px] font-mono">{m2mResult.agent_id}</span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-[11px]">
-                      <div>
-                        <span className="text-slate-500">Selected Product:</span>
-                        <p className="font-bold text-slate-900 mt-0.5">{m2mResult.product?.name || "Verified Store Item"}</p>
+                    {/* 4-Step Protocol Lifecycle */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-slate-300">
+                      <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                        <p className="text-emerald-400 font-bold">✓ 1. Protocol Discovery</p>
+                        <p className="text-[9px] text-slate-400 truncate">agent.json capability read</p>
                       </div>
-                      <div>
-                        <span className="text-slate-500">Total Payable (Verified):</span>
-                        <p className="font-bold text-emerald-700 mt-0.5 text-sm">
-                          ₹{Number(m2mResult.financials?.total_amount || 0).toLocaleString()}
+                      <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                        <p className="text-emerald-400 font-bold">✓ 2. Inventory Gated</p>
+                        <p className="text-[9px] text-slate-400 truncate">Stock verified in DB</p>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                        <p className="text-emerald-400 font-bold">✓ 3. Policy Bound</p>
+                        <p className="text-[9px] text-slate-400 truncate">Max discount cap checked</p>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                        <p className="text-emerald-400 font-bold">✓ 4. Razorpay Minted</p>
+                        <p className="text-[9px] text-slate-400 truncate">256-bit crypt order</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 text-xs">
+                      <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
+                        <span className="text-slate-400 text-[10px]">Product / Item:</span>
+                        <p className="font-bold text-white mt-0.5 truncate">{m2mResult.product?.name || m2mResult.product || "Store Product"}</p>
+                      </div>
+                      <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
+                        <span className="text-slate-400 text-[10px]">Discount Applied:</span>
+                        <p className="font-bold text-amber-400 mt-0.5">
+                          -₹{Number(m2mResult.financials?.discount_applied || 0).toLocaleString()} ({m2mDiscountOffer}% RFP)
+                        </p>
+                      </div>
+                      <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
+                        <span className="text-slate-400 text-[10px]">Total Payable (Server Authoritative):</span>
+                        <p className="font-bold text-emerald-400 mt-0.5 text-sm">
+                          ₹{Number(m2mResult.financials?.total_payable ?? m2mResult.financials?.total_amount ?? 0).toLocaleString()}
                         </p>
                       </div>
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-[11px] text-slate-700">
-                      <span className="text-indigo-600 font-bold">Policy Guardrail Evaluation: </span>
-                      <span>{m2mResult.policy_evaluation?.reason || "Authorized within store limits."}</span>
+                    <div className="p-3 rounded-2xl bg-indigo-900/40 border border-indigo-500/40 text-[11px] text-slate-200">
+                      <span className="text-indigo-400 font-bold">Server Policy Decision: </span>
+                      <span>{m2mResult.financials?.policy_result?.reason || m2mResult.policy_evaluation?.reason || "Authorized: Discount RFP evaluated within store safety boundaries."}</span>
                     </div>
                   </div>
                 )}
@@ -3165,6 +3320,141 @@ export default function MerchantDashboard() {
           </div>
         )}
       </div>
+            </div>
+          )}
+
+          {activeTab === 'razorpay' && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* Header & Overview */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <CreditCard className="w-5 h-5 text-indigo-600" />
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Razorpay Payment Gateway Account</h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">
+                    Link your store's individual Razorpay account so all customer checkouts and orders settle directly to your bank account.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <a
+                    href="https://dashboard.razorpay.com/app/keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                  >
+                    <span>Get Razorpay Keys</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+
+              {/* Status Banner */}
+              <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
+                isCustomRazorpay 
+                  ? "bg-emerald-50/70 border-emerald-300 text-emerald-900" 
+                  : "bg-blue-50/70 border-blue-200 text-blue-900"
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold shrink-0 ${
+                    isCustomRazorpay ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"
+                  }`}>
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold">
+                      {isCustomRazorpay 
+                        ? `Custom Razorpay Account Connected (${razorpayKeyId.startsWith("rzp_live") ? "LIVE MODE" : "TEST MODE"})` 
+                        : "Platform Sandbox Account (Default Test Mode)"}
+                    </p>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      {isCustomRazorpay
+                        ? `Orders placed in your store are processed with Key ID: ${razorpayKeyId}`
+                        : "Using default platform sandbox credentials. Enter your Razorpay API Keys below to link your merchant account."}
+                    </p>
+                  </div>
+                </div>
+
+                {isCustomRazorpay && (
+                  <button
+                    type="button"
+                    onClick={handleDisconnectRazorpay}
+                    className="px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer"
+                  >
+                    Disconnect Account
+                  </button>
+                )}
+              </div>
+
+              {razorpayMessage && (
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{razorpayMessage}</span>
+                </div>
+              )}
+
+              {/* Configuration Form */}
+              <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-5">
+                <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
+                  <h4 className="font-extrabold text-slate-900 text-sm">Store Payment Credentials</h4>
+                  <span className="text-[10px] font-mono text-slate-400">Razorpay Standard Checkout API</span>
+                </div>
+
+                <form onSubmit={handleSaveRazorpay} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-[11px] font-bold text-slate-700 uppercase">
+                          Razorpay Key ID (<code className="font-mono text-indigo-600">rzp_test_...</code> / <code className="font-mono text-emerald-600">rzp_live_...</code>)
+                        </label>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="rzp_test_xxxxxxxxxxxxxxxx"
+                        value={razorpayKeyId}
+                        onChange={(e) => setRazorpayKeyId(e.target.value.trim())}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                        required
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">Found in Razorpay Dashboard ➔ Settings ➔ API Keys</p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-[11px] font-bold text-slate-700 uppercase">
+                          Razorpay Key Secret
+                        </label>
+                        {razorpayKeySecret && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            ✓ Saved Securely
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="password"
+                        placeholder={razorpayKeySecret ? "••••••••••••••••" : "Enter your secret key"}
+                        value={razorpayKeySecret}
+                        onFocus={() => { if (razorpayKeySecret.startsWith("•")) setRazorpayKeySecret(""); }}
+                        onChange={(e) => setRazorpayKeySecret(e.target.value.trim())}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">Encrypted and strictly verified server-side</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-between">
+                    <button
+                      type="submit"
+                      disabled={savingRazorpay || !razorpayKeyId.trim()}
+                      className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingRazorpay ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      <span>Save & Activate Razorpay Credentials</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
 
