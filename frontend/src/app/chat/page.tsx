@@ -627,8 +627,8 @@ function ChatContent() {
   return (
     <div className={
       isEmbed 
-        ? "w-full h-screen bg-slate-50 text-slate-900 flex flex-col justify-between overflow-hidden font-sans" 
-        : "max-w-xl mx-auto flex flex-col h-[calc(100vh-30px)] my-auto bg-white text-slate-900 rounded-3xl border border-slate-200/90 shadow-2xl overflow-hidden font-sans"
+        ? "w-full h-[100dvh] bg-slate-50 text-slate-900 flex flex-col justify-between overflow-hidden font-sans" 
+        : "w-full max-w-xl mx-auto flex flex-col h-[100dvh] sm:h-[calc(100vh-32px)] sm:my-auto bg-white text-slate-900 sm:rounded-3xl sm:border sm:border-slate-200/90 sm:shadow-2xl overflow-hidden font-sans"
     }>
       <Script 
         src="https://checkout.razorpay.com/v1/checkout.js" 
@@ -636,35 +636,35 @@ function ChatContent() {
         onLoad={() => setScriptLoaded(true)}
       />
 
-      {/* Clean Light Header */}
-      <div className="p-3 px-4 bg-white/95 border-b border-slate-100 backdrop-blur-md flex items-center justify-between shrink-0 z-20 shadow-xs">
-        <div className="flex items-center gap-2.5">
+      {/* Clean Light Mobile-First Header */}
+      <div className="p-2.5 sm:p-3 px-3 sm:px-4 bg-white/95 border-b border-slate-100 backdrop-blur-md flex items-center justify-between shrink-0 z-20 shadow-xs">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
           {/* Avatar with Online Status */}
-          <div className="relative">
-            <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 p-0.5 shadow-xs flex items-center justify-center overflow-hidden">
+          <div className="relative shrink-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-100 border border-slate-200 p-0.5 shadow-xs flex items-center justify-center overflow-hidden">
               <img src="/logo.png" alt="BuyFlow" className="w-full h-full object-contain rounded-full" />
             </div>
-            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white animate-pulse"></span>
+            <span className="absolute bottom-0 right-0 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500 ring-2 ring-white animate-pulse"></span>
           </div>
 
-          <div>
-            <h3 className="font-extrabold text-slate-900 text-sm tracking-tight line-clamp-1">
+          <div className="min-w-0">
+            <h3 className="font-black text-slate-900 text-xs sm:text-sm tracking-tight truncate">
               {merchantInfo?.name || "BuyFlow Store"}
             </h3>
-            <p className="text-[11px] font-bold text-blue-600 flex items-center gap-1">
-              <span>AI Shopping Concierge</span>
+            <p className="text-[10px] sm:text-[11px] font-bold text-blue-600 flex items-center gap-1 truncate">
+              <span>AI Concierge</span>
               <span className="text-emerald-500 font-normal">• Online</span>
             </p>
           </div>
         </div>
 
         {/* View Switcher & Actions */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <div className="flex items-center bg-slate-100 p-0.5 sm:p-1 rounded-xl sm:rounded-2xl border border-slate-200/80">
             <button
               type="button"
               onClick={() => setViewMode("chat")}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 sm:px-3 py-1 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 ${
                 viewMode === "chat" 
                   ? "bg-white text-blue-600 shadow-xs" 
                   : "text-slate-600 hover:text-slate-900"
@@ -679,14 +679,15 @@ function ChatContent() {
                 setViewMode("catalog");
                 if (catalogProducts.length === 0) fetchStoreCatalog();
               }}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 sm:px-3 py-1 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 ${
                 viewMode === "catalog" 
                   ? "bg-white text-blue-600 shadow-xs" 
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
               <Store className="w-3.5 h-3.5" />
-              <span>Catalog ({catalogProducts.length || merchantInfo?.product_count || 0})</span>
+              <span className="hidden xs:inline">Catalog</span>
+              <span className="text-[10px] opacity-75">({catalogProducts.length || merchantInfo?.product_count || 0})</span>
             </button>
           </div>
 
@@ -697,10 +698,10 @@ function ChatContent() {
               setTrackingError("");
               setShowTrackingModal(true);
             }}
-            className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all cursor-pointer"
             title="Track Orders"
           >
-            <Truck className="w-4 h-4 text-blue-600" />
+            <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
           </button>
 
           {/* Customer OTP Verification Badge / Button */}
@@ -710,7 +711,7 @@ function ChatContent() {
               setOtpError("");
               setShowOtpModal(true);
             }}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
               guestVerifiedToken
                 ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                 : "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 animate-pulse"
@@ -718,7 +719,7 @@ function ChatContent() {
             title={guestVerifiedToken ? `Verified as ${otpName || "Customer"}` : "Verify Customer OTP"}
           >
             <KeyRound className="w-3.5 h-3.5" />
-            <span>{guestVerifiedToken ? (otpName?.split(" ")[0] || "Verified") : "Verify OTP"}</span>
+            <span className="truncate max-w-[65px] sm:max-w-none">{guestVerifiedToken ? (otpName?.split(" ")[0] || "Verified") : "Verify"}</span>
           </button>
         </div>
       </div>
@@ -1007,16 +1008,16 @@ function ChatContent() {
         </div>
       )}
 
-      {/* Clean Light Input Bar */}
-      <div className="p-3 bg-white border-t border-slate-100 shrink-0">
+      {/* Clean Light Mobile-First Input Bar */}
+      <div className="p-2.5 sm:p-3 bg-white border-t border-slate-100 shrink-0 pb-safe">
         <form onSubmit={(e) => { e.preventDefault(); handleSend(input); }}>
-          <div className="relative flex items-center bg-slate-100 border border-slate-200/90 rounded-full px-3 py-1 focus-within:border-blue-500 focus-within:bg-white transition-all shadow-inner">
+          <div className="relative flex items-center bg-slate-100 border border-slate-200/90 rounded-full px-2.5 sm:px-3 py-0.5 sm:py-1 focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/15 transition-all shadow-inner">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={isListening ? "Listening to your voice..." : "Type your message..."}
-              className="flex-1 bg-transparent px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none"
+              className="flex-1 bg-transparent px-2.5 sm:px-3 py-2 text-sm sm:text-xs text-slate-900 placeholder-slate-400 focus:outline-none min-h-[38px] sm:min-h-[40px]"
             />
 
             {/* Voice Input */}
@@ -1024,7 +1025,7 @@ function ChatContent() {
               <button
                 type="button"
                 onClick={startVoiceInput}
-                className={`p-2 rounded-full mr-1 transition-all ${
+                className={`p-2 rounded-full mr-1 transition-all shrink-0 cursor-pointer ${
                   isListening ? "bg-rose-600 text-white animate-pulse" : "text-slate-500 hover:text-blue-600 hover:bg-slate-200"
                 }`}
                 title="Voice input"
@@ -1037,22 +1038,21 @@ function ChatContent() {
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="p-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all disabled:opacity-40 disabled:hover:bg-blue-600 shadow-xs"
+              className="p-2 sm:p-2.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all disabled:opacity-40 disabled:hover:bg-blue-600 shadow-xs shrink-0 cursor-pointer"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
         </form>
-        <p className="text-[10px] text-slate-400 text-center mt-1.5 font-medium">
+        <p className="text-[10px] text-slate-400 text-center mt-1 font-medium">
           Powered by BuyFlow AI Commerce
         </p>
       </div>
 
       {/* In-Chat OTP Verification Modal */}
-      {/* In-Chat OTP Verification Modal */}
       {showOtpModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full p-6 sm:p-7 relative text-slate-900 animate-in zoom-in-95 duration-200 overflow-hidden">
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-sm sm:max-w-md w-full p-4 sm:p-7 relative text-slate-900 animate-in zoom-in-95 duration-200 overflow-hidden my-auto">
             {/* Background Glow */}
             <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
             <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
@@ -1062,78 +1062,78 @@ function ChatContent() {
                 setShowOtpModal(false);
                 setPendingProductToBuy(null);
               }}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              className="absolute top-3 right-3 sm:top-4 sm:right-4 text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
             {/* Glowing Icon Header */}
-            <div className="text-center mb-5">
-              <div className="w-14 h-14 bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-lg shadow-blue-500/25 ring-4 ring-blue-50">
-                <KeyRound className="w-7 h-7" />
+            <div className="text-center mb-4 sm:mb-5">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white rounded-2xl mx-auto flex items-center justify-center mb-2.5 sm:mb-3 shadow-lg shadow-blue-500/25 ring-4 ring-blue-50">
+                <KeyRound className="w-6 h-6 sm:w-7 sm:h-7" />
               </div>
 
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-extrabold uppercase tracking-wider mb-1 border border-blue-100">
+              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-extrabold uppercase tracking-wider mb-1 border border-blue-100">
                 <Sparkles className="w-3 h-3 text-blue-600" />
                 <span>Verified Shopper Access</span>
               </div>
 
-              <h3 className="font-black text-slate-900 text-xl tracking-tight">
+              <h3 className="font-black text-slate-900 text-lg sm:text-xl tracking-tight">
                 {merchantInfo?.name || "BuyFlow Store"}
               </h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto font-medium">
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-1 max-w-xs mx-auto font-medium leading-relaxed">
                 Enter your details to receive an instant verification code and unlock your AI shopping concierge.
               </p>
             </div>
 
             {otpError && (
-              <div className="mb-4 p-3 bg-rose-50 border border-rose-200/80 rounded-2xl text-xs text-rose-700 font-semibold text-center animate-in shake">
+              <div className="mb-3.5 p-2.5 sm:p-3 bg-rose-50 border border-rose-200/80 rounded-2xl text-xs text-rose-700 font-semibold text-center animate-in shake">
                 {otpError}
               </div>
             )}
 
             {!otpSent ? (
-              <div className="space-y-3.5">
+              <div className="space-y-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Full Name</label>
+                  <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Full Name</label>
                   <div className="relative">
-                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                     <input
                       type="text"
                       required
                       placeholder="e.g. Manav Nagpal"
                       value={otpName}
                       onChange={(e) => setOtpName(e.target.value)}
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
+                      className="w-full pl-10 pr-3.5 py-2.5 sm:py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Email Address (for OTP)</label>
+                  <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Email Address (for OTP)</label>
                   <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                     <input
                       type="email"
                       required
                       placeholder="e.g. customer@gmail.com"
                       value={otpEmail}
                       onChange={(e) => setOtpEmail(e.target.value)}
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
+                      className="w-full pl-10 pr-3.5 py-2.5 sm:py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Phone Number (Optional)</label>
+                  <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Phone Number (Optional)</label>
                   <div className="relative">
-                    <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                     <input
                       type="tel"
                       placeholder="e.g. 09896817707"
                       value={otpPhone}
                       onChange={(e) => setOtpPhone(e.target.value)}
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
+                      className="w-full pl-10 pr-3.5 py-2.5 sm:py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
                     />
                   </div>
                 </div>
@@ -1142,45 +1142,46 @@ function ChatContent() {
                   type="button"
                   disabled={otpLoading || !otpEmail.trim() || !otpName.trim()}
                   onClick={handleSendOtp}
-                  className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 mt-2 disabled:opacity-50 cursor-pointer active:scale-[0.99]"
+                  className="w-full py-3 sm:py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 mt-2 disabled:opacity-50 cursor-pointer active:scale-[0.99] min-h-[44px]"
                 >
                   {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
                   <span>Send Verification Code</span>
                 </button>
 
-                <p className="text-[10px] text-slate-400 text-center font-medium pt-1">
+                <p className="text-[10px] text-slate-400 text-center font-medium pt-0.5">
                   🔒 Encrypted authentication • Instant order tracking enabled
                 </p>
               </div>
             ) : (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <div className="text-center p-3.5 bg-blue-50/70 rounded-2xl border border-blue-200/80">
+              <div className="space-y-3.5 animate-in fade-in duration-200">
+                <div className="text-center p-3 bg-blue-50/70 rounded-2xl border border-blue-200/80">
                   <div className="flex items-center justify-center gap-1.5 text-xs text-blue-600 font-semibold mb-0.5">
                     <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping"></span>
                     <span>Live Verification Code Sent</span>
                   </div>
-                  <p className="text-xs font-bold text-slate-800 font-mono">{otpEmail}</p>
-                  <p className="text-[11px] text-slate-500 mt-1 font-medium">Please check your inbox or spam folder for your 6-digit code.</p>
+                  <p className="text-xs font-bold text-slate-800 font-mono truncate px-2">{otpEmail}</p>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1 font-medium">Please check your inbox or spam folder for your 6-digit code.</p>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-2.5 text-center tracking-wider">
+                  <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 uppercase mb-2 text-center tracking-wider">
                     Enter 6-Digit Code
                   </label>
                   
-                  {/* 6 Individual PIN Digit Boxes */}
-                  <div className="flex items-center justify-center gap-2">
+                  {/* 6 Individual Responsive Digit Boxes */}
+                  <div className="flex items-center justify-center gap-1.5 xs:gap-2 sm:gap-2.5 max-w-full">
                     {[0, 1, 2, 3, 4, 5].map((idx) => (
                       <input
                         key={idx}
                         id={`otp-digit-${idx}`}
                         type="text"
                         inputMode="numeric"
+                        pattern="[0-9]*"
                         maxLength={1}
                         value={otpDigits[idx] || ""}
                         onChange={(e) => handleDigitChange(idx, e.target.value)}
                         onKeyDown={(e) => handleDigitKeyDown(idx, e)}
-                        className="w-11 h-13 text-center text-xl font-bold font-mono bg-slate-50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-500/15 rounded-xl text-slate-900 transition-all outline-none"
+                        className="w-10 h-12 xs:w-11 xs:h-13 sm:w-12 sm:h-14 text-center text-lg xs:text-xl sm:text-2xl font-black font-mono bg-slate-50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-500/15 rounded-xl text-slate-900 transition-all outline-none shrink-0"
                       />
                     ))}
                   </div>
@@ -1190,7 +1191,7 @@ function ChatContent() {
                   type="button"
                   disabled={otpLoading || otpDigits.join("").length < 6}
                   onClick={handleVerifyOtp}
-                  className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-[0.99] mt-2"
+                  className="w-full py-3 sm:py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-[0.99] mt-2 min-h-[44px]"
                 >
                   {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                   <span>Verify & Start Shopping</span>
@@ -1204,7 +1205,7 @@ function ChatContent() {
                       setOtpDigits(["", "", "", "", "", ""]);
                       setOtpCode("");
                     }}
-                    className="text-slate-500 hover:text-blue-600 font-medium cursor-pointer"
+                    className="text-slate-500 hover:text-blue-600 font-medium cursor-pointer p-1"
                   >
                     ← Edit email
                   </button>
@@ -1213,13 +1214,13 @@ function ChatContent() {
                     type="button"
                     disabled={otpLoading || resendCooldown > 0}
                     onClick={handleSendOtp}
-                    className={`font-bold transition-colors ${
+                    className={`font-bold transition-colors p-1 ${
                       resendCooldown > 0 
                         ? "text-slate-400 cursor-not-allowed" 
                         : "text-blue-600 hover:underline cursor-pointer"
                     }`}
                   >
-                    {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend Code"}
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}
                   </button>
                 </div>
               </div>
