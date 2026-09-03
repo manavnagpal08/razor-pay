@@ -29,33 +29,10 @@ class Token(BaseModel):
 
 def ensure_merchant_starter_catalog(db: Session, merchant_id: str):
     """
-    Auto-seeds the 14 verified starter catalog items into a new merchant's inventory.
+    Starter catalog seeding disabled to maintain 100% strict multi-tenant isolation.
+    New merchants start with a clean inventory (0 products).
     """
-    from app.models import Product
-    count = db.query(Product).filter(Product.merchant_id == merchant_id).count()
-    if count == 0:
-        base_prods = db.query(Product).filter(Product.merchant_id == "demo_merchant").all()
-        if not base_prods:
-            base_prods = db.query(Product).all()
-        for p in base_prods:
-            new_p = Product(
-                id=f"{merchant_id[:8]}_{p.id[:8]}_{uuid.uuid4().hex[:4]}",
-                merchant_id=merchant_id,
-                name=p.name,
-                category=p.category,
-                description=p.description,
-                price=p.price,
-                currency=p.currency or "INR",
-                inventory=p.inventory or 25,
-                features=p.features or {},
-                use_cases=p.use_cases or [],
-                metadata_=p.metadata_ or {}
-            )
-            db.add(new_p)
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
+    pass
 
 class UserCreate(BaseModel):
     email: str

@@ -52,14 +52,25 @@ def send_chat_otp(req: SendOtpRequest, db: Session = Depends(get_db)):
     email_dispatch = {"sent": False, "mode": "SIMULATION_LOGGED", "message": ""}
 
     try:
+        from app.models import Merchant, MerchantPolicy
         if req.merchant_id:
-            from app.models import Merchant, MerchantPolicy
             merchant = db.query(Merchant).filter(Merchant.id == req.merchant_id).first()
             if merchant and hasattr(merchant, "name") and merchant.name:
                 store_name = merchant.name
             policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == req.merchant_id).first()
             if policy and isinstance(policy.approval_rules, dict):
-                smtp_override = policy.approval_rules.get("smtp_config")
+                cand = policy.approval_rules.get("smtp_config")
+                if isinstance(cand, dict) and (cand.get("brevo_api_key") or cand.get("user") or cand.get("resend_api_key")):
+                    smtp_override = cand
+
+        # If specific merchant had no configured email, find active configured merchant credentials
+        if not smtp_override:
+            for pol in db.query(MerchantPolicy).all():
+                if pol.approval_rules and isinstance(pol.approval_rules, dict):
+                    cand = pol.approval_rules.get("smtp_config")
+                    if isinstance(cand, dict) and (cand.get("brevo_api_key") or cand.get("user") or cand.get("resend_api_key")):
+                        smtp_override = cand
+                        break
 
         # Dispatch email asynchronously in background thread so request responds in <50ms
         import threading
@@ -67,12 +78,14 @@ def send_chat_otp(req: SendOtpRequest, db: Session = Depends(get_db)):
 
         def async_dispatch():
             try:
-                EmailService.send_otp_email(
+                res = EmailService.send_otp_email(
                     to_email=email, 
                     otp_code=otp,
                     store_name=store_name,
                     smtp_override=smtp_override
                 )
+                import logging
+                logging.getLogger(__name__).info(f"[CHAT OTP DISPATCH] Result for {email}: {res}")
             except Exception as e_bg:
                 import logging
                 logging.getLogger(__name__).warning(f"Background email dispatch error: {e_bg}")

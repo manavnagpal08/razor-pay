@@ -114,18 +114,8 @@ def get_merchant_products(merchant_id: str, db: Session = Depends(get_db)):
         except Exception:
             pass
 
-    # Ensure starter catalog is seeded if merchant has 0 products
+    # Strictly fetch only this merchant's products (Zero fallback across tenants)
     products = db.query(models.Product).filter(models.Product.merchant_id == clean_id).all()
-    if not products:
-        from app.api.auth import ensure_merchant_starter_catalog
-        ensure_merchant_starter_catalog(db, clean_id)
-        products = db.query(models.Product).filter(models.Product.merchant_id == clean_id).all()
-        
-    # Fallback to demo_merchant products if still empty
-    if not products:
-        products = db.query(models.Product).filter(models.Product.merchant_id == "demo_merchant").all()
-    if not products:
-        products = db.query(models.Product).all()
 
     results = []
     for p in products:

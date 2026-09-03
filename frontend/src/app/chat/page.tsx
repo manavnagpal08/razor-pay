@@ -15,7 +15,19 @@ import { Toast } from "@/components/ui/Toast";
 
 function ChatContent() {
   const searchParams = useSearchParams();
-  const merchantParam = searchParams.get("merchant") || "demo_merchant";
+  const [activeMerchantId, setActiveMerchantId] = useState<string>("demo_merchant");
+  
+  useEffect(() => {
+    const fromUrl = searchParams.get("merchant");
+    if (fromUrl) {
+      setActiveMerchantId(fromUrl);
+    } else {
+      const fromStorage = localStorage.getItem("buyflow_merchant_id");
+      if (fromStorage) setActiveMerchantId(fromStorage);
+    }
+  }, [searchParams]);
+
+  const merchantParam = searchParams.get("merchant") || activeMerchantId;
   const isEmbed = searchParams.get("embed") === "true";
 
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
