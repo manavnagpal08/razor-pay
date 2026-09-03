@@ -558,13 +558,26 @@ def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(ge
     policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
     rules = policy.approval_rules if policy and isinstance(policy.approval_rules, dict) else {}
     smtp = rules.get("smtp_config", {})
+    stored_provider = smtp.get("active_provider")
+
+    if stored_provider == "none":
+        return {
+            "active_provider": "none",
+            "gmail_user": "",
+            "is_configured": False,
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 587,
+            "has_password": False,
+            "has_resend_key": False,
+            "has_brevo_key": False,
+            "brevo_sender_email": ""
+        }
+
     user = smtp.get("user") or os.getenv("SMTP_USER") or os.getenv("GMAIL_USER") or ""
     pwd = smtp.get("password") or os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or ""
     resend_key = smtp.get("resend_api_key") or os.getenv("RESEND_API_KEY") or ""
     brevo_key = smtp.get("brevo_api_key") or os.getenv("BREVO_API_KEY") or ""
     
-    # Infer active provider if not explicitly stored
-    stored_provider = smtp.get("active_provider")
     if not stored_provider:
         if brevo_key:
             stored_provider = "brevo"
@@ -573,7 +586,7 @@ def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(ge
         elif resend_key:
             stored_provider = "resend"
         else:
-            stored_provider = "brevo"
+            stored_provider = "none"
 
     return {
         "active_provider": stored_provider,
@@ -590,23 +603,24 @@ def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(ge
 @router.post("/smtp-config")
 def update_smtp_config(req: SMTPConfigRequest, db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
     from app.models import MerchantPolicy
+    from sqlalchemy.orm.attributes import flag_modified
     policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
     if not policy:
         import uuid
         policy = MerchantPolicy(id=str(uuid.uuid4()), merchant_id=merchant_id, max_discount_percent=20.0)
         db.add(policy)
 
-    rules = policy.approval_rules if isinstance(policy.approval_rules, dict) else {}
+    rules = dict(policy.approval_rules) if isinstance(policy.approval_rules, dict) else {}
     existing_smtp = rules.get("smtp_config", {}) if isinstance(rules.get("smtp_config"), dict) else {}
     
-    # Preserve existing password if user sent masked or empty password
+    # Handle password
     raw_pwd = req.gmail_app_password.strip().replace(" ", "") if req.gmail_app_password else ""
     if not raw_pwd or raw_pwd.startswith("•"):
         final_password = existing_smtp.get("password", "")
     else:
         final_password = raw_pwd
 
-    # Preserve existing resend / brevo keys if masked
+    # Handle resend / brevo keys
     raw_resend = req.resend_api_key.strip() if req.resend_api_key else None
     if raw_resend and raw_resend.startswith("•"):
         final_resend = existing_smtp.get("resend_api_key")
@@ -629,16 +643,28 @@ def update_smtp_config(req: SMTPConfigRequest, db: Session = Depends(get_db), me
         "brevo_api_key": final_brevo,
         "brevo_sender_email": req.brevo_sender_email.strip() if req.brevo_sender_email else None
     }
-    policy.approval_rules = rules
+    policy.approval_rules = dict(rules)
+    flag_modified(policy, "approval_rules")
     db.commit()
     return {"success": True, "message": f"{req.active_provider.capitalize() if req.active_provider else 'Email'} delivery configuration saved successfully!"}
 
 @router.post("/smtp-config/disconnect")
 def disconnect_smtp_provider(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
     from app.models import MerchantPolicy
+    from sqlalchemy.orm.attributes import flag_modified
     policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
-    if policy and isinstance(policy.approval_rules, dict):
-        policy.approval_rules["smtp_config"] = {"active_provider": "none"}
+    if policy:
+        rules = dict(policy.approval_rules) if isinstance(policy.approval_rules, dict) else {}
+        rules["smtp_config"] = {
+            "active_provider": "none",
+            "user": "",
+            "password": "",
+            "resend_api_key": None,
+            "brevo_api_key": None,
+            "brevo_sender_email": None
+        }
+        policy.approval_rules = dict(rules)
+        flag_modified(policy, "approval_rules")
         db.commit()
     return {"success": True, "message": "Email provider disconnected successfully."}
 

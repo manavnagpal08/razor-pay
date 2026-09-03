@@ -694,11 +694,11 @@ export default function MerchantDashboard() {
       if (res.ok) {
         const data = await res.json();
         if (data.active_provider) setActiveEmailProvider(data.active_provider);
-        if (data.gmail_user) setSmtpUser(data.gmail_user);
-        if (data.has_password) setSmtpPassword("••••••••••••••••");
-        if (data.has_resend_key) setResendApiKey("••••••••••••••••");
-        if (data.has_brevo_key) setBrevoApiKey("••••••••••••••••");
-        if (data.brevo_sender_email) setBrevoSenderEmail(data.brevo_sender_email);
+        setSmtpUser(data.gmail_user || "");
+        setSmtpPassword(data.has_password ? "••••••••••••••••" : "");
+        setResendApiKey(data.has_resend_key ? "••••••••••••••••" : "");
+        setBrevoApiKey(data.has_brevo_key ? "••••••••••••••••" : "");
+        setBrevoSenderEmail(data.brevo_sender_email || "");
       }
     } catch (e) {
       console.warn("Failed to fetch SMTP config:", e);
@@ -729,6 +729,7 @@ export default function MerchantDashboard() {
       if (res.ok) {
         setSmtpMessage(`✓ ${activeEmailProvider.toUpperCase()} configuration saved successfully! Live emails will now send via ${activeEmailProvider}.`);
         setTimeout(() => setSmtpMessage(""), 5000);
+        await fetchSmtpConfig();
       }
     } catch (e) {
       showToast("Failed to save email configuration.", "error");
@@ -747,11 +748,14 @@ export default function MerchantDashboard() {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
-        setActiveEmailProvider("brevo");
+        setActiveEmailProvider("none");
         setBrevoApiKey("");
+        setBrevoSenderEmail("");
         setResendApiKey("");
+        setSmtpUser("");
         setSmtpPassword("");
-        showToast("Email provider disconnected.", "info");
+        setSmtpTestResult(null);
+        showToast("Email provider disconnected successfully.", "info");
       }
     } catch (e) {
       showToast("Failed to disconnect provider.", "error");
