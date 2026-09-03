@@ -43,26 +43,64 @@ class EmailService:
         host = config.get("host") or os.getenv("SMTP_HOST") or "smtp.gmail.com"
         port = int(config.get("port") or os.getenv("SMTP_PORT") or 587)
         resend_key = config.get("resend_api_key") or os.getenv("RESEND_API_KEY") or "re_MaZdzZ2m_L5hmnmmdvKf4UqqN2aanZaNg"
+        brevo_key = config.get("brevo_api_key") or os.getenv("BREVO_API_KEY") or ""
+        brevo_sender = config.get("brevo_sender_email") or os.getenv("BREVO_SENDER_EMAIL") or user or "manav.nagpal2005@gmail.com"
         
         return {
             "host": host,
             "port": port,
             "user": user.strip(),
             "password": password.strip().replace(" ", ""),  # Gmail App Passwords can have spaces
-            "resend_api_key": resend_key.strip() if resend_key else ""
+            "resend_api_key": resend_key.strip() if resend_key else "",
+            "brevo_api_key": brevo_key.strip() if brevo_key else "",
+            "brevo_sender_email": brevo_sender.strip() if brevo_sender else "manav.nagpal2005@gmail.com"
         }
 
     @classmethod
     def send_email(cls, to_email: str, subject: str, html_body: str, smtp_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Sends an email using Resend HTTPS (port 443) or IPv4-forced SMTP with auto-fallback between STARTTLS (587) and SSL (465).
+        Sends an email using Brevo/Resend HTTPS (port 443) or IPv4-forced SMTP with auto-fallback between STARTTLS (587) and SSL (465).
         """
         creds = cls.get_smtp_credentials(smtp_override)
+        sender_name = creds.get("sender_name") or "BuyFlow Store"
 
-        # Strategy 0: HTTPS Email Delivery over port 443 (Allowed on Render free-tier, 100% reliable)
+        # Strategy 0A: Brevo (Sendinblue) HTTPS API (300 Free Emails/day to ANY recipient, no domain required, port 443)
+        brevo_key = creds.get("brevo_api_key") or os.getenv("BREVO_API_KEY")
+        if brevo_key:
+            try:
+                import urllib.request
+                import json
+                sender_email_brevo = creds.get("brevo_sender_email") or creds.get("user") or "manav.nagpal2005@gmail.com"
+                payload = json.dumps({
+                    "sender": {"name": sender_name, "email": sender_email_brevo},
+                    "to": [{"email": to_email}],
+                    "subject": subject,
+                    "htmlContent": html_body
+                }).encode("utf-8")
+                req_obj = urllib.request.Request(
+                    "https://api.brevo.com/v3/smtp/email",
+                    data=payload,
+                    headers={
+                        "api-key": brevo_key.strip(),
+                        "accept": "application/json",
+                        "content-type": "application/json"
+                    }
+                )
+                with urllib.request.urlopen(req_obj, timeout=10) as resp:
+                    if resp.status in (200, 201, 202):
+                        logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Brevo HTTPS")
+                        return {
+                            "sent": True,
+                            "mode": "BREVO_HTTPS",
+                            "message": f"Free live email delivered successfully to {to_email} via Brevo!",
+                            "to": to_email
+                        }
+            except Exception as e_brevo:
+                logger.warning(f"Brevo HTTPS attempt failed: {e_brevo}. Falling back to next strategy...")
+
+        # Strategy 0B: Resend HTTPS Email Delivery over port 443 (Allowed on Render free-tier, 100% reliable)
         resend_key = creds.get("resend_api_key") or os.getenv("RESEND_API_KEY") or "re_MaZdzZ2m_L5hmnmmdvKf4UqqN2aanZaNg"
         sender_email = creds.get("from_email") or os.getenv("RESEND_FROM_EMAIL") or "onboarding@resend.dev"
-        sender_name = creds.get("sender_name") or "BuyFlow Store"
         
         if resend_key:
             try:
@@ -106,7 +144,7 @@ class EmailService:
             return {
                 "sent": False,
                 "mode": "SIMULATION_LOGGED",
-                "message": "SMTP credentials not configured. Configure Gmail address and 16-character App Password or Resend API key to send live emails.",
+                "message": "SMTP credentials not configured. Configure Gmail address and 16-character App Password, Resend API key, or free Brevo key to send live emails.",
                 "to": to_email,
                 "subject": subject
             }

@@ -547,6 +547,8 @@ class SMTPConfigRequest(BaseModel):
     smtp_host: str | None = "smtp.gmail.com"
     smtp_port: int | None = 587
     resend_api_key: str | None = None
+    brevo_api_key: str | None = None
+    brevo_sender_email: str | None = None
 
 @router.get("/smtp-config")
 def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
@@ -557,12 +559,15 @@ def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(ge
     smtp = rules.get("smtp_config", {})
     user = smtp.get("user") or os.getenv("SMTP_USER") or os.getenv("GMAIL_USER") or ""
     resend_key = smtp.get("resend_api_key") or os.getenv("RESEND_API_KEY") or ""
+    brevo_key = smtp.get("brevo_api_key") or os.getenv("BREVO_API_KEY") or ""
     return {
         "gmail_user": user,
-        "is_configured": bool(user or resend_key),
+        "is_configured": bool(user or resend_key or brevo_key),
         "smtp_host": smtp.get("host") or os.getenv("SMTP_HOST") or "smtp.gmail.com",
         "smtp_port": smtp.get("port") or int(os.getenv("SMTP_PORT") or 587),
-        "has_resend_key": bool(resend_key)
+        "has_resend_key": bool(resend_key),
+        "has_brevo_key": bool(brevo_key),
+        "brevo_sender_email": smtp.get("brevo_sender_email") or os.getenv("BREVO_SENDER_EMAIL") or user or ""
     }
 
 @router.post("/smtp-config")
@@ -580,7 +585,9 @@ def update_smtp_config(req: SMTPConfigRequest, db: Session = Depends(get_db), me
         "password": req.gmail_app_password.strip().replace(" ", ""),
         "host": req.smtp_host or "smtp.gmail.com",
         "port": req.smtp_port or 587,
-        "resend_api_key": req.resend_api_key.strip() if req.resend_api_key else None
+        "resend_api_key": req.resend_api_key.strip() if req.resend_api_key else None,
+        "brevo_api_key": req.brevo_api_key.strip() if req.brevo_api_key else None,
+        "brevo_sender_email": req.brevo_sender_email.strip() if req.brevo_sender_email else None
     }
     policy.approval_rules = rules
     db.commit()
