@@ -2913,6 +2913,19 @@ export default function MerchantDashboard() {
             />
           </div>
 
+          <div className="p-4 bg-amber-50/80 border border-amber-200/90 rounded-2xl text-xs space-y-1.5 text-slate-700">
+            <div className="flex items-center gap-1.5 font-bold text-amber-900">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Important: Resend Sandbox vs. Any Customer Email Delivery</span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-slate-600">
+              When using the default Resend sandbox test key (<code className="bg-amber-100/80 px-1.5 py-0.5 rounded text-amber-900 font-mono">onboarding@resend.dev</code>), Resend's security policy allows sending emails <strong>only to the Resend account owner's email address</strong>.
+            </p>
+            <p className="text-[11px] leading-relaxed text-slate-600">
+              To send real OTP codes and receipts to <strong>any customer email address</strong>, add and verify your custom domain on <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-bold underline">resend.com/domains</a> and paste your custom API key above!
+            </p>
+          </div>
+
           <button
             type="submit"
             disabled={savingSmtp}

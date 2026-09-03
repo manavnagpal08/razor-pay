@@ -61,12 +61,15 @@ class EmailService:
 
         # Strategy 0: HTTPS Email Delivery over port 443 (Allowed on Render free-tier, 100% reliable)
         resend_key = creds.get("resend_api_key") or os.getenv("RESEND_API_KEY") or "re_MaZdzZ2m_L5hmnmmdvKf4UqqN2aanZaNg"
+        sender_email = creds.get("from_email") or os.getenv("RESEND_FROM_EMAIL") or "onboarding@resend.dev"
+        sender_name = creds.get("sender_name") or "BuyFlow Store"
+        
         if resend_key:
             try:
                 import urllib.request
                 import json
                 payload = json.dumps({
-                    "from": "BuyFlow <onboarding@resend.dev>",
+                    "from": f"{sender_name} <{sender_email}>",
                     "to": [to_email],
                     "subject": subject,
                     "html": html_body
@@ -91,7 +94,10 @@ class EmailService:
                         }
             except urllib.error.HTTPError as e_http:
                 err_content = e_http.read().decode('utf-8', errors='ignore')
-                logger.warning(f"Resend HTTP {e_http.code}: {err_content}. Falling back...")
+                logger.warning(f"Resend HTTP {e_http.code}: {err_content}")
+                if "validation_error" in err_content or e_http.code in (400, 403, 422):
+                    if "only send testing emails" in err_content or "onboarding@resend.dev" in err_content:
+                        logger.warning(f"Resend Sandbox Restriction: onboarding@resend.dev can only send to account owner. Add custom domain at resend.com/domains to send to {to_email}")
             except Exception as e_resend:
                 logger.warning(f"Resend HTTPS failed: {e_resend}. Falling back to standard SMTP...")
 
