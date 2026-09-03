@@ -72,39 +72,26 @@ def send_chat_otp(req: SendOtpRequest, db: Session = Depends(get_db)):
                         smtp_override = cand
                         break
 
-        # Dispatch email asynchronously in background thread so request responds in <50ms
-        import threading
+        # Dispatch email directly to guarantee delivery without thread lifecycle interruption
         from app.services.email_service import EmailService
-
-        def async_dispatch():
-            try:
-                res = EmailService.send_otp_email(
-                    to_email=email, 
-                    otp_code=otp,
-                    store_name=store_name,
-                    smtp_override=smtp_override
-                )
-                import logging
-                logging.getLogger(__name__).info(f"[CHAT OTP DISPATCH] Result for {email}: {res}")
-            except Exception as e_bg:
-                import logging
-                logging.getLogger(__name__).warning(f"Background email dispatch error: {e_bg}")
-
-        t = threading.Thread(target=async_dispatch, daemon=True)
-        t.start()
-        
+        dispatch_res = EmailService.send_otp_email(
+            to_email=email, 
+            otp_code=otp,
+            store_name=store_name,
+            smtp_override=smtp_override
+        )
         email_dispatch = {
-            "sent": True,
-            "mode": "DISPATCHING_BACKGROUND",
-            "message": f"Verification code queued and dispatched to {email}."
+            "sent": dispatch_res.get("sent", False),
+            "mode": dispatch_res.get("mode", "SIMULATION_LOGGED"),
+            "message": dispatch_res.get("message", f"Verification code sent to {email}.")
         }
     except Exception as e:
         import logging
-        logging.getLogger(__name__).error(f"Error preparing OTP email dispatch: {e}")
+        logging.getLogger(__name__).error(f"Error executing OTP email dispatch: {e}")
         email_dispatch = {
-            "sent": True,
-            "mode": "FALLBACK_HINT",
-            "message": "Verification code generated for instant access."
+            "sent": False,
+            "mode": "DISPATCH_ERROR",
+            "message": f"Verification code generated: {e}"
         }
 
     return {
