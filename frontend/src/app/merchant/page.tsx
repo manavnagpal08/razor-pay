@@ -3098,7 +3098,7 @@ export default function MerchantDashboard() {
                   )}
                 </div>
                 <p className="text-[11px] text-slate-500 leading-snug">
-                  100% Free • 300 emails/day to <strong>ANY customer</strong> with 0 domain setup.
+                  Fast HTTPS cloud email API to any customer with 0 DNS setup required.
                 </p>
               </div>
               <span className="text-[10px] font-bold text-emerald-700 mt-2">⚡ HTTPS Port 443 Safe</span>
@@ -3140,16 +3140,16 @@ export default function MerchantDashboard() {
             >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="font-extrabold text-xs text-slate-900">Gmail App Password</span>
+                  <span className="font-extrabold text-xs text-slate-900">Gmail / Google Workspace</span>
                   {activeEmailProvider === "gmail" && (
                     <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
                   )}
                 </div>
                 <p className="text-[11px] text-slate-500 leading-snug">
-                  Direct SMTP with 16-character Google App Password.
+                  Direct secure IPv4 SSL SMTP with 16-character Google App Password.
                 </p>
               </div>
-              <span className="text-[10px] font-bold text-blue-700 mt-2">📧 Standard SMTP</span>
+              <span className="text-[10px] font-bold text-blue-700 mt-2">📧 Secure SSL SMTP</span>
             </button>
           </div>
         </div>
@@ -3160,7 +3160,7 @@ export default function MerchantDashboard() {
             <div className="p-4 bg-emerald-50/40 border border-emerald-200/90 rounded-2xl space-y-3 animate-in fade-in duration-150">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">Configure Brevo Free Email (300 emails/day Forever)</h4>
+                  <h4 className="text-xs font-bold text-slate-900">Configure Brevo Cloud API</h4>
                   <p className="text-[11px] text-slate-500">Go to Brevo ➔ <strong>API Keys</strong> tab (not SMTP tab) ➔ click <strong>"Generate a new API key"</strong> (<code className="font-mono bg-emerald-100/70 text-emerald-900 px-1 rounded">xkeysib-...</code>).</p>
                 </div>
                 <a 

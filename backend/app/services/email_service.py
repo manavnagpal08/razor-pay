@@ -187,9 +187,35 @@ class EmailService:
             part = MIMEText(html_body, "html")
             msg.attach(part)
 
-            # Try STARTTLS on 587
+            # Method 2A: Direct IPv4 SSL on 465 (Most reliable for Google Workspace / Gmail)
             try:
-                server = smtplib.SMTP(creds["host"], creds["port"], timeout=6)
+                ssl_ctx = ssl.create_default_context()
+                server = IPv4SMTP_SSL(creds["host"], 465, timeout=10, context=ssl_ctx)
+                server.ehlo()
+                server.login(creds["user"], creds["password"])
+                server.sendmail(creds["user"], [to_email], msg.as_string())
+                server.quit()
+                logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Gmail SSL 465")
+                return {
+                    "sent": True,
+                    "mode": "SMTP_DELIVERED",
+                    "message": f"Email delivered successfully to {to_email} via Gmail SSL!",
+                    "to": to_email
+                }
+            except smtplib.SMTPAuthenticationError as e_auth_ssl:
+                logger.error(f"[GMAIL AUTH ERROR SSL] {e_auth_ssl}")
+                return {
+                    "sent": False,
+                    "mode": "GMAIL_AUTH_FAILED",
+                    "error": str(e_auth_ssl),
+                    "message": "Gmail Authentication Failed: Please ensure 2-Step Verification is ON and generate a 16-character Google App Password at https://myaccount.google.com/apppasswords"
+                }
+            except Exception as e_ssl:
+                logger.warning(f"Gmail SSL 465 attempt failed: {e_ssl}. Trying STARTTLS 587...")
+
+            # Method 2B: Try STARTTLS on 587 with IPv4 forcing
+            try:
+                server = IPv4SMTP(creds["host"], int(creds.get("port") or 587), timeout=10)
                 server.ehlo()
                 server.starttls(context=ssl.create_default_context())
                 server.ehlo()
@@ -200,7 +226,7 @@ class EmailService:
                 return {
                     "sent": True,
                     "mode": "SMTP_DELIVERED",
-                    "message": f"Live email delivered successfully to {to_email} via Gmail SMTP!",
+                    "message": f"Email delivered successfully to {to_email} via Gmail SMTP!",
                     "to": to_email
                 }
             except smtplib.SMTPAuthenticationError as e_auth:
@@ -209,39 +235,14 @@ class EmailService:
                     "sent": False,
                     "mode": "GMAIL_AUTH_FAILED",
                     "error": str(e_auth),
-                    "message": "Gmail Authentication Failed: Please ensure 2-Step Verification is ON in your Google Account and generate a 16-character App Password at https://myaccount.google.com/apppasswords"
+                    "message": "Gmail Authentication Failed: Please generate a 16-character Google App Password at https://myaccount.google.com/apppasswords"
                 }
             except Exception as e_starttls:
-                logger.warning(f"Gmail STARTTLS 587 failed: {e_starttls}. Trying SSL 465...")
-
-            # Try SSL on 465
-            try:
-                ssl_ctx = ssl.create_default_context()
-                server = smtplib.SMTP_SSL(creds["host"], 465, timeout=6, context=ssl_ctx)
-                server.ehlo()
-                server.login(creds["user"], creds["password"])
-                server.sendmail(creds["user"], [to_email], msg.as_string())
-                server.quit()
-                logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Gmail SSL 465")
-                return {
-                    "sent": True,
-                    "mode": "SMTP_DELIVERED",
-                    "message": f"Live email delivered successfully to {to_email} via Gmail SMTP SSL!",
-                    "to": to_email
-                }
-            except smtplib.SMTPAuthenticationError as e_auth_ssl:
-                logger.error(f"[GMAIL AUTH ERROR SSL] {e_auth_ssl}")
-                return {
-                    "sent": False,
-                    "mode": "GMAIL_AUTH_FAILED",
-                    "error": str(e_auth_ssl),
-                    "message": "Gmail Authentication Failed: Please generate a 16-character App Password at https://myaccount.google.com/apppasswords"
-                }
-            except Exception as e_ssl:
+                logger.error(f"Gmail STARTTLS failed: {e_starttls}")
                 return {
                     "sent": False,
                     "mode": "GMAIL_ERROR",
-                    "message": f"Gmail delivery failed: {e_ssl}. If running on cloud free-tier, please use Brevo (300 free emails/day) for 100% reliable port 443 delivery."
+                    "message": f"Gmail delivery failed: {e_starttls}. Please check your Gmail address and 16-character App Password."
                 }
 
         # 3. RESEND HTTPS PROVIDER
