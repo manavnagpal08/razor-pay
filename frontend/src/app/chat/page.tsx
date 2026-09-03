@@ -15,15 +15,23 @@ import { Toast } from "@/components/ui/Toast";
 
 function ChatContent() {
   const searchParams = useSearchParams();
-  const [activeMerchantId, setActiveMerchantId] = useState<string>("demo_merchant");
+  const [activeMerchantId, setActiveMerchantId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const urlMerchant = new URLSearchParams(window.location.search).get("merchant");
+      if (urlMerchant) return urlMerchant;
+      const stored = localStorage.getItem("buyflow_active_merchant_id") || localStorage.getItem("buyflow_merchant_id");
+      if (stored && stored !== "demo_merchant") return stored;
+    }
+    return "demo_merchant";
+  });
   
   useEffect(() => {
     const fromUrl = searchParams.get("merchant");
     if (fromUrl) {
       setActiveMerchantId(fromUrl);
     } else {
-      const fromStorage = localStorage.getItem("buyflow_merchant_id");
-      if (fromStorage) setActiveMerchantId(fromStorage);
+      const fromStorage = localStorage.getItem("buyflow_active_merchant_id") || localStorage.getItem("buyflow_merchant_id");
+      if (fromStorage && fromStorage !== "demo_merchant") setActiveMerchantId(fromStorage);
     }
   }, [searchParams]);
 
