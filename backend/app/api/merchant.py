@@ -214,7 +214,7 @@ def onboard_merchant(req: MerchantOnboardRequest, db: Session = Depends(get_db))
 
 @router.get("/stores")
 def list_stores(db: Session = Depends(get_db), authorization: str | None = Header(None)):
-    from app.models import Merchant, Product, MerchantPolicy
+    from app.models import Merchant, Product, MerchantPolicy, User
     import jwt
     from app.core.config import settings
 
@@ -223,7 +223,7 @@ def list_stores(db: Session = Depends(get_db), authorization: str | None = Heade
     if authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ")[1]
         try:
-            payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=["HS256"])
+            payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
             user_id = payload.get("sub")
             if user_id:
                 target_merchant_ids.append(user_id)

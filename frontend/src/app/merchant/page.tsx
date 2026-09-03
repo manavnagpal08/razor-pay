@@ -604,17 +604,19 @@ export default function MerchantDashboard() {
       const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/products/merchant/${merchantId}`);
       if (res.ok) {
-        let data = await res.json();
-        if (Array.isArray(data) && data.length === 0) {
-          try {
-            await fetch(`${apiUrl}/api/products/merchant/${merchantId}/seed`, { method: "POST" });
-            const retry = await fetch(`${apiUrl}/api/products/merchant/${merchantId}`);
-            if (retry.ok) data = await retry.json();
-          } catch (seedErr) {
-            console.warn("Auto-seed error:", seedErr);
+        const data = await res.json();
+        const productList = Array.isArray(data) ? data : [];
+        setMerchantProducts(productList);
+
+        // If clean new merchant with 0 products, automatically open the Onboarding Wizard
+        if (productList.length === 0 && merchantId !== "demo_merchant") {
+          const hasOnboarded = typeof window !== "undefined" ? localStorage.getItem(`store_onboarded_${merchantId}`) : null;
+          if (!hasOnboarded) {
+            setOnboardingStoreName(currentStoreName === "BuyFlow Store" || currentStoreName === "My Store" ? "" : currentStoreName);
+            setOnboardingStep(1);
+            setShowOnboardingWizard(true);
           }
         }
-        setMerchantProducts(data);
       }
     } catch (e) {
       console.warn("Failed to load merchant products:", e);
