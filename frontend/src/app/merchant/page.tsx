@@ -6,7 +6,7 @@ import {
   Lock, LogIn, Sliders, CheckCircle2, Loader2, Share2, Copy, ExternalLink, Code, 
   MessageSquare, Terminal, RefreshCw, Download, Filter, PlusCircle, Store, X, ChevronDown,
   QrCode, AlertTriangle, Cpu, Layers, ShieldCheck, Zap, Mail, Trash2, Inbox, Package, Search,
-  Users, Phone, Calendar, Tag
+  Users, Phone, Calendar, Tag, Building2
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useAuth } from "@/context/AuthContext";
@@ -1144,57 +1144,55 @@ export default function MerchantDashboard() {
                 </div>
               </div>
               {/* Shareable AI Storefront Agent Banner */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 text-white shadow-xl p-6 sm:p-8">
-        {/* Glow Accents */}
-        <div className="pointer-events-none absolute -top-24 -right-24 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-indigo-600/10 blur-3xl" />
-
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 bg-gradient-to-br from-indigo-50/70 via-white to-blue-50/70 text-slate-900 shadow-sm p-6 sm:p-8">
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
           {/* Left Column: Info & Actions */}
           <div className="lg:col-span-8 space-y-3.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-bold border border-blue-500/20">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
               <span>Multi-Tenant Conversational Commerce</span>
             </div>
 
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
               Shareable AI Storefront Agent Link
             </h2>
 
-            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed max-w-xl">
-              Share this dedicated link with your customers on WhatsApp, Instagram, or email. Buyers can chat directly with your AI concierge, receive instant product recommendations, and complete payments right inside the chat!
+            <p className="text-slate-600 text-xs sm:text-sm leading-relaxed max-w-xl">
+              Share this dedicated link with your customers on WhatsApp, Instagram, or email. Buyers can chat directly with your AI concierge, receive instant product recommendations, and complete payments right inside the chat.
             </p>
 
             {/* Link display and actions */}
             <div className="space-y-3 pt-1">
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-2xl text-xs font-mono text-slate-300 w-full max-w-xl shadow-inner">
-                <Share2 className="w-4 h-4 text-blue-400 shrink-0" />
-                <span className="truncate flex-1 text-slate-300 select-all">{agentShareUrl}</span>
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-mono text-slate-700 w-full max-w-xl shadow-xs">
+                <Share2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span className="truncate flex-1 text-slate-700 select-all font-semibold">{agentShareUrl}</span>
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(agentShareUrl);
-                    setCopiedLink(true);
-                    showToast("Copied storefront link to clipboard!", "success");
-                    setTimeout(() => setCopiedLink(false), 2500);
+                    if (typeof navigator !== "undefined" && navigator.clipboard) {
+                      navigator.clipboard.writeText(agentShareUrl);
+                      setCopiedLink(true);
+                      showToast("Copied storefront link to clipboard.", "success");
+                      setTimeout(() => setCopiedLink(false), 2500);
+                    }
                   }}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
                 >
-                  {copiedLink ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedLink ? "Copied Link!" : "Copy Link"}</span>
+                  {copiedLink ? <CheckCircle2 className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedLink ? "Copied Link" : "Copy Link"}</span>
                 </button>
 
                 <a
                   href={agentShareUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700/80 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
                 >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Open Agent</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Open Store</span>
                 </a>
 
                 <a
@@ -1212,15 +1210,15 @@ export default function MerchantDashboard() {
           </div>
 
           {/* Right Column: Embed on Any Website Box */}
-          <div className="lg:col-span-4 h-full bg-slate-900/70 border border-slate-800/90 rounded-2xl p-5 flex flex-col justify-between gap-4 backdrop-blur-md">
+          <div className="lg:col-span-4 h-full bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between gap-4 shadow-xs">
             <div className="space-y-1.5">
-              <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-2">
                 <Code className="w-4 h-4" />
               </div>
-              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                 <span>Embed on Any Website</span>
               </h4>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
+              <p className="text-[11px] text-slate-500 leading-relaxed">
                 Add an interactive AI shopping widget to your Shopify, WordPress, or custom site.
               </p>
             </div>
@@ -1228,15 +1226,17 @@ export default function MerchantDashboard() {
             <button
               type="button"
               onClick={() => {
-                navigator.clipboard.writeText(embedSnippet);
-                setCopiedEmbed(true);
-                showToast("Copied embed HTML code to clipboard!", "success");
-                setTimeout(() => setCopiedEmbed(false), 2500);
+                if (typeof navigator !== "undefined" && navigator.clipboard) {
+                  navigator.clipboard.writeText(embedSnippet);
+                  setCopiedEmbed(true);
+                  showToast("Copied embed HTML code to clipboard.", "success");
+                  setTimeout(() => setCopiedEmbed(false), 2500);
+                }
               }}
-              className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-white border border-slate-700/80 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              className="w-full py-2.5 px-3 bg-slate-50 hover:bg-slate-100 text-indigo-600 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
             >
-              {copiedEmbed ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedEmbed ? "Copied Embed HTML!" : "Copy Embed Code"}</span>
+              {copiedEmbed ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedEmbed ? "Copied Embed HTML" : "Copy Embed Code"}</span>
             </button>
           </div>
         </div>
@@ -1932,7 +1932,7 @@ export default function MerchantDashboard() {
                         onClick={() => setSelectedCustomerLogs(null)}
                         className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
                       >
-                        ✕
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
 
@@ -1953,36 +1953,36 @@ export default function MerchantDashboard() {
                     </div>
 
                     {/* Chat Logs Stream */}
-                    <div className="p-6 overflow-y-auto space-y-3.5 flex-1 bg-slate-900 text-slate-100 font-mono text-xs">
-                      <div className="text-[11px] text-slate-400 uppercase tracking-wider font-bold mb-2 flex items-center gap-2">
-                        <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+                    <div className="p-6 overflow-y-auto space-y-3.5 flex-1 bg-slate-50 text-slate-900 text-xs">
+                      <div className="text-[11px] text-slate-500 uppercase tracking-wider font-bold mb-2 flex items-center gap-2">
+                        <Terminal className="w-3.5 h-3.5 text-indigo-600" />
                         <span>Conversational Agent Interaction History</span>
                       </div>
 
                       {(!selectedCustomerLogs.chat_logs || selectedCustomerLogs.chat_logs.length === 0) ? (
-                        <div className="p-8 text-center text-slate-500">
+                        <div className="p-8 text-center text-slate-400">
                           No conversation records logged for this session yet.
                         </div>
                       ) : (
                         selectedCustomerLogs.chat_logs.map((log: any, idx: number) => (
-                          <div key={idx} className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                          <div key={idx} className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-2">
                             <div className="flex items-center justify-between text-[11px]">
-                              <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-bold uppercase">
+                              <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold uppercase border border-indigo-100">
                                 {log.type || "chat_query"}
                               </span>
-                              <span className="text-slate-500">{log.timestamp}</span>
+                              <span className="text-slate-400 font-mono text-[10px]">{log.timestamp}</span>
                             </div>
 
                             <div className="space-y-1">
-                              <p className="text-slate-400 text-[11px]">User Query:</p>
-                              <p className="text-emerald-400 font-semibold pl-2 border-l-2 border-emerald-500/50">
+                              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">User Query:</p>
+                              <p className="text-slate-900 font-semibold pl-2.5 border-l-2 border-indigo-500 text-xs">
                                 {log.query}
                               </p>
                             </div>
 
                             <div className="space-y-1 pt-1">
-                              <p className="text-slate-400 text-[11px]">AI Agent Response & Decision:</p>
-                              <p className="text-slate-300 pl-2 border-l-2 border-indigo-500/50 leading-relaxed text-[11px]">
+                              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">AI Concierge Response:</p>
+                              <p className="text-slate-700 pl-2.5 border-l-2 border-emerald-500 leading-relaxed text-xs">
                                 {log.response}
                               </p>
                             </div>
@@ -1993,8 +1993,9 @@ export default function MerchantDashboard() {
 
                     {/* Modal Footer */}
                     <div className="p-4 bg-white border-t border-slate-100 flex items-center justify-between">
-                      <p className="text-[11px] text-slate-400">
-                        🔒 Stored securely in Razorpay AI Action Ledger
+                      <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Stored securely in Razorpay AI Action Ledger</span>
                       </p>
                       <button
                         onClick={() => setSelectedCustomerLogs(null)}
@@ -2038,48 +2039,54 @@ export default function MerchantDashboard() {
               </div>
 
               {/* Persona Selection & Simulation Config */}
-              <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 border border-indigo-500/30 rounded-3xl p-6 shadow-xl text-white space-y-6">
-                <div className="space-y-2">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-300 bg-indigo-500/20 px-2.5 py-0.5 rounded-full border border-indigo-400/30">
+              <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm text-slate-900 space-y-6">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
                     Step 1: Choose Buyer Persona & Target Item
                   </span>
-                  <h4 className="text-lg font-black text-white">Configure Automated Shopper</h4>
+                  <h4 className="text-base font-extrabold text-slate-900 pt-1">Configure Automated Shopper</h4>
                 </div>
 
                 {/* Persona Cards Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {[
-                    { id: "Enterprise_Procurement_AI_v4", name: "🏢 Enterprise Buyer", desc: "Requests corporate quantity deals & pricing quotes" },
-                    { id: "Personal_Shopper_AutoGPT_v2", name: "🤖 AI Price Negotiator", desc: "Attempts discount bargaining within store safety limits" },
-                    { id: "Smart_Cart_Aggregator_Agent", name: "🛒 Cart Concierge", desc: "Searches bundles, upgrades, and complementary items" },
-                    { id: "Fast_Checkout_Agent_v1", name: "⚡ 1-Click Instant Buyer", desc: "Instant automated purchase with saved credentials" }
-                  ].map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setM2mBuyerAgent(p.id)}
-                      className={`p-4 rounded-2xl text-left transition-all border ${
-                        m2mBuyerAgent === p.id 
-                          ? "bg-indigo-600/30 border-indigo-400 text-white shadow-md shadow-indigo-600/20 ring-2 ring-indigo-500/30" 
-                          : "bg-slate-800/60 border-slate-700/80 text-slate-300 hover:bg-slate-800 hover:border-slate-600"
-                      }`}
-                    >
-                      <p className="font-extrabold text-xs text-white">{p.name}</p>
-                      <p className="text-[11px] text-slate-400 mt-1 leading-snug">{p.desc}</p>
-                    </button>
-                  ))}
+                    { id: "Enterprise_Procurement_AI_v4", name: "Enterprise Buyer", icon: Building2, desc: "Requests corporate quantity deals and volume pricing" },
+                    { id: "Personal_Shopper_AutoGPT_v2", name: "AI Price Negotiator", icon: Bot, desc: "Attempts discount bargaining within store safety limits" },
+                    { id: "Smart_Cart_Aggregator_Agent", name: "Cart Concierge", icon: ShoppingBag, desc: "Searches bundles, upgrades, and complementary items" },
+                    { id: "Fast_Checkout_Agent_v1", name: "1-Click Instant Buyer", icon: Zap, desc: "Instant automated purchase with saved credentials" }
+                  ].map((p) => {
+                    const IconComp = p.icon;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setM2mBuyerAgent(p.id)}
+                        className={`p-4 rounded-2xl text-left transition-all border cursor-pointer ${
+                          m2mBuyerAgent === p.id 
+                            ? "bg-indigo-50/80 border-indigo-400 text-slate-900 shadow-sm ring-2 ring-indigo-500/20" 
+                            : "bg-slate-50/70 border-slate-200/80 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <IconComp className="w-4 h-4 text-indigo-600" />
+                          <p className="font-extrabold text-xs text-slate-900">{p.name}</p>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-snug">{p.desc}</p>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Target Product & RFP Discount Settings */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1.5">Target Store Product</label>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1.5">Target Store Product</label>
                     <select
                       value={m2mTargetProduct}
                       onChange={(e) => setM2mTargetProduct(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white focus:outline-none focus:border-indigo-400"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
                     >
-                      <option value="">⚡ First Available Catalog Item (Default)</option>
+                      <option value="">First Available Catalog Item (Default)</option>
                       {merchantProducts.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name} — ₹{Number(p.price).toLocaleString()} ({p.category})
@@ -2090,8 +2097,8 @@ export default function MerchantDashboard() {
 
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[11px] font-bold text-slate-300 uppercase">Requested Discount RFP</label>
-                      <span className="text-xs font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                      <label className="text-[11px] font-bold text-slate-700 uppercase">Requested Discount RFP</label>
+                      <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
                         {m2mDiscountOffer}% Requested
                       </span>
                     </div>
@@ -2102,7 +2109,7 @@ export default function MerchantDashboard() {
                       step="1"
                       value={m2mDiscountOffer}
                       onChange={(e) => setM2mDiscountOffer(Number(e.target.value))}
-                      className="w-full accent-indigo-500 cursor-pointer"
+                      className="w-full accent-indigo-600 cursor-pointer"
                     />
                     <p className="text-[10px] text-slate-400 mt-1">Evaluated by server policy engine against merchant {maxDiscountPercent}% cap</p>
                   </div>
@@ -2112,38 +2119,38 @@ export default function MerchantDashboard() {
                   type="button"
                   onClick={handleRunM2MTransaction}
                   disabled={simulatingM2M}
-                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-extrabold transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-extrabold transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  {simulatingM2M ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />}
+                  {simulatingM2M ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                   <span>{simulatingM2M ? "Executing Machine-to-Machine Order RFP..." : "Execute Automated AI Shopper Transaction"}</span>
                 </button>
 
                 {/* Simulation Result Dual Stream */}
                 {m2mResult && (
-                  <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl font-mono text-xs space-y-2.5 animate-in fade-in">
-                    <div className="flex flex-wrap items-center justify-between text-emerald-400 font-bold pb-2 border-b border-slate-800 text-xs">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-xs space-y-2.5 animate-in fade-in">
+                    <div className="flex flex-wrap items-center justify-between text-emerald-700 font-bold pb-2 border-b border-slate-200 text-xs">
                       <span className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                         <span>RAZORPAY ORDER GENERATED: {m2mResult.razorpay_order_id}</span>
                       </span>
-                      <span className="text-slate-400 text-[10px] font-mono">{m2mResult.agent_id}</span>
+                      <span className="text-slate-500 text-[10px] font-mono">{m2mResult.agent_id}</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-[11px]">
                       <div>
-                        <span className="text-slate-400">Selected Product:</span>
-                        <p className="font-bold text-white mt-0.5">{m2mResult.product?.name || "Verified Store Item"}</p>
+                        <span className="text-slate-500">Selected Product:</span>
+                        <p className="font-bold text-slate-900 mt-0.5">{m2mResult.product?.name || "Verified Store Item"}</p>
                       </div>
                       <div>
-                        <span className="text-slate-400">Total Payable (Verified):</span>
-                        <p className="font-bold text-emerald-400 mt-0.5 text-sm">
+                        <span className="text-slate-500">Total Payable (Verified):</span>
+                        <p className="font-bold text-emerald-700 mt-0.5 text-sm">
                           ₹{Number(m2mResult.financials?.total_amount || 0).toLocaleString()}
                         </p>
                       </div>
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-300">
-                      <span className="text-indigo-400 font-bold">Policy Guardrail Evaluation: </span>
+                    <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-[11px] text-slate-700">
+                      <span className="text-indigo-600 font-bold">Policy Guardrail Evaluation: </span>
                       <span>{m2mResult.policy_evaluation?.reason || "Authorized within store limits."}</span>
                     </div>
                   </div>
@@ -2562,7 +2569,7 @@ export default function MerchantDashboard() {
                           className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                           title="Delete code"
                         >
-                          ✕
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -2571,38 +2578,38 @@ export default function MerchantDashboard() {
               </div>
 
               {/* 4. Real-Time Rule Outcome Simulator */}
-              <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white border border-indigo-500/30 rounded-3xl p-6 shadow-xl space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-indigo-500/20">
+              <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4 text-slate-900">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div className="flex items-center gap-2.5">
-                    <Terminal className="w-5 h-5 text-indigo-400" />
+                    <Terminal className="w-5 h-5 text-indigo-600" />
                     <div>
-                      <h4 className="font-black text-white text-sm">Interactive Rule Outcome Tester</h4>
-                      <p className="text-[11px] text-slate-400">Test how your current discount rules evaluate real shopper requests</p>
+                      <h4 className="font-extrabold text-slate-900 text-sm">Interactive Rule Outcome Tester</h4>
+                      <p className="text-[11px] text-slate-500">Test how your current discount rules evaluate real shopper requests</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
                     Live Guardrail Check
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Test Order Amount (₹)</label>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Test Order Amount (₹)</label>
                     <input
                       type="number"
                       value={testCartTotal}
                       onChange={(e) => setTestCartTotal(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-indigo-400"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Proposed Discount (%)</label>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Proposed Discount (%)</label>
                     <input
                       type="number"
                       value={testProposedDiscount}
                       onChange={(e) => setTestProposedDiscount(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-indigo-400"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
@@ -2610,9 +2617,9 @@ export default function MerchantDashboard() {
                     <button
                       type="button"
                       onClick={handleRunPolicySimulation}
-                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                      <Zap className="w-3.5 h-3.5 text-white" />
                       <span>Test Rule Outcome</span>
                     </button>
                   </div>
@@ -2621,20 +2628,25 @@ export default function MerchantDashboard() {
                 {testSimResult && (
                   <div className={`p-4 rounded-2xl border text-xs font-mono space-y-2 animate-in fade-in ${
                     testSimResult.allowed 
-                      ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-200" 
-                      : "bg-rose-950/60 border-rose-500/40 text-rose-200"
+                      ? "bg-emerald-50/80 border-emerald-200 text-emerald-950" 
+                      : "bg-rose-50/80 border-rose-200 text-rose-950"
                   }`}>
                     <div className="flex items-center justify-between font-bold">
                       <span className="flex items-center gap-1.5">
-                        {testSimResult.allowed ? "✓ RULE PASSED (APPROVED)" : "🚨 RULE TRIGGERED (CLAMPED/REJECTED)"}
+                        {testSimResult.allowed ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 text-rose-600" />
+                        )}
+                        <span>{testSimResult.allowed ? "RULE PASSED (APPROVED)" : "RULE TRIGGERED (CLAMPED/REJECTED)"}</span>
                       </span>
-                      <span className="text-[10px] text-slate-400">{testSimResult.timestamp}</span>
+                      <span className="text-[10px] text-slate-500">{testSimResult.timestamp}</span>
                     </div>
-                    <p className="text-slate-200 leading-relaxed font-sans">{testSimResult.reason}</p>
-                    <div className="pt-2 border-t border-white/10 flex flex-wrap gap-4 text-[11px]">
+                    <p className="text-slate-700 leading-relaxed font-sans">{testSimResult.reason}</p>
+                    <div className="pt-2 border-t border-slate-200/80 flex flex-wrap gap-4 text-[11px]">
                       <span>Original: <strong>₹{testSimResult.original_amount.toLocaleString()}</strong></span>
                       <span>Approved Discount: <strong>₹{testSimResult.approved_discount_inr.toLocaleString()} ({testSimResult.approved_percent}%)</strong></span>
-                      <span>Final Payable: <strong className="text-emerald-400">₹{testSimResult.final_payable_inr.toLocaleString()}</strong></span>
+                      <span>Final Payable: <strong className="text-emerald-700">₹{testSimResult.final_payable_inr.toLocaleString()}</strong></span>
                     </div>
                   </div>
                 )}
@@ -2859,110 +2871,110 @@ export default function MerchantDashboard() {
           {activeTab === 'audit' && (
             <div className="space-y-6 animate-in fade-in">
               {/* Live System Logs & Agent Telemetry Console */}
-      <div className="bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl p-6 text-slate-100 overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-800/80">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-indigo-900/50 border border-indigo-700/50 flex items-center justify-center text-indigo-400">
-              <Terminal className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-bold text-white text-base">Live Agent Telemetry & Audit Logs</h2>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold flex items-center gap-1 border border-emerald-500/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  STREAM ACTIVE
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">Deterministic traces across LangGraph Supervisor, Policy Engine, and Razorpay SDK</p>
-            </div>
-          </div>
+              <div className="bg-white border border-slate-200/90 rounded-3xl shadow-sm p-6 text-slate-900 overflow-hidden space-y-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
+                      <Terminal className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="font-extrabold text-slate-900 text-base">Live Agent Telemetry & Audit Logs</h2>
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-mono font-bold flex items-center gap-1 border border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          STREAM ACTIVE
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">Deterministic traces across LangGraph Supervisor, Policy Engine, and Razorpay SDK</p>
+                    </div>
+                  </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button
-              onClick={fetchLogs}
-              disabled={logsLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? "animate-spin text-indigo-400" : ""}`} />
-              <span>Refresh</span>
-            </button>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={fetchLogs}
+                      disabled={logsLoading}
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? "animate-spin text-indigo-600" : ""}`} />
+                      <span>Refresh</span>
+                    </button>
 
-            <button
-              onClick={handleExportLogs}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export JSON</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Filter Pills */}
-        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 text-xs">
-          <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0 mr-1" />
-          {["ALL", "POLICY_BLOCK", "PAYMENT", "SUCCESS"].map((filter) => (
-            <button
-              key={filter}
-              onClick={() => setLogFilter(filter)}
-              className={`px-3 py-1 rounded-xl font-bold transition-all shrink-0 ${
-                logFilter === filter
-                  ? "bg-indigo-600 text-white shadow-xs"
-                  : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
-              }`}
-            >
-              {filter === "ALL" ? `All Traces (${logs.length})` : 
-               filter === "POLICY_BLOCK" ? "Policy Blocks" :
-               filter === "PAYMENT" ? "Payments" : "AI Decisions"}
-            </button>
-          ))}
-        </div>
-
-        {/* Terminal Logs Table */}
-        <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-3 font-mono text-xs max-h-[380px] overflow-y-auto space-y-2">
-          {filteredLogs.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">
-              No telemetry events recorded matching the selected filter.
-            </div>
-          ) : (
-            filteredLogs.map((log) => (
-              <div key={log.id} className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60 hover:border-slate-700 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-start sm:items-center gap-2.5">
-                  <span className="text-slate-500 text-[11px] shrink-0">
-                    {new Date(log.timestamp).toLocaleTimeString()}
-                  </span>
-
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0 ${
-                    log.level === "POLICY_BLOCK"
-                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                      : log.level === "PAYMENT"
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                        : "bg-blue-500/20 text-blue-300 border border-blue-500/40"
-                  }`}>
-                    {log.level}
-                  </span>
-
-                  <span className="text-indigo-400 font-bold text-xs shrink-0">
-                    [{log.component}]
-                  </span>
-
-                  <span className="text-slate-200 text-xs line-clamp-1">
-                    {log.message}
-                  </span>
+                    <button
+                      onClick={handleExportLogs}
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Export JSON</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto text-[11px]">
-                  <span className="text-slate-500 font-mono">
-                    {log.trace_id}
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">
-                    {log.latency_ms}ms
-                  </span>
+                {/* Filter Pills */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+                  <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1" />
+                  {["ALL", "POLICY_BLOCK", "PAYMENT", "SUCCESS"].map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setLogFilter(filter)}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all shrink-0 cursor-pointer ${
+                        logFilter === filter
+                          ? "bg-indigo-600 text-white shadow-xs"
+                          : "bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200"
+                      }`}
+                    >
+                      {filter === "ALL" ? `All Traces (${logs.length})` : 
+                       filter === "POLICY_BLOCK" ? "Policy Blocks" :
+                       filter === "PAYMENT" ? "Payments" : "AI Decisions"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Light Theme Logs Table */}
+                <div className="bg-slate-50/70 border border-slate-200 rounded-2xl p-3 font-mono text-xs max-h-[420px] overflow-y-auto space-y-2">
+                  {filteredLogs.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 font-sans text-xs">
+                      No telemetry events recorded matching the selected filter.
+                    </div>
+                  ) : (
+                    filteredLogs.map((log) => (
+                      <div key={log.id} className="p-3 rounded-xl bg-white border border-slate-200/90 hover:border-indigo-200 hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-start sm:items-center gap-2.5">
+                          <span className="text-slate-400 text-[11px] shrink-0">
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </span>
+
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+                            log.level === "POLICY_BLOCK"
+                              ? "bg-amber-50 text-amber-800 border border-amber-200"
+                              : log.level === "PAYMENT"
+                                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                : "bg-blue-50 text-blue-800 border border-blue-200"
+                          }`}>
+                            {log.level}
+                          </span>
+
+                          <span className="text-indigo-600 font-bold text-xs shrink-0">
+                            [{log.component}]
+                          </span>
+
+                          <span className="text-slate-800 text-xs font-sans line-clamp-1">
+                            {log.message}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto text-[11px]">
+                          <span className="text-slate-400 font-mono text-[10px]">
+                            {log.trace_id}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-bold">
+                            {log.latency_ms}ms
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      </div>
             </div>
           )}
 

@@ -165,14 +165,14 @@ def list_stores(db: Session = Depends(get_db), authorization: str | None = Heade
         merchants = db.query(Merchant).filter(Merchant.id.in_(target_merchant_ids)).all()
         # If no store found, ensure primary user merchant exists
         if not merchants and user_id:
-            m = db.query(Merchant).filter(Merchant.id == user_id).first()
-            if not m:
-                m = Merchant(id=user_id, name="My Store", currency="INR")
-                db.add(m)
-                db.commit()
+            user_rec = db.query(User).filter(User.id == user_id).first()
+            store_title = user_rec.name if user_rec and user_rec.name else "My Store"
+            m = Merchant(id=user_id, name=store_title, currency="INR")
+            db.add(m)
+            db.commit()
             merchants = [m]
     else:
-        # Default fallback: only return demo_merchant
+        # Default fallback: only return demo_merchant when unauthenticated
         merchants = db.query(Merchant).filter(Merchant.id == "demo_merchant").all()
 
     result = []
@@ -528,48 +528,52 @@ def test_smtp_delivery(req: TestEmailRequest, db: Session = Depends(get_db), mer
 @router.get("/customers")
 def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
     """
-    Returns all customers scoped to this specific merchant store with chat logs & registration metrics.
+    Returns all customers scoped strictly to this specific merchant store with chat logs & registration metrics.
     """
     from app.models import Customer, User, Order, CustomerEvent, AgentAction
     from datetime import datetime, timezone
     
-    # 1. Fetch all store shoppers, excluding merchant owner accounts
-    all_customers = db.query(Customer).all()
     customers = []
     seen_emails = set()
+    merchant_orders = db.query(Order).filter(Order.merchant_id == merchant_id).all()
 
-    for c in all_customers:
-        user = db.query(User).filter(User.id == c.user_id).first() if c.user_id else None
-        
-        # Exclude merchant admin accounts
-        if user and user.role == "merchant":
-            continue
-        if c.user_id == merchant_id:
-            continue
-
-        # Match merchant-scoped, demo, unassigned storefront shoppers, or token-linked
-        if (
-            c.merchant_id == merchant_id or 
-            c.merchant_id == "demo_merchant" or 
-            c.merchant_id is None or
-            (isinstance(c.merchant_id, str) and (merchant_id in c.merchant_id or c.merchant_id.startswith("ey")))
-        ):
+    if merchant_id == "demo_merchant":
+        # For demo merchant, fetch demo customers
+        all_customers = db.query(Customer).filter(
+            or_(Customer.merchant_id == "demo_merchant", Customer.merchant_id == None)
+        ).all()
+        for c in all_customers:
+            user = db.query(User).filter(User.id == c.user_id).first() if c.user_id else None
+            if user and user.role == "merchant":
+                continue
+            email_key = user.email.lower() if user and user.email else c.id
+            if email_key not in seen_emails:
+                seen_emails.add(email_key)
+                customers.append(c)
+    else:
+        # Strict isolation: only customers associated with this specific merchant_id
+        merchant_customers = db.query(Customer).filter(Customer.merchant_id == merchant_id).all()
+        for c in merchant_customers:
+            user = db.query(User).filter(User.id == c.user_id).first() if c.user_id else None
+            if user and user.role == "merchant":
+                continue
             email_key = user.email.lower() if user and user.email else c.id
             if email_key not in seen_emails:
                 seen_emails.add(email_key)
                 customers.append(c)
 
-    # 2. Customers who placed orders with this merchant
-    merchant_orders = db.query(Order).filter(Order.merchant_id == merchant_id).all()
-    order_customer_ids = {o.customer_id for o in merchant_orders if o.customer_id}
-    
-    existing_ids = {c.id for c in customers}
-    for cid in order_customer_ids:
-        if cid not in existing_ids:
-            cust = db.query(Customer).filter(Customer.id == cid).first()
-            if cust:
-                customers.append(cust)
-                existing_ids.add(cid)
+        # Plus customers who placed orders with this merchant
+        for o in merchant_orders:
+            if o.customer_id:
+                cust = db.query(Customer).filter(Customer.id == o.customer_id).first()
+                if cust:
+                    user = db.query(User).filter(User.id == cust.user_id).first() if cust.user_id else None
+                    if user and user.role == "merchant":
+                        continue
+                    email_key = user.email.lower() if user and user.email else cust.id
+                    if email_key not in seen_emails:
+                        seen_emails.add(email_key)
+                        customers.append(cust)
 
     # 3. Fetch all events & actions for chat logs
     now_utc = datetime.now(timezone.utc)
@@ -579,7 +583,7 @@ def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Dep
     for c in customers:
         user = db.query(User).filter(User.id == c.user_id).first() if c.user_id else None
         cust_orders = [o for o in merchant_orders if o.customer_id == c.id]
-        total_spent = sum(float(o.total_amount or 0) for o in cust_orders)
+        total_spent = sum(float(o.amount or 0) for o in cust_orders)
         
         prefs = c.preferences if isinstance(c.preferences, dict) else {}
         phone = prefs.get("phone") or "Not provided"
