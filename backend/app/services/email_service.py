@@ -133,10 +133,16 @@ class EmailService:
                 }
             except Exception as e_brevo_smtp:
                 logger.warning(f"Brevo SMTP Relay attempt failed: {e_brevo_smtp}")
+                if brevo_key.startswith("xsmtpsib-"):
+                    return {
+                        "sent": False,
+                        "mode": "BREVO_SMTP_RESTRICTION",
+                        "message": "Brevo Setup Notice: You pasted an SMTP key (xsmtpsib-...). Cloud servers block SMTP port 587. Please generate an API Key (starts with 'xkeysib-...') from the 'API Keys' tab at https://app.brevo.com/settings/keys/api for 100% free delivery over HTTPS port 443!"
+                    }
                 return {
                     "sent": False,
                     "mode": "BREVO_ERROR",
-                    "message": f"Brevo delivery failed: {e_brevo_smtp}. Please verify your Brevo Key and Sender Email."
+                    "message": f"Brevo delivery failed: {e_brevo_smtp}. Please verify your Brevo Key (xkeysib-...) and Sender Email."
                 }
 
         # 2. GMAIL SMTP PROVIDER

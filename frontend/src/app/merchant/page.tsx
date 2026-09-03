@@ -2995,26 +2995,26 @@ export default function MerchantDashboard() {
             <div className="p-4 bg-emerald-50/40 border border-emerald-200/90 rounded-2xl space-y-3 animate-in fade-in duration-150">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">Configure Brevo Free Email (300 emails/day)</h4>
-                  <p className="text-[11px] text-slate-500">Enter your Brevo API key (<code className="font-mono">xkeysib-...</code> or <code className="font-mono">xsmtpsib-...</code>) and verified sender email.</p>
+                  <h4 className="text-xs font-bold text-slate-900">Configure Brevo Free Email (300 emails/day Forever)</h4>
+                  <p className="text-[11px] text-slate-500">Go to Brevo ➔ <strong>API Keys</strong> tab (not SMTP tab) ➔ click <strong>"Generate a new API key"</strong> (<code className="font-mono bg-emerald-100/70 text-emerald-900 px-1 rounded">xkeysib-...</code>).</p>
                 </div>
                 <a 
                   href="https://app.brevo.com/settings/keys/api" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline inline-flex items-center gap-1"
+                  className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline inline-flex items-center gap-1 shrink-0"
                 >
-                  <span>Get Free Key at Brevo.com</span>
+                  <span>Open Brevo API Keys Tab</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Brevo API / SMTP Key</label>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Brevo API Key (<code className="font-mono">xkeysib-...</code>)</label>
                   <input
                     type="password"
-                    placeholder="xkeysib-... or xsmtpsib-..."
+                    placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxx"
                     value={brevoApiKey}
                     onChange={(e) => setBrevoApiKey(e.target.value)}
                     className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-emerald-500"
