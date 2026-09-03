@@ -273,17 +273,19 @@ export default function MerchantDashboard() {
   const agentShareUrl = `${baseUrl}/chat?merchant=${merchantId}`;
   const embedSnippet = `<iframe src="${agentShareUrl}&embed=true" width="100%" height="100%" style="min-height: 600px; max-height: 90vh; border: none; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);" allow="payment"></iframe>`;
 
-  // Realistic Zero-Data Chart (0 dummy hardcoded numbers!)
+  // 100% Real Database Analytics Chart
   const hasRevenue = metrics && Number(metrics.revenue) > 0;
-  const chartData = [
-    { name: 'Mon', revenue: hasRevenue ? Math.round(Number(metrics.revenue) * 0.1) : 0, aiDriven: hasRevenue ? Math.round(Number(metrics.revenue) * 0.08) : 0 },
-    { name: 'Tue', revenue: hasRevenue ? Math.round(Number(metrics.revenue) * 0.15) : 0, aiDriven: hasRevenue ? Math.round(Number(metrics.revenue) * 0.12) : 0 },
-    { name: 'Wed', revenue: hasRevenue ? Math.round(Number(metrics.revenue) * 0.25) : 0, aiDriven: hasRevenue ? Math.round(Number(metrics.revenue) * 0.2) : 0 },
-    { name: 'Thu', revenue: hasRevenue ? Math.round(Number(metrics.revenue) * 0.18) : 0, aiDriven: hasRevenue ? Math.round(Number(metrics.revenue) * 0.15) : 0 },
-    { name: 'Fri', revenue: hasRevenue ? Math.round(Number(metrics.revenue) * 0.32) : 0, aiDriven: hasRevenue ? Math.round(Number(metrics.revenue) * 0.28) : 0 },
-    { name: 'Sat', revenue: hasRevenue ? Math.round(Number(metrics.revenue) * 0.45) : 0, aiDriven: hasRevenue ? Math.round(Number(metrics.revenue) * 0.38) : 0 },
-    { name: 'Sun', revenue: hasRevenue ? Math.round(Number(metrics.revenue) * 0.65) : 0, aiDriven: hasRevenue ? Math.round(Number(metrics.revenue) * 0.5) : 0 },
-  ];
+  const chartData = (metrics?.daily_chart && Array.isArray(metrics.daily_chart) && metrics.daily_chart.length > 0)
+    ? metrics.daily_chart
+    : [
+        { name: 'Mon', revenue: 0, aiDriven: 0, orders: 0 },
+        { name: 'Tue', revenue: 0, aiDriven: 0, orders: 0 },
+        { name: 'Wed', revenue: 0, aiDriven: 0, orders: 0 },
+        { name: 'Thu', revenue: 0, aiDriven: 0, orders: 0 },
+        { name: 'Fri', revenue: 0, aiDriven: 0, orders: 0 },
+        { name: 'Sat', revenue: 0, aiDriven: 0, orders: 0 },
+        { name: 'Sun', revenue: 0, aiDriven: 0, orders: 0 },
+      ];
 
   useEffect(() => {
     if (token) {
@@ -1570,7 +1572,7 @@ export default function MerchantDashboard() {
                     contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.05)'}}
                   />
                   <Legend iconType="circle" wrapperStyle={{fontSize: '12px', paddingTop: '10px'}} />
-                  <Bar dataKey="aiDriven" name="AI Attributed Volume" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={28} />
+                  <Bar dataKey="orders" name="Orders Volume" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={28} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
