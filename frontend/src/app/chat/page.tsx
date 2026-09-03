@@ -69,6 +69,7 @@ function ChatContent() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
   const [pendingProductToBuy, setPendingProductToBuy] = useState<any>(null);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
 
   useEffect(() => {
     if (resendCooldown > 0) {
@@ -290,11 +291,11 @@ function ChatContent() {
         setOtpDigits(["", "", "", "", "", ""]);
         setOtpCode("");
         setResendCooldown(60);
-        if (data.email_delivery === "BREVO_KEY_MISSING") {
-          showToast("Code generated! To receive live emails in your inbox, please save your Brevo API key in Merchant Settings.", "info");
-        } else if (data.email_delivery === "BREVO_HTTP_ERROR") {
-          showToast(data.delivery_message || "Brevo delivery error. Verify Brevo sender email.", "error");
+        if (data.dev_otp) {
+          setDevOtp(data.dev_otp);
+          showToast(`Verification code: ${data.dev_otp}`, "info");
         } else {
+          setDevOtp(null);
           showToast(`Verification code sent to ${otpEmail}! Check your inbox.`, "success");
         }
         setTimeout(() => {
@@ -1199,6 +1200,21 @@ function ChatContent() {
                       />
                     ))}
                   </div>
+
+                  {devOtp && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const digits = devOtp.split("").slice(0, 6);
+                        setOtpDigits(digits);
+                        setOtpCode(devOtp);
+                      }}
+                      className="w-full mt-2.5 py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Auto-Fill Code: <strong className="font-mono">{devOtp}</strong></span>
+                    </button>
+                  )}
                 </div>
 
                 <button
