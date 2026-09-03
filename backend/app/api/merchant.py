@@ -554,13 +554,12 @@ class SMTPConfigRequest(BaseModel):
 @router.get("/smtp-config")
 def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
     from app.models import MerchantPolicy
-    import os
     policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
     rules = policy.approval_rules if policy and isinstance(policy.approval_rules, dict) else {}
-    smtp = rules.get("smtp_config", {})
+    smtp = rules.get("smtp_config", {}) if isinstance(rules.get("smtp_config"), dict) else {}
     stored_provider = smtp.get("active_provider")
 
-    if stored_provider == "none":
+    if stored_provider == "none" or not smtp:
         return {
             "active_provider": "none",
             "gmail_user": "",
@@ -573,31 +572,22 @@ def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(ge
             "brevo_sender_email": ""
         }
 
-    user = smtp.get("user") or os.getenv("SMTP_USER") or os.getenv("GMAIL_USER") or ""
-    pwd = smtp.get("password") or os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or ""
-    resend_key = smtp.get("resend_api_key") or os.getenv("RESEND_API_KEY") or ""
-    brevo_key = smtp.get("brevo_api_key") or os.getenv("BREVO_API_KEY") or ""
-    
-    if not stored_provider:
-        if brevo_key:
-            stored_provider = "brevo"
-        elif user and pwd:
-            stored_provider = "gmail"
-        elif resend_key:
-            stored_provider = "resend"
-        else:
-            stored_provider = "none"
+    user = smtp.get("user", "")
+    pwd = smtp.get("password", "")
+    resend_key = smtp.get("resend_api_key", "")
+    brevo_key = smtp.get("brevo_api_key", "")
+    brevo_sender = smtp.get("brevo_sender_email", "")
 
     return {
-        "active_provider": stored_provider,
+        "active_provider": stored_provider or "brevo",
         "gmail_user": user,
         "is_configured": bool((stored_provider == "brevo" and brevo_key) or (stored_provider == "gmail" and user and pwd) or (stored_provider == "resend" and resend_key)),
-        "smtp_host": smtp.get("host") or os.getenv("SMTP_HOST") or "smtp.gmail.com",
-        "smtp_port": smtp.get("port") or int(os.getenv("SMTP_PORT") or 587),
+        "smtp_host": smtp.get("host") or "smtp.gmail.com",
+        "smtp_port": smtp.get("port") or 587,
         "has_password": bool(pwd),
         "has_resend_key": bool(resend_key),
         "has_brevo_key": bool(brevo_key),
-        "brevo_sender_email": smtp.get("brevo_sender_email") or os.getenv("BREVO_SENDER_EMAIL") or user or ""
+        "brevo_sender_email": brevo_sender
     }
 
 @router.post("/smtp-config")
