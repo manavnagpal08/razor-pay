@@ -81,6 +81,7 @@ class EmailService:
             # Method 1A: Brevo HTTPS REST API (Port 443 - zero block)
             try:
                 import urllib.request
+                import urllib.error
                 import json
                 payload = json.dumps({
                     "sender": {"name": sender_name, "email": sender_email_brevo},
@@ -106,6 +107,21 @@ class EmailService:
                             "message": f"Free live email delivered successfully to {to_email} via Brevo!",
                             "to": to_email
                         }
+            except urllib.error.HTTPError as e_brevo_http:
+                err_body = e_brevo_http.read().decode('utf-8', errors='ignore')
+                logger.error(f"[BREVO HTTPS HTTP ERROR {e_brevo_http.code}] {err_body}")
+                try:
+                    import json
+                    parsed_err = json.loads(err_body)
+                    err_msg = parsed_err.get("message") or err_body
+                except Exception:
+                    err_msg = err_body
+                return {
+                    "sent": False,
+                    "mode": "BREVO_HTTP_ERROR",
+                    "code": e_brevo_http.code,
+                    "message": f"Brevo API error ({e_brevo_http.code}): {err_msg}. Ensure your Sender Email ({sender_email_brevo}) is verified in your Brevo account."
+                }
             except Exception as e_brevo_api:
                 logger.warning(f"Brevo HTTPS attempt returned: {e_brevo_api}. Trying Brevo SMTP relay...")
 
