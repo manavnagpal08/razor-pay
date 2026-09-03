@@ -279,6 +279,10 @@ export default function MerchantDashboard() {
 
   useEffect(() => {
     if (token) {
+      if (merchantId && merchantId !== "demo_merchant") {
+        localStorage.setItem("buyflow_active_merchant_id", merchantId);
+        localStorage.setItem("buyflow_merchant_id", merchantId);
+      }
       fetchDashboard();
       fetchLogs();
       fetchWebhookConfig();

@@ -53,26 +53,37 @@ def send_chat_otp(req: SendOtpRequest, db: Session = Depends(get_db)):
 
     try:
         from app.models import Merchant, MerchantPolicy
-        if req.merchant_id:
-            merchant = db.query(Merchant).filter(Merchant.id == req.merchant_id).first()
-            if merchant and hasattr(merchant, "name") and merchant.name:
-                store_name = merchant.name
+        
+        # 1. First check if the requested merchant has a policy with email credentials
+        if req.merchant_id and req.merchant_id != "demo_merchant":
             policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == req.merchant_id).first()
             if policy and isinstance(policy.approval_rules, dict):
                 cand = policy.approval_rules.get("smtp_config")
-                if isinstance(cand, dict) and (cand.get("brevo_api_key") or cand.get("user") or cand.get("resend_api_key")):
-                    smtp_override = cand
+                if isinstance(cand, dict) and cand.get("active_provider") != "none":
+                    if cand.get("brevo_api_key") or cand.get("resend_api_key") or (cand.get("user") and cand.get("password")):
+                        smtp_override = cand
+            merchant = db.query(Merchant).filter(Merchant.id == req.merchant_id).first()
+            if merchant and hasattr(merchant, "name") and merchant.name:
+                store_name = merchant.name
 
-        # If specific merchant had no configured email, find active configured merchant credentials
+        # 2. If no valid smtp credentials on this specific merchant_id, find ANY configured policy with active credentials
         if not smtp_override:
             for pol in db.query(MerchantPolicy).all():
                 if pol.approval_rules and isinstance(pol.approval_rules, dict):
                     cand = pol.approval_rules.get("smtp_config")
-                    if isinstance(cand, dict) and (cand.get("brevo_api_key") or cand.get("user") or cand.get("resend_api_key")):
-                        smtp_override = cand
-                        break
+                    if isinstance(cand, dict) and cand.get("active_provider") != "none":
+                        b_key = cand.get("brevo_api_key")
+                        r_key = cand.get("resend_api_key")
+                        u_key = cand.get("user")
+                        p_key = cand.get("password")
+                        if (b_key and len(b_key) > 5) or (r_key and len(r_key) > 5) or (u_key and p_key):
+                            smtp_override = cand
+                            m = db.query(Merchant).filter(Merchant.id == pol.merchant_id).first()
+                            if m and hasattr(m, "name") and m.name:
+                                store_name = m.name
+                            break
 
-        # Dispatch email directly to guarantee delivery without thread lifecycle interruption
+        # Dispatch email directly to guarantee live delivery
         from app.services.email_service import EmailService
         dispatch_res = EmailService.send_otp_email(
             to_email=email, 
@@ -80,19 +91,23 @@ def send_chat_otp(req: SendOtpRequest, db: Session = Depends(get_db)):
             store_name=store_name,
             smtp_override=smtp_override
         )
+        
+        # If email was not successfully sent, inform customer immediately
+        if not dispatch_res.get("sent", False):
+            err_msg = dispatch_res.get("message") or "Email delivery failed. Please check your email configuration in Merchant Settings."
+            raise HTTPException(status_code=400, detail=err_msg)
+
         email_dispatch = {
-            "sent": dispatch_res.get("sent", False),
-            "mode": dispatch_res.get("mode", "SIMULATION_LOGGED"),
+            "sent": True,
+            "mode": dispatch_res.get("mode", "DELIVERED"),
             "message": dispatch_res.get("message", f"Verification code sent to {email}.")
         }
+    except HTTPException:
+        raise
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Error executing OTP email dispatch: {e}")
-        email_dispatch = {
-            "sent": False,
-            "mode": "DISPATCH_ERROR",
-            "message": f"Verification code generated: {e}"
-        }
+        raise HTTPException(status_code=400, detail=f"Email delivery error: {e}")
 
     return {
         "success": True,
