@@ -282,7 +282,13 @@ function ChatContent() {
         setOtpDigits(["", "", "", "", "", ""]);
         setOtpCode("");
         setResendCooldown(60);
-        showToast(`Verification code sent to ${otpEmail}! Check your inbox.`, "success");
+        if (data.email_delivery === "BREVO_KEY_MISSING") {
+          showToast("Code generated! To receive live emails in your inbox, please save your Brevo API key in Merchant Settings.", "info");
+        } else if (data.email_delivery === "BREVO_HTTP_ERROR") {
+          showToast(data.delivery_message || "Brevo delivery error. Verify Brevo sender email.", "error");
+        } else {
+          showToast(`Verification code sent to ${otpEmail}! Check your inbox.`, "success");
+        }
         setTimeout(() => {
           const firstInput = document.getElementById("otp-digit-0");
           firstInput?.focus();
