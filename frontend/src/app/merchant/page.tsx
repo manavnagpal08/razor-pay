@@ -1053,18 +1053,18 @@ export default function MerchantDashboard() {
 
       {/* 2-Column Responsive Workspace: Sidebar + Modular Tab Content */}
       <div className="flex flex-col lg:flex-row gap-6 items-start">
-        {/* Left Navigation Sidebar */}
-        <aside className="w-full lg:w-64 bg-white border border-slate-200/80 rounded-3xl p-3 shadow-xs shrink-0 lg:sticky lg:top-20 z-10">
-          <div className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+        {/* Left Navigation Sidebar - Swipeable on Mobile, Sticky on Desktop */}
+        <aside className="w-full lg:w-64 bg-white border border-slate-200/80 rounded-3xl p-2 sm:p-3 shadow-xs shrink-0 lg:sticky lg:top-20 z-10">
+          <div className="hidden lg:block px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
             Control Center Menu
           </div>
-          <nav className="space-y-1">
+          <nav className="flex lg:flex-col overflow-x-auto no-scrollbar gap-1.5 lg:gap-0 lg:space-y-1 py-1 lg:py-0">
             <button
               onClick={() => setActiveTab("overview")}
-              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+              className={`shrink-0 lg:w-full flex items-center gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-bold transition-all ${
                 activeTab === "overview" 
                   ? "bg-indigo-600 text-white shadow-xs" 
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-slate-50 lg:bg-transparent"
               }`}
             >
               <TrendingUp className="w-4 h-4 shrink-0" />
@@ -1073,13 +1073,13 @@ export default function MerchantDashboard() {
 
             <button
               onClick={() => setActiveTab("catalog")}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+              className={`shrink-0 lg:w-full flex items-center justify-between gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-bold transition-all ${
                 activeTab === "catalog" 
                   ? "bg-indigo-600 text-white shadow-xs" 
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-slate-50 lg:bg-transparent"
               }`}
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 shrink-0" />
                 <span>Product Catalog</span>
               </div>
@@ -1095,13 +1095,13 @@ export default function MerchantDashboard() {
                 setActiveTab("customers");
                 fetchStoreCustomers();
               }}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+              className={`shrink-0 lg:w-full flex items-center justify-between gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-bold transition-all ${
                 activeTab === "customers" 
                   ? "bg-indigo-600 text-white shadow-xs" 
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-slate-50 lg:bg-transparent"
               }`}
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 shrink-0" />
                 <span>Store Customers</span>
               </div>
@@ -1114,10 +1114,10 @@ export default function MerchantDashboard() {
 
             <button
               onClick={() => setActiveTab("simulator")}
-              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+              className={`shrink-0 lg:w-full flex items-center gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-bold transition-all ${
                 activeTab === "simulator" 
                   ? "bg-indigo-600 text-white shadow-xs" 
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-slate-50 lg:bg-transparent"
               }`}
             >
               <Cpu className="w-4 h-4 shrink-0" />
@@ -1126,10 +1126,10 @@ export default function MerchantDashboard() {
 
             <button
               onClick={() => setActiveTab("security")}
-              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+              className={`shrink-0 lg:w-full flex items-center gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-bold transition-all ${
                 activeTab === "security" 
                   ? "bg-indigo-600 text-white shadow-xs" 
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-slate-50 lg:bg-transparent"
               }`}
             >
               <ShieldAlert className="w-4 h-4 shrink-0" />
@@ -1138,10 +1138,10 @@ export default function MerchantDashboard() {
 
             <button
               onClick={() => setActiveTab("policy")}
-              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+              className={`shrink-0 lg:w-full flex items-center gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-bold transition-all ${
                 activeTab === "policy" 
                   ? "bg-indigo-600 text-white shadow-xs" 
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-slate-50 lg:bg-transparent"
               }`}
             >
               <Sliders className="w-4 h-4 shrink-0" />
@@ -1150,10 +1150,10 @@ export default function MerchantDashboard() {
 
             <button
               onClick={() => setActiveTab("webhooks")}
-              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+              className={`shrink-0 lg:w-full flex items-center gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-bold transition-all ${
                 activeTab === "webhooks" 
                   ? "bg-indigo-600 text-white shadow-xs" 
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-slate-50 lg:bg-transparent"
               }`}
             >
               <Code className="w-4 h-4 shrink-0" />
@@ -1162,10 +1162,10 @@ export default function MerchantDashboard() {
 
             <button
               onClick={() => setActiveTab("smtp")}
-              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+              className={`shrink-0 lg:w-full flex items-center gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-bold transition-all ${
                 activeTab === "smtp" 
                   ? "bg-indigo-600 text-white shadow-xs" 
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-slate-50 lg:bg-transparent"
               }`}
             >
               <Mail className="w-4 h-4 shrink-0" />
@@ -1174,10 +1174,10 @@ export default function MerchantDashboard() {
 
             <button
               onClick={() => setActiveTab("audit")}
-              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+              className={`shrink-0 lg:w-full flex items-center gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-2xl text-xs font-bold transition-all ${
                 activeTab === "audit" 
                   ? "bg-indigo-600 text-white shadow-xs" 
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 bg-slate-50 lg:bg-transparent"
               }`}
             >
               <Terminal className="w-4 h-4 shrink-0" />
