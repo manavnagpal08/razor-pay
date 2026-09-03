@@ -64,7 +64,70 @@ class EmailService:
         creds = cls.get_smtp_credentials(smtp_override)
         sender_name = creds.get("sender_name") or "BuyFlow Store"
 
-        # Strategy 0A: Brevo (Sendinblue) HTTPS API (300 Free Emails/day to ANY recipient, no domain required, port 443)
+        # Strategy 1: Prioritize Gmail / Custom SMTP if credentials are explicitly configured by merchant
+        has_gmail_creds = bool(creds.get("user") and creds.get("password"))
+        if has_gmail_creds:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"{sender_name} <{creds['user']}>"
+            msg["To"] = to_email
+            part = MIMEText(html_body, "html")
+            msg.attach(part)
+
+            # Try STARTTLS on 587
+            try:
+                server = smtplib.SMTP(creds["host"], creds["port"], timeout=6)
+                server.ehlo()
+                server.starttls(context=ssl.create_default_context())
+                server.ehlo()
+                server.login(creds["user"], creds["password"])
+                server.sendmail(creds["user"], [to_email], msg.as_string())
+                server.quit()
+                logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Gmail STARTTLS {creds['port']}")
+                return {
+                    "sent": True,
+                    "mode": "SMTP_DELIVERED",
+                    "message": f"Live email delivered successfully to {to_email} via Gmail SMTP!",
+                    "to": to_email
+                }
+            except smtplib.SMTPAuthenticationError as e_auth:
+                logger.error(f"[GMAIL AUTH ERROR] {e_auth}")
+                return {
+                    "sent": False,
+                    "mode": "GMAIL_AUTH_FAILED",
+                    "error": str(e_auth),
+                    "message": "Gmail Authentication Failed: Please ensure 2-Step Verification is ON in your Google Account and generate a 16-character App Password at https://myaccount.google.com/apppasswords"
+                }
+            except Exception as e_starttls:
+                logger.warning(f"Gmail STARTTLS 587 failed: {e_starttls}. Trying SSL 465...")
+
+            # Try SSL on 465
+            try:
+                ssl_ctx = ssl.create_default_context()
+                server = smtplib.SMTP_SSL(creds["host"], 465, timeout=6, context=ssl_ctx)
+                server.ehlo()
+                server.login(creds["user"], creds["password"])
+                server.sendmail(creds["user"], [to_email], msg.as_string())
+                server.quit()
+                logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Gmail SSL 465")
+                return {
+                    "sent": True,
+                    "mode": "SMTP_DELIVERED",
+                    "message": f"Live email delivered successfully to {to_email} via Gmail SMTP SSL!",
+                    "to": to_email
+                }
+            except smtplib.SMTPAuthenticationError as e_auth_ssl:
+                logger.error(f"[GMAIL AUTH ERROR SSL] {e_auth_ssl}")
+                return {
+                    "sent": False,
+                    "mode": "GMAIL_AUTH_FAILED",
+                    "error": str(e_auth_ssl),
+                    "message": "Gmail Authentication Failed: Please generate a 16-character App Password at https://myaccount.google.com/apppasswords"
+                }
+            except Exception as e_ssl:
+                logger.warning(f"Gmail SSL 465 failed: {e_ssl}. Falling back to HTTPS strategies...")
+
+        # Strategy 2: Brevo (Sendinblue) HTTPS API (300 Free Emails/day to ANY recipient, no domain required, port 443)
         brevo_key = creds.get("brevo_api_key") or os.getenv("BREVO_API_KEY")
         if brevo_key:
             try:
@@ -96,12 +159,11 @@ class EmailService:
                             "to": to_email
                         }
             except Exception as e_brevo:
-                logger.warning(f"Brevo HTTPS attempt failed: {e_brevo}. Falling back to next strategy...")
+                logger.warning(f"Brevo HTTPS attempt failed: {e_brevo}. Falling back to Resend...")
 
-        # Strategy 0B: Resend HTTPS Email Delivery over port 443 (Allowed on Render free-tier, 100% reliable)
-        resend_key = creds.get("resend_api_key") or os.getenv("RESEND_API_KEY") or "re_MaZdzZ2m_L5hmnmmdvKf4UqqN2aanZaNg"
+        # Strategy 3: Resend HTTPS Email Delivery over port 443
+        resend_key = creds.get("resend_api_key") or os.getenv("RESEND_API_KEY")
         sender_email = creds.get("from_email") or os.getenv("RESEND_FROM_EMAIL") or "onboarding@resend.dev"
-        
         if resend_key:
             try:
                 import urllib.request
@@ -133,81 +195,22 @@ class EmailService:
             except urllib.error.HTTPError as e_http:
                 err_content = e_http.read().decode('utf-8', errors='ignore')
                 logger.warning(f"Resend HTTP {e_http.code}: {err_content}")
-                if "validation_error" in err_content or e_http.code in (400, 403, 422):
-                    if "only send testing emails" in err_content or "onboarding@resend.dev" in err_content:
-                        logger.warning(f"Resend Sandbox Restriction: onboarding@resend.dev can only send to account owner. Add custom domain at resend.com/domains to send to {to_email}")
             except Exception as e_resend:
-                logger.warning(f"Resend HTTPS failed: {e_resend}. Falling back to standard SMTP...")
+                logger.warning(f"Resend HTTPS failed: {e_resend}")
 
-        if not creds["user"] or not creds["password"]:
-            logger.info(f"[EMAIL SIMULATION] To: {to_email} | Subject: {subject}")
+        if not has_gmail_creds and not brevo_key and not resend_key:
             return {
                 "sent": False,
                 "mode": "SIMULATION_LOGGED",
-                "message": "SMTP credentials not configured. Configure Gmail address and 16-character App Password, Resend API key, or free Brevo key to send live emails.",
+                "message": "SMTP credentials not configured. Please enter your Gmail ID & 16-character App Password or free Brevo key.",
                 "to": to_email,
                 "subject": subject
             }
 
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"BuyFlow AI Commerce <{creds['user']}>"
-        msg["To"] = to_email
-
-        part = MIMEText(html_body, "html")
-        msg.attach(part)
-
-        server = None
-        last_err = None
-        # Strategy 1: IPv4 STARTTLS on port 587 (3s fast timeout)
-        try:
-            server = IPv4SMTP(creds["host"], creds["port"], timeout=3)
-            server.ehlo(creds["host"])
-            server.starttls()
-            server.ehlo(creds["host"])
-            server.login(creds["user"], creds["password"])
-            server.sendmail(creds["user"], [to_email], msg.as_string())
-            server.quit()
-            logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via STARTTLS {creds['port']}")
-            return {
-                "sent": True,
-                "mode": "SMTP_DELIVERED",
-                "message": f"Live email delivered successfully to {to_email} via Gmail SMTP!",
-                "to": to_email
-            }
-        except Exception as e_starttls:
-            last_err = e_starttls
-            logger.warning(f"STARTTLS attempt on port {creds['port']} failed: {e_starttls}. Retrying via SSL on port 465...")
-
-        # Strategy 2: IPv4 direct SSL on port 465 fallback (3s fast timeout)
-        try:
-            ssl_ctx = ssl.create_default_context()
-            server = IPv4SMTP_SSL(creds["host"], 465, timeout=3, context=ssl_ctx)
-            server.ehlo(creds["host"])
-            server.login(creds["user"], creds["password"])
-            server.sendmail(creds["user"], [to_email], msg.as_string())
-            server.quit()
-            logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via SSL 465")
-            return {
-                "sent": True,
-                "mode": "SMTP_DELIVERED",
-                "message": f"Live email delivered successfully to {to_email} via Gmail SMTP SSL!",
-                "to": to_email
-            }
-        except Exception as e_ssl:
-            last_err = e_ssl
-            logger.error(f"[EMAIL ERROR] Both SMTP strategies failed: {e_ssl}")
-
-        err_str = str(last_err)
-        friendly_msg = f"SMTP delivery failed: {err_str}"
-        if "101" in err_str or "unreachable" in err_str.lower():
-            friendly_msg = "Cloud container firewall restriction: Render free tier blocks outbound SMTP ports 465/587 to prevent spam. Unblocked in paid/local environments, or add RESEND_API_KEY for instant HTTPS delivery."
-
         return {
             "sent": False,
             "mode": "SMTP_ERROR",
-            "error": err_str,
-            "message": friendly_msg
+            "message": "Email delivery failed. For cloud deployment on Render/Vercel, we recommend connecting Brevo (300 free emails/day) in your dashboard settings for 100% reliable HTTPS delivery over port 443."
         }
 
     @classmethod
