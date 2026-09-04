@@ -10,7 +10,10 @@ class GeminiLLMProvider(LLMProvider):
     """Real implementation for extracting intent using Gemini via Langchain with multi-model fallback."""
     
     def __init__(self):
-        self.models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash"]
+        self.models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+        self.provider_name = "gemini"
+        self.model_name = None
+        self.fallback_reason = None
         
     def extract_intent(self, text: str) -> ShoppingIntent:
         system_prompt = (
@@ -37,9 +40,15 @@ class GeminiLLMProvider(LLMProvider):
                 structured_llm = llm.with_structured_output(ShoppingIntent)
                 res = structured_llm.invoke(messages)
                 if res and isinstance(res, ShoppingIntent):
+                    self.model_name = m
+                    self.fallback_reason = None
                     return res
             except Exception as e:
+                self.fallback_reason = f"{m}: {e.__class__.__name__}"
                 logger.warning(f"Gemini API extract_intent with model {m} failed: {e}")
                 
         from app.services.llm_provider import MockLLMProvider
+        self.provider_name = "mock"
+        self.model_name = "deterministic-fallback"
+        self.fallback_reason = self.fallback_reason or "Gemini returned no structured intent"
         return MockLLMProvider().extract_intent(text)

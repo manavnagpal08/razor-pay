@@ -118,3 +118,86 @@ def test_agent_transact_idempotency_returns_existing_order(monkeypatch):
         assert action_count == 1
     finally:
         db.close()
+
+
+def test_chat_does_not_show_irrelevant_product_for_unavailable_specific_category(monkeypatch):
+    merchant_id, _product_id = _merchant_with_product("chatlaptop", price=1999.0)
+    monkeypatch.setattr("app.services.ai_supervisor.IntentService.process_intent", lambda self, text: type(
+        "IntentResp",
+        (),
+        {
+            "intent": type(
+                "Intent",
+                (),
+                {
+                    "model_dump": lambda self: {
+                        "category": "smartphones",
+                        "subcategory": None,
+                        "max_price": None,
+                        "min_price": None,
+                        "currency": "INR",
+                        "use_cases": [],
+                        "required_features": [],
+                        "preferred_features": [],
+                        "keywords": ["smartphone"],
+                    }
+                },
+            )(),
+            "provider": "mock",
+            "model": "test",
+            "fallback_reason": None,
+        },
+    )())
+
+    response = client.post(
+        "/api/ai/chat/search",
+        json={"text": "i want a smartphone", "thread_id": "test_thread", "merchant_id": merchant_id},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["results"] == []
+    assert body["alternatives"]
+    assert "don't currently have smartphones" in body["summary"]
+    assert body["ai_provider"]["provider"] == "mock"
+
+
+def test_chat_deals_query_returns_available_store_picks(monkeypatch):
+    merchant_id, _product_id = _merchant_with_product("chatdeals", price=1999.0)
+    monkeypatch.setattr("app.services.ai_supervisor.IntentService.process_intent", lambda self, text: type(
+        "IntentResp",
+        (),
+        {
+            "intent": type(
+                "Intent",
+                (),
+                {
+                    "model_dump": lambda self: {
+                        "category": None,
+                        "subcategory": None,
+                        "max_price": None,
+                        "min_price": None,
+                        "currency": "INR",
+                        "use_cases": [],
+                        "required_features": [],
+                        "preferred_features": [],
+                        "keywords": ["best", "deals"],
+                    }
+                },
+            )(),
+            "provider": "mock",
+            "model": "test",
+            "fallback_reason": None,
+        },
+    )())
+
+    response = client.post(
+        "/api/ai/chat/search",
+        json={"text": "what are the best deals", "thread_id": "test_thread", "merchant_id": merchant_id},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["results"]
+    assert "store picks" in body["summary"]
+    assert "not in stock" not in body["summary"].lower()

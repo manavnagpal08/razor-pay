@@ -4,9 +4,12 @@ import sys
 # Ensure backend root is in sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-supabase_url = "postgresql://postgres.wvjdygfjjtldghaddrgf:wz474hxktt%23Y%2B%26Y@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require"
+supabase_url = os.environ.get("DATABASE_URL")
+if not supabase_url:
+    raise RuntimeError("DATABASE_URL must be set before running setup_supabase.py")
+if not os.environ.get("GEMINI_API_KEY"):
+    raise RuntimeError("GEMINI_API_KEY must be set before running setup_supabase.py")
 os.environ["DATABASE_URL"] = supabase_url
-os.environ["GEMINI_API_KEY"] = "AQ.Ab8RN6IpQrvyIxVtU2zSjmMPWiZHi3jz291EGnSOy1NyuxgDtQ"
 
 from sqlalchemy import create_engine, text
 from app.models import Base

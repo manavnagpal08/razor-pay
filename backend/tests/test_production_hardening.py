@@ -311,3 +311,15 @@ def test_auth_rejects_unknown_roles():
     )
 
     assert response.status_code == 422
+
+
+def test_ai_provider_status_does_not_expose_secret(monkeypatch):
+    monkeypatch.setattr("app.api.ai.settings.gemini_api_key", "secret-value")
+
+    response = client.get("/api/ai/provider/status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["gemini_key_configured"] is True
+    assert body["gemini_key_length"] == len("secret-value")
+    assert "secret-value" not in str(body)

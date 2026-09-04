@@ -10,6 +10,10 @@ class LLMProvider(ABC):
 
 class MockLLMProvider(LLMProvider):
     """Development/mock provider for extracting intent deterministically."""
+
+    provider_name = "mock"
+    model_name = "deterministic-rules"
+    fallback_reason = None
     
     def extract_intent(self, text: str) -> ShoppingIntent:
         text_lower = text.lower()

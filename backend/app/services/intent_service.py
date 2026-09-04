@@ -22,7 +22,10 @@ class IntentService:
             return IntentResponse(
                 intent=structured_intent,
                 original_text=text,
-                confidence=1.0 # Mock confidence
+                confidence=1.0,
+                provider=getattr(self.provider, "provider_name", self.provider.__class__.__name__),
+                model=getattr(self.provider, "model_name", None),
+                fallback_reason=getattr(self.provider, "fallback_reason", None),
             )
         except Exception as e:
             logger.error(f"Failed to extract intent: {str(e)}")

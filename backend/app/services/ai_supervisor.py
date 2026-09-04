@@ -15,6 +15,7 @@ class CommerceState(TypedDict):
     input_text: str
     merchant_id: Optional[str]
     intent: Optional[Dict[str, Any]]
+    ai_provider: Optional[Dict[str, Any]]
     raw_products: List[Any]
     ranked_products: List[Dict[str, Any]]
     best_match: Optional[Any]
@@ -47,7 +48,14 @@ class AICommerceSupervisor:
         
     def _node_parse_intent(self, state: CommerceState) -> CommerceState:
         intent_resp = self.intent_service.process_intent(state["input_text"])
-        return {"intent": intent_resp.intent.model_dump()}
+        return {
+            "intent": intent_resp.intent.model_dump(),
+            "ai_provider": {
+                "provider": intent_resp.provider,
+                "model": intent_resp.model,
+                "fallback_reason": intent_resp.fallback_reason,
+            },
+        }
         
     def _node_search(self, state: CommerceState) -> CommerceState:
         intent_data = state.get("intent", {})
@@ -152,6 +160,7 @@ class AICommerceSupervisor:
             input_text=text,
             merchant_id=merchant_id,
             intent=None,
+            ai_provider=None,
             raw_products=[],
             ranked_products=[],
             best_match=None,
@@ -177,12 +186,22 @@ class AICommerceSupervisor:
         kw = ", ".join(intent_data.get("keywords") or [])
         count = len(results)
         offer = final_state.get("offer")
+        text_lower = text.lower()
+        is_deals_query = any(w in text_lower for w in ["discount", "coupon", "promo", "offer", "code", "deal", "cheap", "bargain", "percent", "%", "recommended", "recommendation", "best"])
         
         has_direct_match = any(r.get("is_direct_match", False) or r.get("match_type") in ["BEST_MATCH", "TOP PICK"] for r in results)
         searched_term = cat or kw or text
+        display_results = results
+        alternatives = []
 
-        if count > 0:
-            if has_direct_match:
+        if cat and count > 0 and not has_direct_match:
+            alternatives = results[:3]
+            display_results = []
+
+        if display_results:
+            if is_deals_query and not cat:
+                summary = "Here are the best available store picks and active savings from this merchant's live catalog:"
+            elif has_direct_match:
                 if cat and kw:
                     summary = f"I found {count} top-rated {cat} tailored for '{kw}'. Here are the best options ranked by specs and compatibility:"
                 elif cat:
@@ -190,14 +209,21 @@ class AICommerceSupervisor:
                 else:
                     summary = f"I found {count} relevant products matching your request:"
             else:
-                summary = f"We don't currently have '{searched_term}' in stock in this store's catalog. Here are the items currently available in our inventory:"
+                summary = "Here are the strongest available store picks right now, ranked from the live merchant catalog:"
+        elif alternatives:
+            available_names = ", ".join((item.get("product") or {}).get("name", "available item") for item in alternatives)
+            summary = f"We don't currently have {searched_term} in this merchant's live catalog. I found nearby available alternatives instead: {available_names}. Ask for available products or add a matching catalog item to sell this request."
+        elif count > 0 and is_deals_query:
+            display_results = results
+            summary = "Here are the best available store picks and active savings from this merchant's live catalog:"
         else:
             summary = f"We couldn't find items matching '{searched_term}' in our catalog. Please ask about our other store products!"
 
         # Append offer highlight if shopper inquired about deals/promos/coupons
-        if offer and any(w in text.lower() for w in ["discount", "coupon", "promo", "offer", "code", "deal", "cheap", "bargain", "percent", "%"]):
+        if offer and is_deals_query:
             summary = f"🎉 Great news! Active store coupon **{offer['code']}** ({int(offer['discount_percent'])}% off) is available for your order!\n\n" + summary
 
+        ai_provider = final_state.get("ai_provider") or {}
         reasoning = {
             "intent_extracted": {
                 "category": cat or "General",
@@ -207,15 +233,20 @@ class AICommerceSupervisor:
             },
             "policy_verification": "Verified • 0 violations • Max discount 20%",
             "catalog_scanned": f"{count} items ranked",
+            "direct_catalog_match": has_direct_match,
             "offer_applied": offer["code"] if offer else None
         }
+        if ai_provider:
+            reasoning["ai_provider"] = ai_provider
 
         return {
             "summary": summary,
             "intent": intent_data,
-            "results": results,
+            "results": display_results,
+            "alternatives": alternatives,
             "upsell": final_state.get("upsell"),
             "cross_sell": final_state.get("cross_sell"),
             "offer": offer,
+            "ai_provider": ai_provider,
             "reasoning": reasoning
         }

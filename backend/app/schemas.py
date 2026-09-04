@@ -68,6 +68,9 @@ class IntentResponse(BaseModel):
     intent: ShoppingIntent
     original_text: str
     confidence: float = 1.0
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    fallback_reason: Optional[str] = None
 
 class CartItemSchema(BaseModel):
     id: str

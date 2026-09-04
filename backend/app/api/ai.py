@@ -6,6 +6,7 @@ from app.schemas import IntentRequest, IntentResponse, ProductSearchRequest
 from app.services.intent_service import IntentService
 from app.api.products import search_products
 from app.database import get_db
+from app.core.config import settings
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -24,6 +25,21 @@ def parse_intent(request: IntentRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to process AI intent")
+
+@router.get("/provider/status")
+def get_ai_provider_status():
+    import importlib.util
+
+    provider = IntentService().provider
+    return {
+        "provider": getattr(provider, "provider_name", provider.__class__.__name__),
+        "model": getattr(provider, "model_name", None),
+        "gemini_key_configured": bool(settings.gemini_api_key),
+        "gemini_key_length": len(settings.gemini_api_key or ""),
+        "gemini_dependency_installed": importlib.util.find_spec("langchain_google_genai") is not None,
+        "require_live_ai": settings.require_live_ai,
+        "environment": settings.environment,
+    }
 
 @router.post("/chat/search")
 def chat_search(request: ChatRequest, db: Session = Depends(get_db)):
