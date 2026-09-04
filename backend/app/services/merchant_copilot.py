@@ -14,18 +14,59 @@ logger = logging.getLogger(__name__)
 
 class MockMerchantLLM:
     def invoke(self, messages: List[Any], tools: List[Any] = None) -> Any:
-        last_msg = messages[-1].content.lower()
+        last_msg = messages[-1].content.lower() if hasattr(messages[-1], "content") else ""
         
         if isinstance(messages[-1], ToolMessage):
-            data = messages[-1].content
-            return AIMessage(content=f"Based on the store data: {data}. Let me know if you need recommendations.")
+            try:
+                data = json.loads(messages[-1].content)
+            except Exception:
+                data = messages[-1].content
+                
+            if isinstance(data, list):
+                if len(data) == 0:
+                    return AIMessage(content="No data recorded yet for this period. As new orders come in, they will show up here.")
+                
+                # Format product list
+                if isinstance(data[0], dict) and "name" in data[0]:
+                    lines = ["Here are your top performing products:"]
+                    for idx, p in enumerate(data, 1):
+                        p_name = p.get("name", "Product")
+                        p_price = float(p.get("price", 0) or 0)
+                        p_orders = int(p.get("orders", 0) or 0)
+                        p_rev = float(p.get("revenue", 0) or 0)
+                        lines.append(f"{idx}. **{p_name}** — ₹{p_price:,.2f} | {p_orders} orders placed (₹{p_rev:,.2f} total revenue)")
+                    return AIMessage(content="\n\n".join([lines[0], "\n".join(lines[1:])]))
+                
+                # Format activity list
+                if isinstance(data[0], dict) and ("action" in data[0] or "agent" in data[0]):
+                    lines = ["Recent store activities:"]
+                    for a in data:
+                        action_name = a.get("action") or a.get("action_type") or "Event"
+                        reason = a.get("reason", "")
+                        lines.append(f"• **{action_name}**: {reason}")
+                    return AIMessage(content="\n".join(lines))
+                    
+            elif isinstance(data, dict):
+                if "revenue" in data:
+                    rev = float(data.get("revenue", 0) or 0)
+                    orders = int(data.get("orders", 0) or 0)
+                    aov = float(data.get("average_order_value", 0) or 0)
+                    blocks = int(data.get("policy_blocks", 0) or 0)
+                    return AIMessage(content=f"Here is your store summary:\n• **Total Revenue**: ₹{rev:,.2f}\n• **Total Paid Orders**: {orders}\n• **Average Order Value**: ₹{aov:,.2f}\n• **Security Rules Enforced**: {blocks}")
+                elif "policy" in data:
+                    pol = data.get("policy", {})
+                    max_d = pol.get("max_discount_percent", 15)
+                    free_s = pol.get("free_shipping_threshold", 999)
+                    return AIMessage(content=f"Your current discount rules:\n• **Max Allowed Discount**: {max_d}%\n• **Free Shipping Threshold**: ₹{free_s:,.2f}\nAll discounts are automatically verified before checkout.")
+                    
+            return AIMessage(content="Your store data is up to date. Let me know if you need anything else!")
             
         if "revenue" in last_msg or "sales" in last_msg or "kpi" in last_msg:
             return AIMessage(
                 content="Checking your store KPIs and revenue...",
                 tool_calls=[{"name": "get_store_kpis", "args": {}, "id": "call_kpi"}]
             )
-        elif "product" in last_msg or "top" in last_msg:
+        elif "product" in last_msg or "top" in last_msg or "selling" in last_msg:
             return AIMessage(
                 content="Fetching your top performing products...",
                 tool_calls=[{"name": "get_top_products", "args": {"limit": 5}, "id": "call_prod"}]
@@ -41,7 +82,7 @@ class MockMerchantLLM:
                 tool_calls=[{"name": "get_ai_activity", "args": {"limit": 5}, "id": "call_ai"}]
             )
         else:
-            return AIMessage(content="I am your Merchant Copilot. I can help with revenue, top products, AI activity, and policy explanations. What would you like to know?")
+            return AIMessage(content="I am your Store AI Assistant. I can help check your revenue, top selling products, customer activity, and store rules. What would you like to know?")
 
 class GetStoreKPIs(BaseModel):
     """Get revenue and orders."""
@@ -161,8 +202,11 @@ class MerchantCopilotSupervisor:
 
     def process_query(self, query: str, merchant_id: str = "default") -> str:
         prompt_content = (
-            "You are the Razorpay AI Commerce Merchant Copilot.\n"
-            "Distinguish between FACT and RECOMMENDATION. Never fabricate numbers.\n"
+            "You are the friendly Store AI Assistant for this shop.\n"
+            "Answer the merchant's question in clean, simple, natural human language.\n"
+            "Always format amounts with the Indian Rupee symbol (e.g. ₹200.00).\n"
+            "NEVER return raw JSON, python dictionaries, code strings, or array brackets.\n"
+            "Present product and sales lists using friendly bullet points or numbered lists.\n"
             f"Question: {query}"
         )
         

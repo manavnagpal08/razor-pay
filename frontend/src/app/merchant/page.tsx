@@ -1392,10 +1392,10 @@ export default function MerchantDashboard() {
                   </div>
                 </div>
 
-                {/* 4. Policy Blocks */}
+                {/* 4. Security Guardrails */}
                 <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Policy Blocks</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Security Guardrails</span>
                     <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
                       <ShieldAlert className="w-4 h-4" />
                     </div>
@@ -1405,7 +1405,7 @@ export default function MerchantDashboard() {
                       {metrics?.policy_blocks || 0}
                     </div>
                     <div className="text-[11px] font-semibold text-amber-600 mt-1.5">
-                      Autonomous violations prevented
+                      Unauthorized actions blocked
                     </div>
                   </div>
                 </div>
@@ -1417,38 +1417,30 @@ export default function MerchantDashboard() {
           <div className="lg:col-span-8 space-y-3.5">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
               <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Multi-Tenant Conversational Commerce</span>
+              <span>AI Shopping Assistant</span>
             </div>
-
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Shareable AI Storefront Agent Link
-            </h2>
-
-            <p className="text-slate-600 text-xs sm:text-sm leading-relaxed max-w-xl">
+            
+            <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              Your Store AI Chat Link
+            </h3>
+            
+            <p className="text-xs sm:text-sm text-slate-600 max-w-xl font-medium leading-relaxed">
               Share this dedicated link with your customers on WhatsApp, Instagram, or email. Buyers can chat directly with your AI concierge, receive instant product recommendations, and complete payments right inside the chat.
             </p>
 
-            {/* Link display and actions */}
-            <div className="space-y-3 pt-1">
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-mono text-slate-700 w-full max-w-xl shadow-xs">
-                <Share2 className="w-4 h-4 text-indigo-600 shrink-0" />
-                <span className="truncate flex-1 text-slate-700 select-all font-semibold">{agentShareUrl}</span>
+            <div className="pt-2 flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-700 select-all max-w-full sm:max-w-md truncate">
+                <Share2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="truncate">{agentShareUrl}</span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (typeof navigator !== "undefined" && navigator.clipboard) {
-                      navigator.clipboard.writeText(agentShareUrl);
-                      setCopiedLink(true);
-                      showToast("Copied storefront link to clipboard.", "success");
-                      setTimeout(() => setCopiedLink(false), 2500);
-                    }
-                  }}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+                  onClick={handleCopyLink}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer"
                 >
-                  {copiedLink ? <CheckCircle2 className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedLink ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedLink ? "Copied Link" : "Copy Link"}</span>
                 </button>
 
@@ -1456,18 +1448,17 @@ export default function MerchantDashboard() {
                   href={agentShareUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+                  className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <ExternalLink className="w-3.5 h-3.5 text-indigo-600" />
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
                   <span>Open Store</span>
                 </a>
 
                 <a
-                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out our AI Shopping Assistant and buy directly: ${agentShareUrl}`)}`}
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out our store catalog and chat with our assistant: ${agentShareUrl}`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
-                  title="Share on WhatsApp"
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 cursor-pointer"
                 >
                   <MessageSquare className="w-3.5 h-3.5" />
                   <span>WhatsApp</span>
@@ -1547,7 +1538,7 @@ export default function MerchantDashboard() {
 
         <div className="bg-white border border-slate-200/80 rounded-3xl shadow-xs p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-slate-900">AI Conversions by Volume</h2>
+            <h2 className="text-sm font-bold text-slate-900">Orders & Sales Volume</h2>
             <span className="text-[11px] text-slate-400 font-semibold">{hasRevenue ? "Active Conversions" : "0 Conversions"}</span>
           </div>
           {!hasRevenue ? (
@@ -1582,15 +1573,15 @@ export default function MerchantDashboard() {
               {/* Copilot & AI Action Split */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Merchant Copilot */}
+        {/* Store AI Assistant */}
         <div className="bg-white border border-slate-200 rounded-3xl shadow-xs flex flex-col h-[520px] overflow-hidden">
           <div className="p-4 px-5 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
             <div className="w-9 h-9 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600">
               <Bot className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-bold text-slate-900 text-sm">Merchant Copilot</h2>
-              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Natural Language Business Analytics</p>
+              <h2 className="font-bold text-slate-900 text-sm">Store AI Assistant</h2>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Ask questions about your store</p>
             </div>
           </div>
           
@@ -1598,13 +1589,13 @@ export default function MerchantDashboard() {
             {chatMessages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 p-4">
                 <Sparkles className="w-8 h-8 text-indigo-300 mb-2" />
-                <p className="text-xs font-semibold text-slate-700">Ask your AI Store Copilot</p>
-                <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">e.g. "What were our top 3 products this week?" or "How many upsells were proposed?"</p>
+                <p className="text-xs font-semibold text-slate-700">Ask your Store Assistant</p>
+                <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">e.g. "What are our top products?" or "How much revenue did we make this week?"</p>
               </div>
             )}
             {chatMessages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] text-xs shadow-xs leading-relaxed ${
+                <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] text-xs shadow-xs leading-relaxed whitespace-pre-line ${
                   msg.role === 'user' 
                     ? 'bg-indigo-600 text-white rounded-tr-none' 
                     : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
@@ -1617,7 +1608,7 @@ export default function MerchantDashboard() {
               <div className="flex justify-start">
                 <div className="bg-white border border-slate-200 px-4 py-2.5 rounded-2xl rounded-tl-none text-xs text-slate-400 flex gap-1 shadow-xs items-center">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-                  <span>Analyzing store telemetry...</span>
+                  <span>Analyzing store data...</span>
                 </div>
               </div>
             )}
@@ -1630,7 +1621,7 @@ export default function MerchantDashboard() {
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask about sales, top products, or agent activity..."
+                placeholder="Ask about sales, top products, or store activity..."
                 className="w-full pl-4 pr-11 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800"
               />
               <button 
@@ -1644,22 +1635,22 @@ export default function MerchantDashboard() {
           </form>
         </div>
 
-        {/* AI Action Ledger */}
+        {/* Store Activity & Security Log */}
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden h-[520px] flex flex-col">
           <div className="p-4 px-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
             <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-indigo-600" />
-              <span>Agent Action Ledger (100% Explainable)</span>
+              <span>Store Activity & Security Log</span>
             </h2>
             <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase border border-slate-200">
-              Audit Stream Active
+              Live Stream Active
             </span>
           </div>
           
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100 text-xs">
             {activity.length === 0 ? (
               <div className="h-full flex items-center justify-center text-slate-400 p-8 text-center">
-                No autonomous agent events logged yet. Execute searches or upsells to populate the ledger.
+                No store events recorded yet. Actions and security checks will appear here in real-time.
               </div>
             ) : (
               activity.map((act) => (
@@ -2364,9 +2355,9 @@ export default function MerchantDashboard() {
 
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[11px] font-bold text-slate-700 uppercase">Requested Discount RFP</label>
+                      <label className="text-[11px] font-bold text-slate-700 uppercase">Requested Discount</label>
                       <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                        {m2mDiscountOffer}% Requested
+                        {m2mDiscountOffer}% Discount
                       </span>
                     </div>
                     <input
@@ -2378,7 +2369,7 @@ export default function MerchantDashboard() {
                       onChange={(e) => setM2mDiscountOffer(Number(e.target.value))}
                       className="w-full accent-indigo-600 cursor-pointer"
                     />
-                    <p className="text-[10px] text-slate-400 mt-1">Evaluated by server policy engine against merchant {maxDiscountPercent}% cap</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Evaluated by server rules against store max discount limit ({maxDiscountPercent}%)</p>
                   </div>
                 </div>
 
@@ -2389,7 +2380,7 @@ export default function MerchantDashboard() {
                   className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-extrabold transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {simulatingM2M ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                  <span>{simulatingM2M ? "Executing Machine-to-Machine Order RFP..." : "Execute Automated AI Shopper Transaction"}</span>
+                  <span>{simulatingM2M ? "Processing test order..." : "Run Test Order Simulation"}</span>
                 </button>
 
                 {/* Simulation Result Dual Stream */}
@@ -2399,31 +2390,31 @@ export default function MerchantDashboard() {
                       <div className="flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
                         <span className="font-bold text-emerald-400 text-xs sm:text-sm">
-                          RAZORPAY ORDER MINTED: {m2mResult.razorpay_order?.razorpay_order_id || m2mResult.razorpay_order_id || "rzp_order_simulated"}
+                          RAZORPAY ORDER CREATED: {m2mResult.razorpay_order?.razorpay_order_id || m2mResult.razorpay_order_id || "rzp_order_simulated"}
                         </span>
                       </div>
                       <span className="text-slate-300 text-[11px] bg-white/10 px-2.5 py-1 rounded-lg">
-                        Agent ID: {m2mResult.agent_id}
+                        Test Buyer: {m2mResult.agent_id?.replace(/_/g, ' ')}
                       </span>
                     </div>
 
-                    {/* 4-Step Protocol Lifecycle */}
+                    {/* 4-Step Lifecycle */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-slate-300">
                       <div className="p-2 rounded-xl bg-white/5 border border-white/10">
-                        <p className="text-emerald-400 font-bold">✓ 1. Protocol Discovery</p>
-                        <p className="text-[9px] text-slate-400 truncate">agent.json capability read</p>
+                        <p className="text-emerald-400 font-bold">✓ 1. Item Found</p>
+                        <p className="text-[9px] text-slate-400 truncate">Product matched in catalog</p>
                       </div>
                       <div className="p-2 rounded-xl bg-white/5 border border-white/10">
-                        <p className="text-emerald-400 font-bold">✓ 2. Inventory Gated</p>
-                        <p className="text-[9px] text-slate-400 truncate">Stock verified in DB</p>
+                        <p className="text-emerald-400 font-bold">✓ 2. Stock Verified</p>
+                        <p className="text-[9px] text-slate-400 truncate">Inventory available in DB</p>
                       </div>
                       <div className="p-2 rounded-xl bg-white/5 border border-white/10">
-                        <p className="text-emerald-400 font-bold">✓ 3. Policy Bound</p>
-                        <p className="text-[9px] text-slate-400 truncate">Max discount cap checked</p>
+                        <p className="text-emerald-400 font-bold">✓ 3. Discount Checked</p>
+                        <p className="text-[9px] text-slate-400 truncate">Checked against store rule</p>
                       </div>
                       <div className="p-2 rounded-xl bg-white/5 border border-white/10">
-                        <p className="text-emerald-400 font-bold">✓ 4. Razorpay Minted</p>
-                        <p className="text-[9px] text-slate-400 truncate">256-bit crypt order</p>
+                        <p className="text-emerald-400 font-bold">✓ 4. Razorpay Ready</p>
+                        <p className="text-[9px] text-slate-400 truncate">Secure payment created</p>
                       </div>
                     </div>
 
@@ -2435,11 +2426,11 @@ export default function MerchantDashboard() {
                       <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
                         <span className="text-slate-400 text-[10px]">Discount Applied:</span>
                         <p className="font-bold text-amber-400 mt-0.5">
-                          -₹{Number(m2mResult.financials?.discount_applied || 0).toLocaleString()} ({m2mDiscountOffer}% RFP)
+                          -₹{Number(m2mResult.financials?.discount_applied || 0).toLocaleString()} ({m2mDiscountOffer}% Discount)
                         </p>
                       </div>
                       <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
-                        <span className="text-slate-400 text-[10px]">Total Payable (Server Authoritative):</span>
+                        <span className="text-slate-400 text-[10px]">Total Amount Paid:</span>
                         <p className="font-bold text-emerald-400 mt-0.5 text-sm">
                           ₹{Number(m2mResult.financials?.total_payable ?? m2mResult.financials?.total_amount ?? 0).toLocaleString()}
                         </p>
@@ -2447,8 +2438,8 @@ export default function MerchantDashboard() {
                     </div>
 
                     <div className="p-3 rounded-2xl bg-indigo-900/40 border border-indigo-500/40 text-[11px] text-slate-200">
-                      <span className="text-indigo-400 font-bold">Server Policy Decision: </span>
-                      <span>{m2mResult.financials?.policy_result?.reason || m2mResult.policy_evaluation?.reason || "Authorized: Discount RFP evaluated within store safety boundaries."}</span>
+                      <span className="text-indigo-400 font-bold">Store Rule Verification: </span>
+                      <span>{m2mResult.financials?.policy_result?.reason || m2mResult.policy_evaluation?.reason || "Authorized: Discount checked and approved within store limits."}</span>
                     </div>
                   </div>
                 )}
