@@ -201,3 +201,74 @@ def test_chat_deals_query_returns_available_store_picks(monkeypatch):
     assert body["results"]
     assert "store picks" in body["summary"]
     assert "not in stock" not in body["summary"].lower()
+    assert body["offer"]
+
+
+def test_chat_specs_query_answers_details_without_auto_discount(monkeypatch):
+    db = SessionLocal()
+    merchant_id = f"merchant_specs_{uuid.uuid4().hex[:8]}"
+    product_id = f"prod_specs_{uuid.uuid4().hex[:8]}"
+    db.add(Merchant(id=merchant_id, name="Specs Merchant", currency="INR"))
+    db.add(Product(
+        id=product_id,
+        merchant_id=merchant_id,
+        name="Creator Laptop",
+        category="Laptops",
+        description="A lightweight laptop for coding and creative work.",
+        price=74999.0,
+        inventory=7,
+        currency="INR",
+        features={"ram": "16GB", "storage": "512GB SSD", "processor": "Intel Core Ultra 5", "verified": True},
+        use_cases=["coding", "editing"],
+        metadata_={},
+    ))
+    db.add(MerchantPolicy(
+        id=f"policy_specs_{uuid.uuid4().hex[:8]}",
+        merchant_id=merchant_id,
+        max_discount_percent=15.0,
+        max_discount_amount=5000.0,
+        campaign_budget_limit=20000.0,
+        approval_rules={},
+    ))
+    db.commit()
+    db.close()
+
+    monkeypatch.setattr("app.services.ai_supervisor.IntentService.process_intent", lambda self, text: type(
+        "IntentResp",
+        (),
+        {
+            "intent": type(
+                "Intent",
+                (),
+                {
+                    "model_dump": lambda self: {
+                        "category": "laptops",
+                        "subcategory": None,
+                        "max_price": None,
+                        "min_price": None,
+                        "currency": "INR",
+                        "use_cases": [],
+                        "required_features": [],
+                        "preferred_features": [],
+                        "keywords": ["laptop"],
+                    }
+                },
+            )(),
+            "provider": "mock",
+            "model": "test",
+            "fallback_reason": None,
+        },
+    )())
+
+    response = client.post(
+        "/api/ai/chat/search",
+        json={"text": "what tech specs are there in this laptop", "thread_id": "test_thread", "merchant_id": merchant_id},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "available catalog details" in body["summary"]
+    assert "16GB" in body["summary"]
+    assert "512GB SSD" in body["summary"]
+    assert body["results"] == []
+    assert body["offer"] is None

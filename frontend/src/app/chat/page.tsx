@@ -652,10 +652,6 @@ function ChatContent() {
         reasoning: data.reasoning && typeof data.reasoning === "object" ? data.reasoning : null
       };
 
-      if (safeOffer) {
-        setAppliedPromo(safeOffer);
-      }
-
       setMessages(prev => [...prev, newMsg]);
 
       if (voiceEnabled) {

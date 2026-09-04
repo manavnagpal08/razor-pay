@@ -45,6 +45,48 @@ class AICommerceSupervisor:
         workflow.add_edge("evaluate_offers", END)
         
         self.graph = workflow.compile()
+
+    def _is_offer_query(self, text: str) -> bool:
+        text_lower = text.lower()
+        return any(w in text_lower for w in [
+            "discount", "coupon", "promo", "offer", "code", "deal",
+            "cheap", "bargain", "percent", "%", "sale"
+        ])
+
+    def _is_detail_query(self, text: str) -> bool:
+        text_lower = text.lower()
+        return any(w in text_lower for w in [
+            "spec", "specs", "specification", "specifications", "feature",
+            "features", "detail", "details", "about", "tell me more",
+            "what is there", "what are there", "what tech"
+        ])
+
+    def _build_product_detail_summary(self, product: Dict[str, Any]) -> str:
+        name = product.get("name") or product.get("title") or "this product"
+        price = float(product.get("price") or 0)
+        inventory = product.get("inventory")
+        description = product.get("description") or "No detailed description is available yet."
+        features = product.get("features") if isinstance(product.get("features"), dict) else {}
+        use_cases = product.get("use_cases") if isinstance(product.get("use_cases"), list) else []
+
+        feature_lines = []
+        for key, value in features.items():
+            if key in {"verified", "featured"}:
+                continue
+            feature_lines.append(f"- {str(key).replace('_', ' ').title()}: {value}")
+
+        if not feature_lines:
+            feature_lines.append("- Detailed technical specs are not filled in this merchant catalog yet.")
+
+        use_case_text = ", ".join(str(item) for item in use_cases) if use_cases else "Everyday use"
+        return (
+            f"Here are the available catalog details for **{name}**:\n\n"
+            f"- Price: ₹{price:,.0f}\n"
+            f"- Stock: {inventory if inventory is not None else 'Not specified'} units\n"
+            f"- Description: {description}\n"
+            f"- Use cases: {use_case_text}\n"
+            + "\n".join(feature_lines)
+        )
         
     def _node_parse_intent(self, state: CommerceState) -> CommerceState:
         intent_resp = self.intent_service.process_intent(state["input_text"])
@@ -187,7 +229,10 @@ class AICommerceSupervisor:
         count = len(results)
         offer = final_state.get("offer")
         text_lower = text.lower()
-        is_deals_query = any(w in text_lower for w in ["discount", "coupon", "promo", "offer", "code", "deal", "cheap", "bargain", "percent", "%", "recommended", "recommendation", "best"])
+        is_offer_query = self._is_offer_query(text)
+        is_recommendation_query = any(w in text_lower for w in ["recommended", "recommendation", "best"])
+        is_deals_query = is_offer_query or is_recommendation_query
+        is_detail_query = self._is_detail_query(text)
         
         has_direct_match = any(r.get("is_direct_match", False) or r.get("match_type") in ["BEST_MATCH", "TOP PICK"] for r in results)
         searched_term = cat or kw or text
@@ -199,7 +244,10 @@ class AICommerceSupervisor:
             display_results = []
 
         if display_results:
-            if is_deals_query and not cat:
+            if is_detail_query and has_direct_match:
+                summary = self._build_product_detail_summary(display_results[0]["product"])
+                display_results = []
+            elif is_deals_query and not cat:
                 summary = "Here are the best available store picks and active savings from this merchant's live catalog:"
             elif has_direct_match:
                 if cat and kw:
@@ -220,8 +268,9 @@ class AICommerceSupervisor:
             summary = f"We couldn't find items matching '{searched_term}' in our catalog. Please ask about our other store products!"
 
         # Append offer highlight if shopper inquired about deals/promos/coupons
-        if offer and is_deals_query:
-            summary = f"🎉 Great news! Active store coupon **{offer['code']}** ({int(offer['discount_percent'])}% off) is available for your order!\n\n" + summary
+        exposed_offer = offer if is_offer_query else None
+        if exposed_offer and is_offer_query:
+            summary = f"🎉 Great news! Active store coupon **{exposed_offer['code']}** ({int(exposed_offer['discount_percent'])}% off) is available for your order!\n\n" + summary
 
         ai_provider = final_state.get("ai_provider") or {}
         reasoning = {
@@ -234,7 +283,7 @@ class AICommerceSupervisor:
             "policy_verification": "Verified • 0 violations • Max discount 20%",
             "catalog_scanned": f"{count} items ranked",
             "direct_catalog_match": has_direct_match,
-            "offer_applied": offer["code"] if offer else None
+            "offer_applied": exposed_offer["code"] if exposed_offer else None
         }
         if ai_provider:
             reasoning["ai_provider"] = ai_provider
@@ -246,7 +295,7 @@ class AICommerceSupervisor:
             "alternatives": alternatives,
             "upsell": final_state.get("upsell"),
             "cross_sell": final_state.get("cross_sell"),
-            "offer": offer,
+            "offer": exposed_offer,
             "ai_provider": ai_provider,
             "reasoning": reasoning
         }
