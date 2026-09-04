@@ -938,61 +938,87 @@ def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Dep
     """
     from app.models import Customer, User, Order, CustomerEvent, AgentAction
     from datetime import datetime, timezone
+    from sqlalchemy import or_
+    import uuid
     
     customers = []
-    seen_emails = set()
+    seen_keys = set()
     merchant_orders = db.query(Order).filter(Order.merchant_id == merchant_id).all()
 
     if merchant_id == "demo_merchant":
-        # For demo merchant, fetch demo customers
+        # For demo merchant, fetch demo customers plus anyone who bought from demo_merchant
         all_customers = db.query(Customer).filter(
             or_(Customer.merchant_id == "demo_merchant", Customer.merchant_id == None)
         ).all()
         for c in all_customers:
             user = db.query(User).filter(User.id == c.user_id).first() if c.user_id else None
-            if user and user.role == "merchant":
-                continue
-            email_key = user.email.lower() if user and user.email else c.id
-            if email_key not in seen_emails:
-                seen_emails.add(email_key)
-                customers.append(c)
+            key = user.email.lower() if user and user.email else c.id
+            if key not in seen_keys:
+                seen_keys.add(key)
+                customers.append((c, user))
     else:
-        # Strict isolation: only customers associated with this specific merchant_id
+        # 1. Customers explicitly assigned to this merchant_id
         merchant_customers = db.query(Customer).filter(Customer.merchant_id == merchant_id).all()
         for c in merchant_customers:
             user = db.query(User).filter(User.id == c.user_id).first() if c.user_id else None
-            if user and user.role == "merchant":
-                continue
-            email_key = user.email.lower() if user and user.email else c.id
-            if email_key not in seen_emails:
-                seen_emails.add(email_key)
-                customers.append(c)
+            key = user.email.lower() if user and user.email else c.id
+            if key not in seen_keys:
+                seen_keys.add(key)
+                customers.append((c, user))
 
-        # Plus customers who placed orders with this merchant
+        # 2. Plus any customer who placed an order with this merchant
         for o in merchant_orders:
-            if o.customer_id:
-                cust = db.query(Customer).filter(Customer.id == o.customer_id).first()
-                if cust:
-                    user = db.query(User).filter(User.id == cust.user_id).first() if cust.user_id else None
-                    if user and user.role == "merchant":
-                        continue
-                    email_key = user.email.lower() if user and user.email else cust.id
-                    if email_key not in seen_emails:
-                        seen_emails.add(email_key)
-                        customers.append(cust)
+            if not o.customer_id:
+                continue
+            # Try finding Customer by id or user_id
+            cust = db.query(Customer).filter(
+                or_(Customer.id == o.customer_id, Customer.user_id == o.customer_id)
+            ).first()
+            user = None
+            if cust:
+                user = db.query(User).filter(User.id == cust.user_id).first() if cust.user_id else None
+            else:
+                # Try finding User directly by id or email
+                user = db.query(User).filter(
+                    or_(User.id == o.customer_id, User.email == o.customer_id)
+                ).first()
+                if user:
+                    cust = db.query(Customer).filter(Customer.user_id == user.id).first()
+                    if not cust:
+                        cust = Customer(
+                            id=str(uuid.uuid4()),
+                            user_id=user.id,
+                            merchant_id=merchant_id,
+                            segment="conversational_buyer",
+                            preferences={}
+                        )
+                        db.add(cust)
+                        try:
+                            db.commit()
+                        except Exception:
+                            db.rollback()
 
-    # 3. Fetch all events & actions for chat logs
+            if cust:
+                key = user.email.lower() if user and user.email else cust.id
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    customers.append((cust, user))
+
+    # 3. Build response with orders & metrics
     now_utc = datetime.now(timezone.utc)
     today_date = now_utc.date()
 
     result = []
-    for c in customers:
-        user = db.query(User).filter(User.id == c.user_id).first() if c.user_id else None
-        cust_orders = [o for o in merchant_orders if o.customer_id == c.id]
+    for c, user in customers:
+        # Match all orders placed by this customer / user
+        cust_orders = [
+            o for o in merchant_orders 
+            if o.customer_id == c.id or (user and (o.customer_id == user.id or o.customer_id == user.email))
+        ]
         total_spent = sum(float(o.amount or 0) for o in cust_orders)
         
         prefs = c.preferences if isinstance(c.preferences, dict) else {}
-        phone = prefs.get("phone") or "Not provided"
+        phone = prefs.get("phone") or "Verified In-Chat"
 
         # Check if joined today
         joined_at = c.created_at if hasattr(c, "created_at") and c.created_at else None
@@ -1001,7 +1027,7 @@ def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Dep
         # Gather customer-specific conversation history and chat logs
         events = db.query(CustomerEvent).filter(
             CustomerEvent.merchant_id == merchant_id,
-            CustomerEvent.customer_id == c.id
+            or_(CustomerEvent.customer_id == c.id, CustomerEvent.customer_id == (user.id if user else c.id))
         ).order_by(CustomerEvent.timestamp.desc()).limit(15).all()
 
         chat_logs = []
@@ -1014,19 +1040,22 @@ def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Dep
                 "timestamp": ev.timestamp.strftime("%Y-%m-%d %H:%M:%S") if ev.timestamp else "Recently"
             })
 
-        # If no events found yet, include standard welcoming interaction log
+        # Include welcoming interaction log if none found
         if not chat_logs:
             chat_logs.append({
                 "type": "account_verified",
-                "query": "Verified OTP Authentication",
-                "response": f"Customer authorized for AI concierge shopping session.",
+                "query": "Verified AI Shopping Session",
+                "response": f"Customer placed {len(cust_orders)} order(s) via AI Concierge.",
                 "timestamp": joined_at.strftime("%Y-%m-%d %H:%M:%S") if joined_at else "Recently"
             })
 
+        display_name = user.name if user and user.name else "Verified Shopper"
+        display_email = user.email if user and user.email else "shopper@storefront"
+
         result.append({
             "id": c.id,
-            "name": user.name if user and user.name else "Verified Shopper",
-            "email": user.email if user and user.email else "conversational.shopper@storefront",
+            "name": display_name,
+            "email": display_email,
             "phone": phone,
             "segment": c.segment or "conversational_buyer",
             "orders_count": len(cust_orders),
