@@ -1003,65 +1003,79 @@ function ChatContent() {
                     {/* Product Recommendations */}
                     {((msg.products && msg.products.length > 0) || (msg.results && msg.results.length > 0)) && (
                       <div className="mt-2.5 grid grid-cols-1 gap-2.5 w-full">
-                        {asArray(msg.products || msg.results).map((rawProd: any, idx: number) => {
-                          const rawRecord = rawProd && typeof rawProd === "object" ? rawProd : {};
-                          const prod = rawRecord.product && typeof rawRecord.product === "object" ? rawRecord.product : rawRecord;
-                          const prodId = toDisplayText(prod.id || rawRecord.id || `prod_${idx}`);
-                          const prodImg = toDisplayText(prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url || rawRecord.image_url);
-                          const prodName = toDisplayText(prod.name || prod.title || rawRecord.name || rawRecord.title || "Recommended Product");
-                          const prodPrice = Number(prod.price ?? rawRecord.price ?? 0);
-                          const prodReason = toDisplayText(rawRecord.reasons?.[0] || prod.description || rawRecord.match_type || "");
-                          const formattedPrice = isNaN(prodPrice) ? "99,999" : prodPrice.toLocaleString("en-IN");
+                        {asArray(msg.products || msg.results)
+                          .filter((rawProd: any) => {
+                            const rawRecord = rawProd && typeof rawProd === "object" ? rawProd : {};
+                            const prod = rawRecord.product && typeof rawRecord.product === "object" ? rawRecord.product : rawRecord;
+                            return prod && (prod.name || prod.title || prod.id);
+                          })
+                          .map((rawProd: any, idx: number) => {
+                            const rawRecord = rawProd && typeof rawProd === "object" ? rawProd : {};
+                            const prod = rawRecord.product && typeof rawRecord.product === "object" ? rawRecord.product : rawRecord;
+                            const prodId = toDisplayText(prod.id || rawRecord.id || `prod_${idx}`);
+                            const prodImg = toDisplayText(prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url || rawRecord.image_url);
+                            const prodName = toDisplayText(prod.name || prod.title || rawRecord.name || "Featured Product");
+                            const prodPrice = Number(prod.price ?? rawRecord.price ?? 0);
+                            const prodReason = toDisplayText(rawRecord.reasons?.[0] || prod.description || "");
+                            const formattedPrice = isNaN(prodPrice) ? "0" : prodPrice.toLocaleString("en-IN");
+                            const matchBadge = rawRecord.match_type === "BEST_MATCH" ? "Best Match" : (rawRecord.match_type === "ALTERNATIVE" ? "Top Pick" : null);
 
-                          return (
-                            <div 
-                              key={prodId} 
-                              className="bg-white border border-slate-200/90 hover:border-blue-500 rounded-2xl p-3 sm:p-3.5 flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2.5 sm:gap-3.5 shadow-sm hover:shadow-md transition-all group"
-                            >
-                              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 w-full">
-                                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center relative">
-                                  {prodImg ? (
-                                    <img src={prodImg} alt={prodName} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                  ) : (
-                                    <Package className="w-5 h-5 text-slate-400" />
-                                  )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <h5 className="font-bold text-slate-900 text-xs sm:text-sm truncate leading-snug group-hover:text-blue-600 transition-colors">
-                                    {prodName}
-                                  </h5>
-                                  {prodReason && (
-                                    <p className="text-[10px] sm:text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-medium">
-                                      {prodReason}
-                                    </p>
-                                  )}
-                                  <div className="flex items-center gap-2 mt-0.5 sm:mt-1">
-                                    <p className="text-xs sm:text-sm font-black text-blue-600">
-                                      ₹{formattedPrice}
-                                    </p>
-                                    {prod.category && (
-                                      <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[9px] sm:text-[10px] font-semibold rounded-md uppercase tracking-wider truncate max-w-[100px]">
-                                        {toDisplayText(prod.category)}
-                                      </span>
+                            return (
+                              <div 
+                                key={prodId} 
+                                className="bg-white border border-slate-200/90 hover:border-blue-500 rounded-2xl p-3 sm:p-3.5 flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2.5 sm:gap-3.5 shadow-sm hover:shadow-md transition-all group"
+                              >
+                                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 w-full">
+                                  <div className="w-12 h-12 sm:w-14 sm:h-14 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center relative">
+                                    {prodImg ? (
+                                      <img src={prodImg} alt={prodName} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                    ) : (
+                                      <Package className="w-5 h-5 text-slate-400" />
                                     )}
                                   </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <h5 className="font-bold text-slate-900 text-xs sm:text-sm truncate leading-snug group-hover:text-blue-600 transition-colors">
+                                        {prodName}
+                                      </h5>
+                                      {matchBadge && (
+                                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-bold rounded-md uppercase tracking-wider">
+                                          {matchBadge}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {prodReason && (
+                                      <p className="text-[10px] sm:text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-medium">
+                                        {prodReason}
+                                      </p>
+                                    )}
+                                    <div className="flex items-center gap-2 mt-0.5 sm:mt-1">
+                                      <p className="text-xs sm:text-sm font-black text-blue-600">
+                                        ₹{formattedPrice}
+                                      </p>
+                                      {prod.category && (
+                                        <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[9px] sm:text-[10px] font-semibold rounded-md uppercase tracking-wider truncate max-w-[100px]">
+                                          {toDisplayText(prod.category)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 w-full xs:w-auto shrink-0 justify-end pt-1 xs:pt-0 border-t xs:border-t-0 border-slate-100">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleInstantBuy(prod)}
+                                    disabled={instantBuyingId === prodId}
+                                    className="w-full xs:w-auto px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs shadow-blue-500/20 active:scale-95 cursor-pointer disabled:opacity-50 min-h-[36px]"
+                                  >
+                                    {instantBuyingId === prodId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5 fill-white" />}
+                                    <span>Buy Now</span>
+                                  </button>
                                 </div>
                               </div>
-
-                              <div className="flex items-center gap-2 w-full xs:w-auto shrink-0 justify-end pt-1 xs:pt-0 border-t xs:border-t-0 border-slate-100">
-                                <button
-                                  type="button"
-                                  onClick={() => handleInstantBuy(prod)}
-                                  disabled={instantBuyingId === prodId}
-                                  className="w-full xs:w-auto px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs shadow-blue-500/20 active:scale-95 cursor-pointer disabled:opacity-50 min-h-[36px]"
-                                >
-                                  {instantBuyingId === prodId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5 fill-white" />}
-                                  <span>Buy Now</span>
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
                       </div>
                     )}
                   </div>
