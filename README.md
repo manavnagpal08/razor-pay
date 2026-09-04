@@ -1,10 +1,36 @@
-# BuyFlow — Razorpay AI Commerce OS
+# 🚀 BuyFlow — Razorpay AI Commerce OS
 
-> **AI-native commerce infrastructure for human shoppers and AI buyers.**
+<div align="center">
 
-BuyFlow is an AI Growth and Agentic Commerce platform built for **Razorpay Buildathon — Track 01: AI Growth & Agentic Commerce**.
+[![Razorpay Buildathon](https://img.shields.io/badge/Razorpay-Buildathon_Track_01-blue?style=for-the-badge&logo=razorpay)](https://razorpay.com)
+[![Status](https://img.shields.io/badge/Status-Production_Ready-emerald?style=for-the-badge)](https://razorpay-buildthon.vercel.app)
+[![User Guide](https://img.shields.io/badge/Docs-Complete_User_Guide-violet?style=for-the-badge)](./docs/USER_GUIDE.md)
+[![License](https://img.shields.io/badge/License-MIT-amber?style=for-the-badge)](./LICENSE)
 
-BuyFlow enables merchants to become discoverable and transactable by both human shoppers and AI buyers through conversational commerce, machine-readable catalogs, agentic transaction APIs, deterministic financial controls, merchant intelligence, and Razorpay payments.
+**The Autonomous AI Commerce Operating System for Human Shoppers & AI Buyers**
+
+[📖 **Read User Guide**](./docs/USER_GUIDE.md) • [📄 **Download PDF Guide (6 Pages)**](./docs/BuyFlow_AI_Commerce_User_Guide.pdf) • [🌐 **Live Storefront**](https://razorpay-buildthon.vercel.app) • [⚙️ **Merchant OS**](https://razorpay-buildthon.vercel.app/merchant) • [⚡ **Backend API**](https://razorpay-commerce-backend.onrender.com)
+
+</div>
+
+---
+
+BuyFlow is a complete, enterprise-grade AI Growth and Agentic Commerce operating system built for **Razorpay Buildathon — Track 01: AI Growth & Agentic Commerce**.
+
+It empowers merchants to become effortlessly sellable to both human shoppers and autonomous AI buyers by unifying conversational discovery, machine-readable commerce manifests (`/api/agent/manifest`), programmatic transaction APIs (`/api/agent/transact`), deterministic policy guardrails, and in-app Razorpay Test Mode checkout.
+
+---
+
+## 📚 Essential Documentation
+
+- 📘 [**Complete User Guide & Handbook**](./docs/USER_GUIDE.md) — Comprehensive guide covering shopper conversational flow, in-chat OTP login, store management, policy guardrails, live BlueDart tracking, and FAQ.
+- 📄 [**Download 6-Page PDF User Guide**](./docs/BuyFlow_AI_Commerce_User_Guide.pdf) — Formatted, publication-ready PDF handbook for shoppers and merchants.
+- 🛡️ [**Financial Safety & Policy Boundaries**](./docs/AI_BOUNDARIES.md) — Zero-trust policy execution specifications.
+- 🤖 [**AI Multi-Agent System Overview**](./AGENTS.md) — LangGraph Supervisor and sub-agent architecture.
+
+---
+
+## 🎯 Problem Statement Alignment (Track 01)
 
 The core principle is:
 

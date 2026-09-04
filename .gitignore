@@ -12,3 +12,10 @@ serviceAccountKey.json
 dist/
 build/
 .vercel/
+tmp/
+output/
+!output/
+output/*
+!output/pdf/
+output/pdf/*
+!output/pdf/BuyFlow_AI_Commerce_OS_User_Guide.pdf
