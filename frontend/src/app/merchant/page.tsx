@@ -13,6 +13,7 @@ import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
 import Link from "next/link";
 import { Toast } from "@/components/ui/Toast";
+import { FormattedChatMessage } from "@/components/FormattedChatMessage";
 
 export default function MerchantDashboard() {
   const { user, token, role, loading: authLoading } = useAuth();
@@ -1602,12 +1603,12 @@ export default function MerchantDashboard() {
             )}
             {chatMessages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] text-xs shadow-xs leading-relaxed whitespace-pre-line ${
+                <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] text-xs shadow-xs leading-relaxed ${
                   msg.role === 'user' 
                     ? 'bg-indigo-600 text-white rounded-tr-none' 
                     : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
                 }`}>
-                  {msg.text}
+                  <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />
                 </div>
               </div>
             ))}

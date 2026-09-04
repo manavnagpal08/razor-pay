@@ -12,6 +12,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
 import { Toast } from "@/components/ui/Toast";
+import { FormattedChatMessage } from "@/components/FormattedChatMessage";
 
 function ChatContent() {
   const searchParams = useSearchParams();
@@ -944,7 +945,7 @@ function ChatContent() {
                         ? "bg-blue-600 text-white font-medium rounded-tr-xs"
                         : "bg-white border border-slate-200/90 text-slate-800 rounded-tl-xs"
                     }`}>
-                      <p className="whitespace-pre-wrap">{msg.text}</p>
+                      <FormattedChatMessage text={msg.text} isUser={msg.role === "user"} />
                       
                       {/* Autonomous Offer / Discount Badge */}
                       {msg.offer && (
