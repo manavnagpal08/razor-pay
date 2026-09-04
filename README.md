@@ -27,7 +27,6 @@ Current alignment score: 9.45/10.
 
 - Frontend: https://razorpay-buildthon.vercel.app
 - Backend: https://razorpay-commerce-backend.onrender.com
-- AI provider status: https://razorpay-commerce-backend.onrender.com/api/ai/provider/status
 
 Note: the Vercel project may have deployment protection enabled depending on account settings.
 
@@ -247,27 +246,6 @@ npm run build
 npx eslint src/app/chat/page.tsx --quiet
 ```
 
-Current verification status:
-
-- Backend tests: 42 passing.
-- Backend compile: passing.
-- Frontend production build: passing.
-- Live Render backend: Gemini provider verified.
-- Live Vercel frontend: production deployment ready.
-
-## Demo Flow for Judges
-
-1. Open the live frontend.
-2. Create or select a merchant store.
-3. Add products to the merchant catalog.
-4. Ask the AI concierge for recommendations.
-5. Ask a follow-up like "what specs are there in this laptop."
-6. Ask for active discounts or best deals.
-7. Click `Apply Code` only when an offer is relevant.
-8. Click `Buy Now`.
-9. Complete checkout with Razorpay Test Mode.
-10. Open merchant dashboard to inspect revenue, AI activity, policy logs, and campaign opportunities.
-
 ## Safety and Production Readiness
 
 BuyFlow treats payment and discount actions as bounded operations:
@@ -299,6 +277,4 @@ frontend/
   src/utils/             API helpers
 ```
 
-## Repository
 
-GitHub: https://github.com/manavnagpal08/razor-pay
