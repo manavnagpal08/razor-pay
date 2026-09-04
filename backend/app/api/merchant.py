@@ -811,8 +811,8 @@ def get_smtp_config(db: Session = Depends(get_db), merchant_id: str = Depends(ge
         "has_password": bool(pwd),
         "has_resend_key": bool(resend_key),
         "has_brevo_key": bool(brevo_key),
-        "brevo_api_key": brevo_key,
-        "resend_api_key": resend_key,
+        "brevo_api_key": "••••••••••••••••" if brevo_key else "",
+        "resend_api_key": "••••••••••••••••" if resend_key else "",
         "brevo_sender_email": brevo_sender
     }
 
@@ -857,8 +857,17 @@ def update_smtp_config(req: SMTPConfigRequest, db: Session = Depends(get_db), me
     else:
         final_brevo_sender = raw_brevo_sender
 
+    active_provider = req.active_provider or existing_smtp.get("active_provider") or "brevo"
+    if active_provider == "brevo":
+        if not final_brevo:
+            raise HTTPException(status_code=400, detail="Brevo API key is required when Brevo is the active email provider.")
+        if not final_brevo_sender:
+            raise HTTPException(status_code=400, detail="Brevo sender email is required when Brevo is the active email provider.")
+        if not final_brevo.startswith(("xkeysib-", "xsmtpsib-")):
+            raise HTTPException(status_code=400, detail="Brevo key must start with xkeysib- for API delivery or xsmtpsib- for SMTP delivery.")
+
     rules["smtp_config"] = {
-        "active_provider": req.active_provider or existing_smtp.get("active_provider") or "brevo",
+        "active_provider": active_provider,
         "user": req.gmail_user.strip() if req.gmail_user else existing_smtp.get("user", ""),
         "password": final_password,
         "host": req.smtp_host or existing_smtp.get("host") or "smtp.gmail.com",

@@ -3335,9 +3335,10 @@ export default function MerchantDashboard() {
                     )}
                   </div>
                   <input
-                    type="text"
+                    type="password"
                     placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxx"
                     value={brevoApiKey}
+                    onFocus={() => { if (brevoApiKey.startsWith("•")) setBrevoApiKey(""); }}
                     onChange={(e) => setBrevoApiKey(e.target.value.trim())}
                     className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-emerald-500"
                   />

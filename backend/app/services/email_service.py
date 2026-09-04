@@ -45,7 +45,8 @@ class EmailService:
         port = int(config.get("port") or os.getenv("SMTP_PORT") or 587)
         resend_key = config.get("resend_api_key") or os.getenv("RESEND_API_KEY") or ""
         brevo_key = config.get("brevo_api_key") or os.getenv("BREVO_API_KEY") or ""
-        brevo_sender = config.get("brevo_sender_email") or os.getenv("BREVO_SENDER_EMAIL") or user or "manav.nagpal2005@gmail.com"
+        brevo_sender = config.get("brevo_sender_email") or os.getenv("BREVO_SENDER_EMAIL") or ""
+        sender_name = config.get("sender_name") or os.getenv("BREVO_SENDER_NAME") or os.getenv("EMAIL_SENDER_NAME") or ""
         
         return {
             "active_provider": active_provider,
@@ -55,7 +56,8 @@ class EmailService:
             "password": password.strip().replace(" ", ""),  # Gmail App Passwords can have spaces
             "resend_api_key": resend_key.strip() if resend_key else "",
             "brevo_api_key": brevo_key.strip() if brevo_key else "",
-            "brevo_sender_email": brevo_sender.strip() if brevo_sender else "manav.nagpal2005@gmail.com"
+            "brevo_sender_email": brevo_sender.strip() if brevo_sender else "",
+            "sender_name": sender_name.strip() if sender_name else ""
         }
 
     @classmethod
@@ -65,17 +67,29 @@ class EmailService:
         """
         creds = cls.get_smtp_credentials(smtp_override)
         provider = creds.get("active_provider", "brevo")
-        sender_name = store_name or creds.get("sender_name") or "BuyFlow Store"
+        sender_name = creds.get("sender_name") or store_name or "BuyFlow Store"
 
         # 1. BREVO PROVIDER (Recommended: HTTPS Port 443 Safe)
         if provider == "brevo":
             brevo_key = creds.get("brevo_api_key") or os.getenv("BREVO_API_KEY")
-            sender_email_brevo = creds.get("brevo_sender_email") or creds.get("user") or "manav.nagpal2005@gmail.com"
+            sender_email_brevo = creds.get("brevo_sender_email") or os.getenv("BREVO_SENDER_EMAIL") or ""
             if not brevo_key:
                 return {
                     "sent": False,
                     "mode": "BREVO_KEY_MISSING",
                     "message": "Brevo API key is not configured. Please paste your Brevo Key in the Email Setup tab."
+                }
+            if not sender_email_brevo or "@" not in sender_email_brevo:
+                return {
+                    "sent": False,
+                    "mode": "BREVO_SENDER_MISSING",
+                    "message": "Brevo sender email is not configured. Add the exact sender email that is verified in Brevo under Senders & IPs."
+                }
+            if not brevo_key.strip().startswith(("xkeysib-", "xsmtpsib-")):
+                return {
+                    "sent": False,
+                    "mode": "BREVO_KEY_TYPE_INVALID",
+                    "message": "Brevo key format is invalid. Use a Transactional API key that starts with 'xkeysib-' or an SMTP key that starts with 'xsmtpsib-'."
                 }
 
             # Method 1A: Brevo HTTPS REST API (Port 443) - For xkeysib- API keys
@@ -85,33 +99,12 @@ class EmailService:
                     import urllib.error
                     import json
 
-                    # Auto-resolve safe Brevo sender if an unauthenticated consumer domain is used (e.g. @gmail.com)
-                    effective_sender = sender_email_brevo.strip()
-                    reply_to = None
-                    if any(effective_sender.lower().endswith(dom) for dom in ["@gmail.com", "@yahoo.com", "@outlook.com", "@hotmail.com"]):
-                        try:
-                            acc_req = urllib.request.Request(
-                                "https://api.brevo.com/v3/account",
-                                headers={"api-key": brevo_key.strip(), "accept": "application/json"}
-                            )
-                            with urllib.request.urlopen(acc_req, timeout=4) as acc_resp:
-                                acc_data = json.loads(acc_resp.read().decode())
-                                user_id = acc_data.get("user_id")
-                                if user_id:
-                                    prefix = effective_sender.split("@")[0].replace(" ", "").replace("+", "")
-                                    effective_sender = f"{prefix}@{user_id}.brevosend.com"
-                                    reply_to = {"email": sender_email_brevo.strip(), "name": sender_name}
-                        except Exception as e_acc:
-                            logger.warning(f"Could not resolve Brevo authenticated domain: {e_acc}")
-
                     email_payload = {
-                        "sender": {"name": sender_name, "email": effective_sender},
+                        "sender": {"name": sender_name, "email": sender_email_brevo.strip()},
                         "to": [{"email": to_email.strip()}],
                         "subject": subject,
                         "htmlContent": html_body
                     }
-                    if reply_to:
-                        email_payload["replyTo"] = reply_to
 
                     payload = json.dumps(email_payload).encode("utf-8")
                     req_obj = urllib.request.Request(
@@ -154,7 +147,7 @@ class EmailService:
                     if "unrecognised IP" in str(err_msg) or "authorised_ips" in str(err_msg):
                         action_msg = f"Brevo IP Security Block: Brevo blocked delivery because IP restriction is active on your Brevo account. Please open https://app.brevo.com/security/authorised_ips and disable IP restriction (or add your server IP) to enable email dispatch."
                     else:
-                        action_msg = f"Brevo API error ({e_brevo_http.code}): {err_msg}. Note: In your Brevo account, ensure '{sender_email_brevo}' is verified under 'Senders & IPs' (https://app.brevo.com/senders) and IP restriction is disabled at https://app.brevo.com/security/authorised_ips."
+                        action_msg = f"Brevo API error ({e_brevo_http.code}): {err_msg}. Verify the sender email in Brevo under Senders & IPs and make sure API key IP restriction is disabled or allows this server."
 
                     return {
                         "sent": False,
