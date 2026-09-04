@@ -40,6 +40,28 @@ def chat_search(request: ChatRequest, db: Session = Depends(get_db)):
             request.thread_id, 
             merchant_id=request.merchant_id
         )
+        
+        # Log conversational chat event for merchant audit trail
+        try:
+            import uuid
+            from app.models import CustomerEvent
+            event = CustomerEvent(
+                id=str(uuid.uuid4()),
+                merchant_id=request.merchant_id or "demo_merchant",
+                customer_id=request.thread_id or "shopper",
+                event_type="AI_CONCIERGE_CHAT",
+                metadata_={
+                    "query": request.text,
+                    "summary": response_data.get("summary"),
+                    "offer": response_data.get("offer"),
+                    "intent": response_data.get("intent")
+                }
+            )
+            db.add(event)
+            db.commit()
+        except Exception:
+            db.rollback()
+
         return response_data
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

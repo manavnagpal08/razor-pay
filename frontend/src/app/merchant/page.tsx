@@ -2230,30 +2230,86 @@ export default function MerchantDashboard() {
                           No conversation records logged for this session yet.
                         </div>
                       ) : (
-                        selectedCustomerLogs.chat_logs.map((log: any, idx: number) => (
-                          <div key={idx} className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-2">
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold uppercase border border-indigo-100">
-                                {log.type || "chat_query"}
-                              </span>
-                              <span className="text-slate-400 font-mono text-[10px]">{log.timestamp}</span>
-                            </div>
+                        selectedCustomerLogs.chat_logs.map((log: any, idx: number) => {
+                          const isPaid = log.type === "ORDER_PAID";
+                          const isCreated = log.type === "ORDER_CREATED";
+                          const isChat = log.type === "AI_CONCIERGE_CHAT";
+                          
+                          const badgeColor = isPaid 
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                            : isCreated 
+                            ? "bg-blue-50 text-blue-700 border-blue-200" 
+                            : isChat 
+                            ? "bg-purple-50 text-purple-700 border-purple-200" 
+                            : "bg-indigo-50 text-indigo-700 border-indigo-100";
 
-                            <div className="space-y-1">
-                              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">User Query:</p>
-                              <p className="text-slate-900 font-semibold pl-2.5 border-l-2 border-indigo-500 text-xs">
-                                {log.query}
-                              </p>
-                            </div>
+                          const badgeText = isPaid
+                            ? "💳 Payment Verified"
+                            : isCreated
+                            ? "🛍️ Order Created"
+                            : isChat
+                            ? "💬 Shopping Inquiry"
+                            : log.type?.replace(/_/g, " ") || "Chat Interaction";
 
-                            <div className="space-y-1 pt-1">
-                              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">AI Concierge Response:</p>
-                              <p className="text-slate-700 pl-2.5 border-l-2 border-emerald-500 leading-relaxed text-xs">
-                                {log.response}
-                              </p>
+                          return (
+                            <div key={idx} className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-3">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className={`px-2.5 py-0.5 rounded-lg font-bold text-[10px] uppercase border ${badgeColor}`}>
+                                  {badgeText}
+                                </span>
+                                <span className="text-slate-400 font-mono text-[10px]">{log.timestamp}</span>
+                              </div>
+
+                              {/* Prominent Discount Applied Banner if coupon or promotion was utilized */}
+                              {log.discount && (
+                                <div className="p-3 bg-gradient-to-r from-emerald-50 via-teal-50/70 to-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-2.5 text-emerald-950 shadow-xs">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+                                      🏷️
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <p className="font-black text-emerald-900 text-xs tracking-wide uppercase">
+                                          Discount Applied: {log.discount.code || "SAVE15"} ({log.discount.discount_percent}% OFF)
+                                        </p>
+                                        {log.discount.saved_amount != null && (
+                                          <span className="px-2 py-0.5 bg-emerald-600 text-white text-[10px] font-black rounded-md tracking-wider">
+                                            SAVED ₹{Number(log.discount.saved_amount).toLocaleString("en-IN")}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-[11px] text-emerald-700 font-semibold mt-0.5 truncate">
+                                        {log.discount.original_amount != null && log.discount.final_amount != null
+                                          ? `Original: ₹${Number(log.discount.original_amount).toLocaleString("en-IN")} → Paid: ₹${Number(log.discount.final_amount).toLocaleString("en-IN")}`
+                                          : `Active coupon authorized by merchant policy engine.`
+                                        }
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <span className="px-2.5 py-1 rounded-full bg-emerald-100/90 text-emerald-800 text-[10px] font-extrabold border border-emerald-300 uppercase tracking-wider">
+                                      {log.discount.discount_percent}% Saved
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="space-y-1">
+                                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">User Query / Action:</p>
+                                <p className="text-slate-900 font-bold pl-2.5 border-l-2 border-indigo-500 text-xs">
+                                  {log.query}
+                                </p>
+                              </div>
+
+                              <div className="space-y-1 pt-0.5">
+                                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">AI Concierge Response:</p>
+                                <p className="text-slate-700 pl-2.5 border-l-2 border-emerald-500 leading-relaxed text-xs font-medium">
+                                  {log.response}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
 

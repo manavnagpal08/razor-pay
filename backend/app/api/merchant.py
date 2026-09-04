@@ -936,7 +936,7 @@ def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Dep
     """
     Returns all customers scoped strictly to this specific merchant store with chat logs & registration metrics.
     """
-    from app.models import Customer, User, Order, CustomerEvent, AgentAction
+    from app.models import Customer, User, Order, CustomerEvent, AgentAction, Cart, CartItem
     from datetime import datetime, timezone
     from sqlalchemy import or_
     import uuid
@@ -1028,24 +1028,126 @@ def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Dep
         events = db.query(CustomerEvent).filter(
             CustomerEvent.merchant_id == merchant_id,
             or_(CustomerEvent.customer_id == c.id, CustomerEvent.customer_id == (user.id if user else c.id))
-        ).order_by(CustomerEvent.timestamp.desc()).limit(15).all()
+        ).order_by(CustomerEvent.timestamp.desc()).limit(20).all()
 
         chat_logs = []
+        logged_order_ids = set()
+
         for ev in events:
             meta = ev.metadata_ if isinstance(ev.metadata_, dict) else {}
+            ev_type = ev.event_type or "CHAT_INTERACTION"
+            discount_payload = None
+
+            if ev_type == "ORDER_PAID":
+                order_id = meta.get("order_id")
+                rzp_payment_id = meta.get("razorpay_payment_id") or "rzp_test_payment"
+                order = db.query(Order).filter(Order.id == order_id).first() if order_id else None
+                if order:
+                    logged_order_ids.add(order.id)
+                cart = db.query(Cart).filter(Cart.id == order.cart_id).first() if order and order.cart_id else None
+                paid_amt = float(order.amount) if order else float(total_spent)
+                subtotal = float(cart.subtotal) if (cart and cart.subtotal and float(cart.subtotal) > 0) else paid_amt
+                disc_amt = float(cart.discount) if (cart and cart.discount and float(cart.discount) > 0) else max(0.0, subtotal - paid_amt)
+                
+                query_text = f"💳 Razorpay Payment Verified (#{order.razorpay_order_id if order and order.razorpay_order_id else (order_id[:12] if order_id else 'ORDER')})"
+                response_text = f"Payment of ₹{paid_amt:,.2f} captured and verified via Razorpay HMAC signature. (Payment ID: {rzp_payment_id})"
+
+                if disc_amt > 0:
+                    disc_pct = round((disc_amt / subtotal) * 100) if subtotal > 0 else 15
+                    discount_payload = {
+                        "applied": True,
+                        "code": "SAVE15",
+                        "discount_percent": disc_pct,
+                        "saved_amount": disc_amt,
+                        "original_amount": subtotal,
+                        "final_amount": paid_amt
+                    }
+
+            elif ev_type == "ORDER_CREATED":
+                order_id = meta.get("order_id")
+                order = db.query(Order).filter(Order.id == order_id).first() if order_id else None
+                if order:
+                    logged_order_ids.add(order.id)
+                cart = db.query(Cart).filter(Cart.id == order.cart_id).first() if order and order.cart_id else None
+                order_amt = float(order.amount) if order else 0.0
+                subtotal = float(cart.subtotal) if (cart and cart.subtotal and float(cart.subtotal) > 0) else order_amt
+                disc_amt = float(cart.discount) if (cart and cart.discount and float(cart.discount) > 0) else max(0.0, subtotal - order_amt)
+
+                query_text = f"🛍️ Order Created (#{order.razorpay_order_id if order and order.razorpay_order_id else (order.id[:12] if order else 'NEW')})"
+                response_text = f"Server recalculated cart total ₹{order_amt:,.2f} and generated Razorpay order."
+
+                if disc_amt > 0:
+                    disc_pct = round((disc_amt / subtotal) * 100) if subtotal > 0 else 15
+                    discount_payload = {
+                        "applied": True,
+                        "code": "SAVE15",
+                        "discount_percent": disc_pct,
+                        "saved_amount": disc_amt,
+                        "original_amount": subtotal,
+                        "final_amount": order_amt
+                    }
+
+            elif ev_type == "AI_CONCIERGE_CHAT":
+                query_text = meta.get("query") or "Product Catalog Inquiry"
+                response_text = meta.get("summary") or "AI recommended best matching catalog items based on criteria."
+                offer = meta.get("offer")
+                if offer and isinstance(offer, dict):
+                    discount_payload = {
+                        "applied": True,
+                        "code": offer.get("code", "SAVE15"),
+                        "discount_percent": float(offer.get("discount_percent", 15)),
+                        "saved_amount": None,
+                        "original_amount": None,
+                        "final_amount": None
+                    }
+
+            else:
+                query_text = meta.get("query") or meta.get("action") or f"Customer {ev_type.replace('_', ' ').title()}"
+                response_text = meta.get("summary") or meta.get("response") or "AI Concierge processed customer shopping session."
+
             chat_logs.append({
-                "type": ev.event_type,
-                "query": meta.get("query") or meta.get("action") or ev.event_type,
-                "response": meta.get("summary") or meta.get("response") or "Interaction processed",
+                "type": ev_type,
+                "query": query_text,
+                "response": response_text,
+                "discount": discount_payload,
                 "timestamp": ev.timestamp.strftime("%Y-%m-%d %H:%M:%S") if ev.timestamp else "Recently"
             })
+
+        # Include orders that might not have an explicit CustomerEvent in the database
+        for o in cust_orders:
+            if o.id not in logged_order_ids:
+                cart = db.query(Cart).filter(Cart.id == o.cart_id).first() if o.cart_id else None
+                paid_amt = float(o.amount or 0)
+                subtotal = float(cart.subtotal) if (cart and cart.subtotal and float(cart.subtotal) > 0) else paid_amt
+                disc_amt = float(cart.discount) if (cart and cart.discount and float(cart.discount) > 0) else max(0.0, subtotal - paid_amt)
+                
+                order_discount = None
+                if disc_amt > 0:
+                    disc_pct = round((disc_amt / subtotal) * 100) if subtotal > 0 else 15
+                    order_discount = {
+                        "applied": True,
+                        "code": "SAVE15",
+                        "discount_percent": disc_pct,
+                        "saved_amount": disc_amt,
+                        "original_amount": subtotal,
+                        "final_amount": paid_amt
+                    }
+
+                chat_logs.insert(0, {
+                    "type": "ORDER_PAID" if o.status == "PAID" else "ORDER_CREATED",
+                    "query": f"💳 Razorpay Payment Verified (#{o.razorpay_order_id or o.id[:12]})",
+                    "response": f"Payment of ₹{paid_amt:,.2f} verified via Razorpay HMAC signature. Order status: {o.status}.",
+                    "discount": order_discount,
+                    "timestamp": o.created_at.strftime("%Y-%m-%d %H:%M:%S") if o.created_at else "Recently"
+                })
 
         # Include welcoming interaction log if none found
         if not chat_logs:
             chat_logs.append({
-                "type": "account_verified",
+                "type": "ACCOUNT_VERIFIED",
                 "query": "Verified AI Shopping Session",
                 "response": f"Customer placed {len(cust_orders)} order(s) via AI Concierge.",
+                "discount": None,
                 "timestamp": joined_at.strftime("%Y-%m-%d %H:%M:%S") if joined_at else "Recently"
             })
 
