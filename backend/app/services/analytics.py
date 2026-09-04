@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
-from app.models import Order, AgentAction, Product, CartItem, MerchantPolicy
+from app.models import Order, AgentAction, Product, Cart, CartItem, MerchantPolicy
 from typing import Dict, Any, List
 
 class AnalyticsService:
@@ -157,6 +157,85 @@ class AnalyticsService:
         
         stats.sort(key=lambda x: x["revenue"], reverse=True)
         return stats[:limit]
+
+    def get_campaign_opportunities(self, merchant_id: str) -> List[Dict[str, Any]]:
+        policy = self.db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+        max_discount = float(policy.max_discount_percent or 10.0) if policy else 10.0
+        safe_discount = min(max_discount, 15.0)
+
+        products = self.db.query(Product).filter(Product.merchant_id == merchant_id).all()
+        product_ids = [product.id for product in products]
+        if not product_ids:
+            return [{
+                "type": "catalog_gap",
+                "priority": "high",
+                "title": "Add products before launching campaigns",
+                "reason": "No merchant-scoped catalog items are available, so AI buyers cannot transact yet.",
+                "proposal": {"action": "add_catalog_items", "discount_percent": 0, "budget": 0},
+            }]
+
+        active_carts = self.db.query(Cart).filter(
+            Cart.merchant_id == merchant_id,
+            Cart.status.in_(["active", "payment_pending"]),
+        ).count()
+        paid_orders = self.db.query(Order).filter(
+            Order.merchant_id == merchant_id,
+            Order.status.in_(["PAID", "COMPLETED", "CAPTURED"]),
+        ).count()
+
+        opportunities = []
+        if active_carts > paid_orders:
+            opportunities.append({
+                "type": "cart_recovery",
+                "priority": "high",
+                "title": "Recover active and payment-pending carts",
+                "reason": f"{active_carts} active/payment-pending carts versus {paid_orders} paid orders suggests recoverable checkout intent.",
+                "proposal": {
+                    "audience": "cart_abandoners",
+                    "discount_percent": safe_discount,
+                    "budget": min(float(policy.campaign_budget_limit or 5000.0) if policy else 5000.0, 5000.0),
+                },
+            })
+
+        sold_product_ids = {
+            row.product_id for row in self.db.query(CartItem.product_id).join(Order, Order.cart_id == CartItem.cart_id).filter(
+                Order.status.in_(["PAID", "COMPLETED", "CAPTURED"]),
+                CartItem.product_id.in_(product_ids),
+            ).distinct().all()
+        }
+        unsold_products = [product for product in products if product.id not in sold_product_ids and product.inventory > 0]
+        if unsold_products:
+            names = ", ".join(product.name for product in unsold_products[:3])
+            opportunities.append({
+                "type": "slow_mover",
+                "priority": "medium",
+                "title": "Promote products with no paid orders yet",
+                "reason": f"{names} have available inventory but no paid order signal.",
+                "proposal": {
+                    "audience": "new_visitors",
+                    "product_ids": [product.id for product in unsold_products[:3]],
+                    "discount_percent": max(5.0, min(safe_discount, 10.0)),
+                    "budget": min(float(policy.campaign_budget_limit or 3000.0) if policy else 3000.0, 3000.0),
+                },
+            })
+
+        low_stock_products = [product for product in products if 0 < int(product.inventory or 0) <= 3]
+        if low_stock_products:
+            names = ", ".join(product.name for product in low_stock_products[:3])
+            opportunities.append({
+                "type": "urgency",
+                "priority": "medium",
+                "title": "Use low-stock urgency messaging",
+                "reason": f"{names} have low inventory, so urgency messaging can convert demand without increasing discount risk.",
+                "proposal": {
+                    "audience": "returning_visitors",
+                    "product_ids": [product.id for product in low_stock_products[:3]],
+                    "discount_percent": 0,
+                    "budget": 0,
+                },
+            })
+
+        return opportunities[:5]
 
     def get_merchant_policy(self, merchant_id: str) -> Dict[str, Any]:
         policy = self.db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()

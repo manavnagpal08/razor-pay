@@ -61,6 +61,11 @@ def chat_search(request: ChatRequest, db: Session = Depends(get_db)):
         try:
             import uuid
             from app.models import CustomerEvent
+            shown_products = []
+            for item in (response_data.get("results") or response_data.get("alternatives") or [])[:5]:
+                if isinstance(item, dict):
+                    product = item.get("product") if isinstance(item.get("product"), dict) else item
+                    shown_products.append(product)
             event = CustomerEvent(
                 id=str(uuid.uuid4()),
                 merchant_id=request.merchant_id or "demo_merchant",
@@ -70,7 +75,8 @@ def chat_search(request: ChatRequest, db: Session = Depends(get_db)):
                     "query": request.text,
                     "summary": response_data.get("summary"),
                     "offer": response_data.get("offer"),
-                    "intent": response_data.get("intent")
+                    "intent": response_data.get("intent"),
+                    "shown_products": shown_products,
                 }
             )
             db.add(event)

@@ -89,6 +89,11 @@ def list_campaigns(db: Session = Depends(get_db), merchant_id: str = Depends(get
         for c in campaigns
     ]
 
+@router.get("/campaigns/opportunities")
+def get_campaign_opportunities(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
+    service = AnalyticsService(db)
+    return service.get_campaign_opportunities(merchant_id)
+
 @router.post("/campaigns/propose", response_model=CampaignStatusResponse)
 def propose_campaign(
     req: CampaignProposalRequest,
@@ -237,6 +242,8 @@ class FirstProductPayload(BaseModel):
     inventory: Optional[int] = 20
     description: Optional[str] = None
     image_url: Optional[str] = None
+    features: Optional[Dict[str, Any]] = None
+    use_cases: Optional[List[str]] = None
 
 class StoreSetupRequest(BaseModel):
     store_name: str
@@ -259,6 +266,7 @@ def setup_store_profile(
     """
     import uuid
     from app.models import Merchant, MerchantPolicy, Product
+    from app.services.catalog_enrichment import infer_product_attributes, rebuild_merchant_relationships
 
     clean_name = req.store_name.strip()
     merchant = db.query(Merchant).filter(Merchant.id == merchant_id).first()
@@ -302,17 +310,20 @@ def setup_store_profile(
         if fp and fp.name and fp.name.strip():
             prod_id = f"prod_{str(uuid.uuid4())[:8]}"
             img_url = fp.image_url or "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80"
+            product_category = (fp.category or req.category or "General").strip()
+            product_description = fp.description or f"Featured {fp.name.strip()}"
+            inferred = infer_product_attributes(fp.name, product_category, product_description)
             product = Product(
                 id=prod_id,
                 merchant_id=merchant_id,
                 name=fp.name.strip(),
-                category=(fp.category or req.category or "General").strip(),
+                category=product_category,
                 price=float(fp.price) if fp.price else 999.0,
                 inventory=int(fp.inventory) if fp.inventory else 20,
-                description=fp.description or f"Featured {fp.name.strip()}",
+                description=product_description,
                 currency="INR",
-                features={"verified": True, "featured": True},
-                use_cases=["Everyday", "Store Exclusive"],
+                features=fp.features or {**inferred["features"], "featured": True},
+                use_cases=fp.use_cases or inferred["use_cases"],
                 metadata_={"image_url": img_url}
             )
             db.add(product)
@@ -321,6 +332,10 @@ def setup_store_profile(
                 "name": product.name,
                 "price": float(product.price)
             })
+
+    if input_products:
+        db.flush()
+        rebuild_merchant_relationships(db, merchant_id)
 
     db.commit()
     db.refresh(merchant)

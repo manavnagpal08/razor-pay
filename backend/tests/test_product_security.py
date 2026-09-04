@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.core.security import create_access_token
 from app.database import SessionLocal
 from app.main import app
-from app.models import Merchant, Product, User
+from app.models import Merchant, Product, ProductRelationship, User
 
 
 client = TestClient(app)
@@ -60,6 +60,48 @@ def test_product_create_ignores_body_merchant_id_and_uses_token_owner():
 
     assert response.status_code == 200
     assert response.json()["merchant_id"] == merchant_id
+
+
+def test_product_create_enriches_laptop_specs_and_builds_relationships():
+    merchant_id, token = create_merchant("Enriched Merchant")
+
+    first = client.post(
+        "/api/products/",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Student Laptop",
+            "category": "Laptops",
+            "price": 45000.0,
+            "inventory": 8,
+            "description": "Laptop for college and coding",
+        },
+    )
+    second = client.post(
+        "/api/products/",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Creator Laptop Pro",
+            "category": "Laptops",
+            "price": 75000.0,
+            "inventory": 5,
+            "description": "Laptop for editing and creative work",
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["features"]["ram"] == "16GB"
+    assert "coding" in first.json()["use_cases"]
+
+    db = SessionLocal()
+    try:
+        assert db.query(ProductRelationship).filter(
+            ProductRelationship.source_product_id == first.json()["id"],
+            ProductRelationship.target_product_id == second.json()["id"],
+            ProductRelationship.relationship_type == "UPSELL",
+        ).first() is not None
+    finally:
+        db.close()
 
 
 def test_merchant_cannot_delete_another_merchants_product():

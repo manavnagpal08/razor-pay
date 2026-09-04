@@ -97,6 +97,8 @@ class CreateProductPayload(schemas.BaseModel):
     description: str | None = ""
     image_url: str | None = None
     merchant_id: str | None = "demo_merchant"
+    features: dict | None = None
+    use_cases: list[str] | None = None
 
 @router.get("/merchant/{merchant_id}", response_model=List[schemas.ProductResponse])
 def get_merchant_products(merchant_id: str, db: Session = Depends(get_db)):
@@ -158,6 +160,8 @@ def create_merchant_product(
 
     prod_id = f"prod_{str(uuid.uuid4())[:8]}"
     img_url = req.image_url or "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80"
+    from app.services.catalog_enrichment import infer_product_attributes, rebuild_merchant_relationships
+    inferred = infer_product_attributes(req.name, req.category, req.description)
     product = models.Product(
         id=prod_id,
         merchant_id=clean_merchant_id,
@@ -167,11 +171,13 @@ def create_merchant_product(
         inventory=req.inventory,
         description=req.description or f"High performance {req.name}",
         currency="INR",
-        features={"verified": True},
-        use_cases=["Everyday", "Professional"],
+        features=req.features or inferred["features"],
+        use_cases=req.use_cases or inferred["use_cases"],
         metadata_={"image_url": img_url}
     )
     db.add(product)
+    db.flush()
+    rebuild_merchant_relationships(db, clean_merchant_id)
     db.commit()
     db.refresh(product)
     
@@ -284,4 +290,3 @@ def delete_merchant_product(
     db.delete(product)
     db.commit()
     return {"status": "deleted", "product_id": product_id}
-

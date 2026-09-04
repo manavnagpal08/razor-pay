@@ -7,7 +7,7 @@ from app.schemas import ShoppingIntent, ProductSearchRequest
 from app.services.intent_service import IntentService
 from app.services.recommendation import RecommendationEngine
 from app.api.products import search_products
-from app.models import Product
+from app.models import Product, CustomerEvent
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,49 @@ class AICommerceSupervisor:
             f"- Use cases: {use_case_text}\n"
             + "\n".join(feature_lines)
         )
+
+    def _resolve_referenced_product(self, text: str, thread_id: str, merchant_id: Optional[str]) -> Optional[Dict[str, Any]]:
+        text_lower = text.lower()
+        merchant_filter = merchant_id or "demo_merchant"
+
+        named_product = self.db.query(Product).filter(
+            Product.merchant_id == merchant_filter,
+            Product.inventory > 0,
+        ).all()
+        for product in named_product:
+            if product.name and product.name.lower() in text_lower:
+                return self._serialize_product(product)
+
+        if not any(word in text_lower for word in ["this", "that", "it", "same", "above", "laptop", "phone", "product"]):
+            return None
+
+        event = self.db.query(CustomerEvent).filter(
+            CustomerEvent.merchant_id == merchant_filter,
+            CustomerEvent.customer_id == (thread_id or "shopper"),
+            CustomerEvent.event_type == "AI_CONCIERGE_CHAT",
+        ).order_by(CustomerEvent.timestamp.desc()).first()
+        metadata = event.metadata_ if event and isinstance(event.metadata_, dict) else {}
+        for product in metadata.get("shown_products", []):
+            if isinstance(product, dict) and product.get("id"):
+                return product
+        return None
+
+    def _serialize_product(self, product: Product) -> Dict[str, Any]:
+        image_url = product.metadata_.get("image_url") if isinstance(product.metadata_, dict) else None
+        return {
+            "id": product.id,
+            "merchant_id": product.merchant_id,
+            "name": product.name,
+            "category": product.category,
+            "description": product.description,
+            "price": float(product.price or 0),
+            "currency": product.currency or "INR",
+            "inventory": product.inventory or 0,
+            "image_url": image_url,
+            "features": product.features or {},
+            "use_cases": product.use_cases or [],
+            "metadata": product.metadata_ or {},
+        }
         
     def _node_parse_intent(self, state: CommerceState) -> CommerceState:
         intent_resp = self.intent_service.process_intent(state["input_text"])
@@ -213,6 +256,8 @@ class AICommerceSupervisor:
         
         config = {"configurable": {"thread_id": thread_id}}
         final_state = self.graph.invoke(initial_state, config=config)
+        is_detail_query = self._is_detail_query(text)
+        referenced_product = self._resolve_referenced_product(text, thread_id, merchant_id) if is_detail_query else None
         
         results = []
         for r in final_state.get("ranked_products", []):
@@ -232,7 +277,6 @@ class AICommerceSupervisor:
         is_offer_query = self._is_offer_query(text)
         is_recommendation_query = any(w in text_lower for w in ["recommended", "recommendation", "best"])
         is_deals_query = is_offer_query or is_recommendation_query
-        is_detail_query = self._is_detail_query(text)
         
         has_direct_match = any(r.get("is_direct_match", False) or r.get("match_type") in ["BEST_MATCH", "TOP PICK"] for r in results)
         searched_term = cat or kw or text
@@ -243,7 +287,12 @@ class AICommerceSupervisor:
             alternatives = results[:3]
             display_results = []
 
-        if display_results:
+        if referenced_product:
+            summary = self._build_product_detail_summary(referenced_product)
+            display_results = []
+            alternatives = []
+            has_direct_match = True
+        elif display_results:
             if is_detail_query and has_direct_match:
                 summary = self._build_product_detail_summary(display_results[0]["product"])
                 display_results = []

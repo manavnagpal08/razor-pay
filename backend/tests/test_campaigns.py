@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.core.security import create_access_token
 from app.database import SessionLocal
 from app.main import app
-from app.models import AgentAction, Merchant, MerchantPolicy, User
+from app.models import AgentAction, Cart, Merchant, MerchantPolicy, Product, User
 
 
 client = TestClient(app)
@@ -96,3 +96,44 @@ def test_campaign_policy_blocks_excessive_budget_and_discount():
     assert body["status"] == "POLICY_BLOCKED"
     assert body["policy_result"]["allowed"] is False
     assert len(body["policy_result"]["violations"]) == 2
+
+
+def test_campaign_opportunities_react_to_store_signals():
+    merchant_id, token = create_merchant_fixture()
+    db = SessionLocal()
+    product = Product(
+        id=f"prod_signal_{uuid.uuid4().hex[:8]}",
+        merchant_id=merchant_id,
+        name="Slow Moving Laptop",
+        category="Laptops",
+        description="Useful product with inventory but no paid orders",
+        price=50000.0,
+        inventory=2,
+        currency="INR",
+        features={},
+        use_cases=[],
+        metadata_={},
+    )
+    cart = Cart(
+        id=f"cart_signal_{uuid.uuid4().hex[:8]}",
+        merchant_id=merchant_id,
+        customer_id="customer_signal",
+        status="active",
+        subtotal=50000.0,
+        discount=0.0,
+        total=50000.0,
+    )
+    db.add_all([product, cart])
+    db.commit()
+    db.close()
+
+    response = client.get(
+        "/api/merchant/campaigns/opportunities",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    types = {item["type"] for item in response.json()}
+    assert "cart_recovery" in types
+    assert "slow_mover" in types
+    assert "urgency" in types

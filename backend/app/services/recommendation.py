@@ -108,6 +108,8 @@ class RecommendationEngine:
     def find_upsell(self, product: Any) -> Optional[UpsellResponse]:
         p_id = product.get("id") if isinstance(product, dict) else getattr(product, "id", None)
         p_price = product.get("price") if isinstance(product, dict) else getattr(product, "price", 0)
+        p_category = product.get("category") if isinstance(product, dict) else getattr(product, "category", None)
+        p_merchant_id = product.get("merchant_id") if isinstance(product, dict) else getattr(product, "merchant_id", self.merchant_id)
         if not p_id:
             return None
         # Search for UPSELL relationship or find slightly more expensive in same category
@@ -126,10 +128,27 @@ class RecommendationEngine:
                     price_difference=diff,
                     reasons=[f"For ₹{diff} more, you get a premium upgrade."]
                 )
+        fallback = self.db.query(Product).filter(
+            Product.id != p_id,
+            Product.merchant_id == p_merchant_id,
+            Product.category == p_category,
+            Product.inventory > 0,
+            Product.price > p_price,
+        ).order_by(Product.price.asc()).first()
+        if fallback:
+            diff = float(fallback.price) - float(p_price)
+            return UpsellResponse(
+                original_product_id=p_id,
+                upgrade_product_id=fallback.id,
+                price_difference=diff,
+                reasons=[f"For ₹{diff:,.0f} more, {fallback.name} is the next available upgrade in this merchant catalog."]
+            )
         return None
 
     def find_cross_sell(self, product: Any) -> Optional[CrossSellResponse]:
         p_id = product.get("id") if isinstance(product, dict) else getattr(product, "id", None)
+        p_category = (product.get("category") if isinstance(product, dict) else getattr(product, "category", "")) or ""
+        p_merchant_id = product.get("merchant_id") if isinstance(product, dict) else getattr(product, "merchant_id", self.merchant_id)
         if not p_id:
             return None
         cross_sells = self.db.query(ProductRelationship).filter(
@@ -147,6 +166,17 @@ class RecommendationEngine:
             return CrossSellResponse(
                 original_product_id=p_id,
                 recommended_product_ids=target_ids
+            )
+        fallback_targets = self.db.query(Product).filter(
+            Product.id != p_id,
+            Product.merchant_id == p_merchant_id,
+            Product.inventory > 0,
+            Product.category != p_category,
+        ).order_by(Product.price.asc()).limit(3).all()
+        if fallback_targets:
+            return CrossSellResponse(
+                original_product_id=p_id,
+                recommended_product_ids=[target.id for target in fallback_targets]
             )
         return None
 

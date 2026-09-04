@@ -645,6 +645,7 @@ function ChatContent() {
         text: responseText, 
         products: prods,
         results: prods,
+        alternatives: asArray(data.alternatives),
         intent: data.intent && typeof data.intent === "object" ? data.intent : null,
         upsell: data.upsell && typeof data.upsell === "object" ? data.upsell : null,
         cross_sell: data.cross_sell && typeof data.cross_sell === "object" ? data.cross_sell : null,

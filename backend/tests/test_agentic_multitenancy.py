@@ -272,3 +272,81 @@ def test_chat_specs_query_answers_details_without_auto_discount(monkeypatch):
     assert "512GB SSD" in body["summary"]
     assert body["results"] == []
     assert body["offer"] is None
+
+
+def test_chat_followup_this_laptop_uses_previous_thread_product(monkeypatch):
+    db = SessionLocal()
+    merchant_id = f"merchant_memory_{uuid.uuid4().hex[:8]}"
+    product_id = f"prod_memory_{uuid.uuid4().hex[:8]}"
+    db.add(Merchant(id=merchant_id, name="Memory Merchant", currency="INR"))
+    db.add(Product(
+        id=product_id,
+        merchant_id=merchant_id,
+        name="Memory Laptop",
+        category="Laptops",
+        description="A laptop with remembered specs.",
+        price=64000.0,
+        inventory=4,
+        currency="INR",
+        features={"ram": "32GB", "storage": "1TB SSD"},
+        use_cases=["coding"],
+        metadata_={},
+    ))
+    db.add(MerchantPolicy(
+        id=f"policy_memory_{uuid.uuid4().hex[:8]}",
+        merchant_id=merchant_id,
+        max_discount_percent=10.0,
+        max_discount_amount=5000.0,
+        campaign_budget_limit=20000.0,
+        approval_rules={},
+    ))
+    db.commit()
+    db.close()
+
+    def fake_intent(_self, text):
+        category = "laptops" if "laptop" in text.lower() else None
+        return type(
+            "IntentResp",
+            (),
+            {
+                "intent": type(
+                    "Intent",
+                    (),
+                    {
+                        "model_dump": lambda self: {
+                            "category": category,
+                            "subcategory": None,
+                            "max_price": None,
+                            "min_price": None,
+                            "currency": "INR",
+                            "use_cases": [],
+                            "required_features": [],
+                            "preferred_features": [],
+                            "keywords": ["laptop"],
+                        }
+                    },
+                )(),
+                "provider": "mock",
+                "model": "test",
+                "fallback_reason": None,
+            },
+        )()
+
+    monkeypatch.setattr("app.services.ai_supervisor.IntentService.process_intent", fake_intent)
+
+    thread_id = f"thread_memory_{uuid.uuid4().hex[:8]}"
+    first = client.post(
+        "/api/ai/chat/search",
+        json={"text": "show me laptops", "thread_id": thread_id, "merchant_id": merchant_id},
+    )
+    second = client.post(
+        "/api/ai/chat/search",
+        json={"text": "what specs are there in this laptop", "thread_id": thread_id, "merchant_id": merchant_id},
+    )
+
+    assert first.status_code == 200
+    assert first.json()["results"]
+    assert second.status_code == 200
+    assert "Memory Laptop" in second.json()["summary"]
+    assert "32GB" in second.json()["summary"]
+    assert second.json()["results"] == []
