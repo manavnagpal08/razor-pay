@@ -61,25 +61,37 @@ class MockMerchantLLM:
                     
             return AIMessage(content="Your store data is up to date. Let me know if you need anything else!")
             
-        if "revenue" in last_msg or "sales" in last_msg or "kpi" in last_msg:
-            return AIMessage(
-                content="Checking your store KPIs and revenue...",
-                tool_calls=[{"name": "get_store_kpis", "args": {}, "id": "call_kpi"}]
-            )
-        elif "product" in last_msg or "top" in last_msg or "selling" in last_msg:
+        user_text = ""
+        for m in reversed(messages):
+            if isinstance(m, HumanMessage):
+                c_str = str(m.content)
+                if "Question:" in c_str:
+                    user_text = c_str.split("Question:")[-1].strip().lower()
+                else:
+                    user_text = c_str.lower()
+                break
+            elif hasattr(m, "content"):
+                user_text = str(m.content).lower()
+
+        if "product" in user_text or "top" in user_text or "selling" in user_text or "item" in user_text:
             return AIMessage(
                 content="Fetching your top performing products...",
                 tool_calls=[{"name": "get_top_products", "args": {"limit": 5}, "id": "call_prod"}]
             )
-        elif "policy" in last_msg or "discount" in last_msg or "block" in last_msg:
+        elif "policy" in user_text or "discount" in user_text or "rule" in user_text:
             return AIMessage(
                 content="Analyzing your store discount policies...",
                 tool_calls=[{"name": "get_merchant_policy", "args": {}, "id": "call_pol"}]
             )
-        elif "ai" in last_msg or "recommend" in last_msg or "activity" in last_msg:
+        elif "ai" in user_text or "recommend" in user_text or "activity" in user_text or "event" in user_text:
             return AIMessage(
                 content="Retrieving recent AI agent actions...",
                 tool_calls=[{"name": "get_ai_activity", "args": {"limit": 5}, "id": "call_ai"}]
+            )
+        elif "revenue" in user_text or "sales" in user_text or "order" in user_text or "kpi" in user_text or "make" in user_text:
+            return AIMessage(
+                content="Checking your store KPIs and revenue...",
+                tool_calls=[{"name": "get_store_kpis", "args": {}, "id": "call_kpi"}]
             )
         else:
             return AIMessage(content="I am your Store AI Assistant. I can help check your revenue, top selling products, customer activity, and store rules. What would you like to know?")
