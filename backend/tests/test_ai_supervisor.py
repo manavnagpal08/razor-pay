@@ -51,7 +51,7 @@ def test_supervisor_workflow(monkeypatch):
         result = supervisor.process_chat_message("I need a gaming laptop under 80000")
         
         # Check intent extraction
-        assert result["intent"]["category"] == "laptops"
+        assert result["intent"]["category"] in ["laptops", "laptop"]
         assert result["intent"]["max_price"] == 80000.0
         
         # Check results

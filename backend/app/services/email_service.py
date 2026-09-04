@@ -84,12 +84,36 @@ class EmailService:
                     import urllib.request
                     import urllib.error
                     import json
-                    payload = json.dumps({
-                        "sender": {"name": sender_name, "email": sender_email_brevo.strip()},
+
+                    # Auto-resolve safe Brevo sender if an unauthenticated consumer domain is used (e.g. @gmail.com)
+                    effective_sender = sender_email_brevo.strip()
+                    reply_to = None
+                    if any(effective_sender.lower().endswith(dom) for dom in ["@gmail.com", "@yahoo.com", "@outlook.com", "@hotmail.com"]):
+                        try:
+                            acc_req = urllib.request.Request(
+                                "https://api.brevo.com/v3/account",
+                                headers={"api-key": brevo_key.strip(), "accept": "application/json"}
+                            )
+                            with urllib.request.urlopen(acc_req, timeout=4) as acc_resp:
+                                acc_data = json.loads(acc_resp.read().decode())
+                                user_id = acc_data.get("user_id")
+                                if user_id:
+                                    prefix = effective_sender.split("@")[0].replace(" ", "").replace("+", "")
+                                    effective_sender = f"{prefix}@{user_id}.brevosend.com"
+                                    reply_to = {"email": sender_email_brevo.strip(), "name": sender_name}
+                        except Exception as e_acc:
+                            logger.warning(f"Could not resolve Brevo authenticated domain: {e_acc}")
+
+                    email_payload = {
+                        "sender": {"name": sender_name, "email": effective_sender},
                         "to": [{"email": to_email.strip()}],
                         "subject": subject,
                         "htmlContent": html_body
-                    }).encode("utf-8")
+                    }
+                    if reply_to:
+                        email_payload["replyTo"] = reply_to
+
+                    payload = json.dumps(email_payload).encode("utf-8")
                     req_obj = urllib.request.Request(
                         "https://api.brevo.com/v3/smtp/email",
                         data=payload,

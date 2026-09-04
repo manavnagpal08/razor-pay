@@ -49,29 +49,41 @@ def send_chat_otp(req: SendOtpRequest, db: Session = Depends(get_db)):
 
     store_name = "BuyFlow Store"
     smtp_override = None
-    email_dispatch = {"sent": False, "mode": "SIMULATION_LOGGED", "message": ""}
+
+    # Clean / decode merchant_id if passed as JWT token
+    clean_merchant_id = req.merchant_id
+    if clean_merchant_id and clean_merchant_id.startswith("ey"):
+        try:
+            import jwt
+            from app.core.config import settings
+            decoded = jwt.decode(clean_merchant_id, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+            if decoded.get("sub"):
+                clean_merchant_id = decoded["sub"]
+        except Exception:
+            pass
 
     try:
         from app.models import Merchant, MerchantPolicy
+        from app.core.config import settings
         
-        # 1. First check if the requested merchant has a policy with email credentials
-        if req.merchant_id:
-            policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == req.merchant_id).first()
+        # 1. Check if the requested merchant has a policy with active email credentials
+        if clean_merchant_id and clean_merchant_id != "demo_merchant":
+            policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == clean_merchant_id).first()
             if policy and isinstance(policy.approval_rules, dict):
                 cand = policy.approval_rules.get("smtp_config")
-                if isinstance(cand, dict):
+                if isinstance(cand, dict) and cand.get("active_provider") != "none":
                     if cand.get("brevo_api_key") or cand.get("resend_api_key") or (cand.get("user") and cand.get("password")):
                         smtp_override = cand
-            merchant = db.query(Merchant).filter(Merchant.id == req.merchant_id).first()
+            merchant = db.query(Merchant).filter(Merchant.id == clean_merchant_id).first()
             if merchant and hasattr(merchant, "name") and merchant.name:
                 store_name = merchant.name
 
-        # 2. If no valid smtp credentials on this specific merchant_id, search ALL policies in DB for any configured credentials
+        # 2. If no valid smtp credentials on this specific merchant_id, search policies for any configured credentials
         if not smtp_override:
-            for pol in db.query(MerchantPolicy).all():
+            for pol in db.query(MerchantPolicy).order_by(MerchantPolicy.id.desc()).all():
                 if pol.approval_rules and isinstance(pol.approval_rules, dict):
                     cand = pol.approval_rules.get("smtp_config")
-                    if isinstance(cand, dict):
+                    if isinstance(cand, dict) and cand.get("active_provider") != "none":
                         b_key = cand.get("brevo_api_key")
                         r_key = cand.get("resend_api_key")
                         u_key = cand.get("user")
@@ -93,6 +105,17 @@ def send_chat_otp(req: SendOtpRequest, db: Session = Depends(get_db)):
         )
         
         if not dispatch_res.get("sent", False):
+            import logging
+            logging.getLogger(__name__).warning(f"[CHAT OTP DISPATCH NOT LIVE] Mode: {dispatch_res.get('mode')} Message: {dispatch_res.get('message')} OTP: {otp}")
+            # If in development / demo mode and no live provider configured, allow OTP testing via console
+            if settings.environment.lower() != "production" and dispatch_res.get("mode") in ["BREVO_KEY_MISSING", "SIMULATION_LOGGED"]:
+                return {
+                    "success": True,
+                    "email": email,
+                    "message": f"Verification code generated (Dev Code: {otp}). In production, emails deliver directly to your inbox.",
+                    "expires_in_seconds": 600,
+                    "dev_otp": otp
+                }
             err_msg = dispatch_res.get("message") or "Email delivery failed. Please check your email configuration in Merchant Settings."
             raise HTTPException(status_code=400, detail=err_msg)
 
