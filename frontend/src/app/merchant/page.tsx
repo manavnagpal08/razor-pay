@@ -6,8 +6,9 @@ import {
   Lock, LogIn, Sliders, CheckCircle2, Loader2, Share2, Copy, ExternalLink, Code, 
   MessageSquare, Terminal, RefreshCw, Download, Filter, PlusCircle, Store, X, ChevronDown,
   QrCode, AlertTriangle, Cpu, Layers, ShieldCheck, Zap, Mail, Trash2, Inbox, Package, Search,
-  Users, Phone, Calendar, Tag, Building2, MapPin, ArrowRight, ArrowLeft, Check, CreditCard, Edit3, Save
+  Users, Phone, Calendar, Tag, Building2, MapPin, ArrowRight, ArrowLeft, Check, CreditCard, Edit3, Save, Printer
 } from "lucide-react";
+import QRCode from "qrcode";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
@@ -282,43 +283,91 @@ export default function MerchantDashboard() {
     }
   };
 
+  const merchantId = selectedStore?.id || (stores && stores.length > 0 ? stores[0].id : (user?.merchant_id || user?.uid || "demo_merchant"));
+  const currentStoreName = selectedStore?.name || (stores && stores.length > 0 ? stores[0].name : (user?.store_name || user?.name || (user?.email ? user.email.split('@')[0].toUpperCase() : "BuyFlow Store")));
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://razorpay-buildthon.vercel.app";
+  const agentShareUrl = `${baseUrl}/chat?merchant=${encodeURIComponent(merchantId)}`;
+  const embedSnippet = `<iframe src="${agentShareUrl}&embed=true" width="100%" height="100%" style="min-height: 600px; max-height: 90vh; border: none; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);" allow="payment"></iframe>`;
+
+  // Dynamic High-Reliability Client-Side QR Code State
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const [generatingQr, setGeneratingQr] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isSubscribed = true;
+    if (agentShareUrl) {
+      setGeneratingQr(true);
+      QRCode.toDataURL(agentShareUrl, {
+        errorCorrectionLevel: "H", // High error correction (30%) guarantees scannability on all smartphones even with center logo
+        margin: 2,
+        width: 600,
+        color: {
+          dark: "#0f172a",
+          light: "#ffffff",
+        },
+      })
+        .then((url) => {
+          if (isSubscribed) {
+            setQrDataUrl(url);
+            setGeneratingQr(false);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to generate QR Data URL:", err);
+          if (isSubscribed) setGeneratingQr(false);
+        });
+    }
+    return () => {
+      isSubscribed = false;
+    };
+  }, [agentShareUrl]);
+
   const handleDownloadQrCode = async () => {
     try {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(agentShareUrl)}`;
-      const response = await fetch(qrUrl);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      
+      // 1. Generate pristine high-resolution QR matrix
+      const highResQr = await QRCode.toDataURL(agentShareUrl, {
+        errorCorrectionLevel: "H",
+        margin: 3,
+        width: 1000,
+        color: {
+          dark: "#0f172a",
+          light: "#ffffff",
+        },
+      });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 1000;
+      canvas.height = 1000;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
       const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.src = blobUrl;
+      img.src = highResQr;
       img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 600;
-        canvas.height = 600;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, 600, 600);
-        ctx.drawImage(img, 0, 0, 600, 600);
-        
+        ctx.fillRect(0, 0, 1000, 1000);
+        ctx.drawImage(img, 0, 0, 1000, 1000);
+
         const logoImg = new Image();
         logoImg.src = "/logo.png";
         logoImg.onload = () => {
-          const logoSize = 130;
-          const center = (600 - logoSize) / 2;
-          
+          const logoSize = 160;
+          const center = (1000 - logoSize) / 2;
+
           ctx.fillStyle = "#ffffff";
           ctx.beginPath();
-          ctx.roundRect(center - 10, center - 10, logoSize + 20, logoSize + 20, 24);
+          if (typeof (ctx as any).roundRect === "function") {
+            (ctx as any).roundRect(center - 16, center - 16, logoSize + 32, logoSize + 32, 28);
+          } else {
+            ctx.rect(center - 16, center - 16, logoSize + 32, logoSize + 32);
+          }
           ctx.fill();
-          ctx.lineWidth = 4;
+          ctx.lineWidth = 6;
           ctx.strokeStyle = "#e2e8f0";
           ctx.stroke();
-          
+
           ctx.drawImage(logoImg, center, center, logoSize, logoSize);
-          
+
           const finalUrl = canvas.toDataURL("image/png");
           const a = document.createElement("a");
           a.href = finalUrl;
@@ -326,8 +375,9 @@ export default function MerchantDashboard() {
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
-          showToast("QR code downloaded successfully!", "success");
+          showToast("High-resolution QR code downloaded successfully!", "success");
         };
+
         logoImg.onerror = () => {
           const finalUrl = canvas.toDataURL("image/png");
           const a = document.createElement("a");
@@ -344,12 +394,6 @@ export default function MerchantDashboard() {
       showToast("Failed to download QR code.", "error");
     }
   };
-
-  const merchantId = selectedStore?.id || user?.merchant_id || user?.uid || "demo_merchant";
-  const currentStoreName = selectedStore?.name || (stores && stores.length > 0 ? stores[0].name : (user?.store_name || user?.name || (user?.email ? user.email.split('@')[0].toUpperCase() : "BuyFlow Store")));
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://razorpay-buildthon.vercel.app";
-  const agentShareUrl = `${baseUrl}/chat?merchant=${merchantId}`;
-  const embedSnippet = `<iframe src="${agentShareUrl}&embed=true" width="100%" height="100%" style="min-height: 600px; max-height: 90vh; border: none; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);" allow="payment"></iframe>`;
 
   // 100% Real Database Analytics Chart
   const hasRevenue = metrics && Number(metrics.revenue) > 0;
@@ -4180,25 +4224,35 @@ export default function MerchantDashboard() {
               <h3 className="font-black text-slate-900 text-base">{currentStoreName}</h3>
               <p className="text-[11px] text-slate-500 mb-3">Scan with your smartphone camera to launch the BuyFlow AI Concierge</p>
 
-              {/* QR Image with BuyFlow Logo in Center */}
-              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 inline-block mb-3 shadow-xs">
-                <div className="relative inline-block">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(agentShareUrl)}`}
-                    alt="Storefront QR Code"
-                    className="w-48 h-48 rounded-xl mx-auto block"
-                  />
-                  {/* BuyFlow Logo in Center */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-11 h-11 bg-white rounded-xl shadow-md border-2 border-white p-1 flex items-center justify-center">
-                      <img src="/logo.png" alt="BuyFlow" className="w-full h-full object-contain rounded-lg" />
+              {/* High-Reliability Scannable QR Code */}
+              {generatingQr && !qrDataUrl ? (
+                <div className="w-48 h-48 flex flex-col items-center justify-center bg-slate-50 rounded-2xl mx-auto border border-slate-100 mb-3">
+                  <Loader2 className="w-7 h-7 text-indigo-600 animate-spin mb-1.5" />
+                  <span className="text-[11px] text-slate-500 font-medium">Generating QR...</span>
+                </div>
+              ) : (
+                <div className="bg-white p-2 rounded-2xl border border-slate-200 inline-block mb-3 shadow-xs">
+                  <div className="relative inline-block">
+                    <img
+                      src={qrDataUrl || `https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=H&data=${encodeURIComponent(agentShareUrl)}`}
+                      alt="Storefront QR Code"
+                      className="w-48 h-48 rounded-xl mx-auto block object-contain"
+                    />
+                    {/* Centered Brand Logo Badge with ECC-H Scannability */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-9 h-9 bg-white rounded-xl shadow-md border-2 border-white p-0.5 flex items-center justify-center">
+                        <img src="/logo.png" alt="BuyFlow" className="w-full h-full object-contain rounded-lg" />
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <p className="text-[10px] text-slate-400 font-mono mb-1 truncate px-2">{agentShareUrl}</p>
-              <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Verified BuyFlow AI Storefront</p>
+              <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Verified BuyFlow AI Storefront</span>
+              </p>
             </div>
 
             {/* Print Styles for Exactly 1-Page Poster Printing */}
@@ -4225,7 +4279,7 @@ export default function MerchantDashboard() {
               }
             `}</style>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 mb-2">
               <button
                 type="button"
                 onClick={handleDownloadQrCode}
@@ -4245,6 +4299,27 @@ export default function MerchantDashboard() {
               >
                 <Copy className="w-3.5 h-3.5" />
                 <span>Copy Link</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <a
+                href={agentShareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[11px] font-semibold border border-slate-200 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                <span>Test Store</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[11px] font-semibold border border-slate-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-500" />
+                <span>Print Poster</span>
               </button>
             </div>
           </div>
