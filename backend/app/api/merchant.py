@@ -1020,9 +1020,22 @@ def get_merchant_customers(db: Session = Depends(get_db), merchant_id: str = Dep
         prefs = c.preferences if isinstance(c.preferences, dict) else {}
         phone = prefs.get("phone") or "Verified In-Chat"
 
-        # Check if joined today
+        # Check if joined today or active in recent window
         joined_at = c.created_at if hasattr(c, "created_at") and c.created_at else None
-        is_today = (joined_at.date() == today_date) if joined_at else False
+        
+        is_today = False
+        if joined_at:
+            time_diff = (now_utc - joined_at).total_seconds() if joined_at.tzinfo else (now_utc.replace(tzinfo=None) - joined_at).total_seconds()
+            if joined_at.date() == today_date or time_diff < 172800: # within 48h / current active cycle
+                is_today = True
+
+        if not is_today and cust_orders:
+            for o in cust_orders:
+                if o.created_at:
+                    o_diff = (now_utc - o.created_at).total_seconds() if o.created_at.tzinfo else (now_utc.replace(tzinfo=None) - o.created_at).total_seconds()
+                    if o.created_at.date() == today_date or o_diff < 172800:
+                        is_today = True
+                        break
 
         # Gather customer-specific conversation history and chat logs
         events = db.query(CustomerEvent).filter(

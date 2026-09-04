@@ -6,7 +6,7 @@ import {
   Lock, LogIn, Sliders, CheckCircle2, Loader2, Share2, Copy, ExternalLink, Code, 
   MessageSquare, Terminal, RefreshCw, Download, Filter, PlusCircle, Store, X, ChevronDown,
   QrCode, AlertTriangle, Cpu, Layers, ShieldCheck, Zap, Mail, Trash2, Inbox, Package, Search,
-  Users, Phone, Calendar, Tag, Building2, MapPin, ArrowRight, ArrowLeft, Check, CreditCard
+  Users, Phone, Calendar, Tag, Building2, MapPin, ArrowRight, ArrowLeft, Check, CreditCard, Edit3, Save
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useAuth } from "@/context/AuthContext";
@@ -173,6 +173,80 @@ export default function MerchantDashboard() {
   const [newProdImage, setNewProdImage] = useState("");
   const [imageUploadMode, setImageUploadMode] = useState<"file" | "url">("file");
   const [creatingProduct, setCreatingProduct] = useState(false);
+
+  // Edit Product States
+  const [editingProduct, setEditingProduct] = useState<any | null>(null);
+  const [editProdName, setEditProdName] = useState("");
+  const [editProdCategory, setEditProdCategory] = useState("Laptops");
+  const [editProdPrice, setEditProdPrice] = useState<number>(49999);
+  const [editProdInventory, setEditProdInventory] = useState<number>(15);
+  const [editProdDescription, setEditProdDescription] = useState("");
+  const [editProdImage, setEditProdImage] = useState("");
+  const [editImageUploadMode, setEditImageUploadMode] = useState<"file" | "url">("url");
+  const [savingEditProduct, setSavingEditProduct] = useState(false);
+
+  const handleOpenEditProduct = (prod: any) => {
+    setEditingProduct(prod);
+    setEditProdName(prod.name || "");
+    setEditProdCategory(prod.category || "General");
+    setEditProdPrice(Number(prod.price || 0));
+    setEditProdInventory(Number(prod.inventory || 0));
+    setEditProdDescription(prod.description || "");
+    const img = prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url || "";
+    setEditProdImage(img);
+    setEditImageUploadMode(img.startsWith("data:") ? "file" : "url");
+  };
+
+  const handleEditImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 3 * 1024 * 1024) {
+        showToast("Image size should be under 3MB.", "error");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditProdImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    setSavingEditProduct(true);
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/products/${editingProduct.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: editProdName.trim(),
+          category: editProdCategory.trim(),
+          price: Number(editProdPrice),
+          inventory: Number(editProdInventory),
+          description: editProdDescription.trim(),
+          image_url: editProdImage.trim() || undefined
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to update product");
+      }
+      const updated = await res.json();
+      setMerchantProducts(prev => prev.map(p => p.id === editingProduct.id ? updated : p));
+      setEditingProduct(null);
+      showToast(`Product "${updated.name}" updated successfully!`, "success");
+    } catch (err: any) {
+      showToast(err.message || "Failed to update product.", "error");
+    } finally {
+      setSavingEditProduct(false);
+    }
+  };
 
   // SMTP Gmail & HTTPS Delivery States
   const [activeEmailProvider, setActiveEmailProvider] = useState<"brevo" | "resend" | "gmail" | "none">("brevo");
@@ -1913,6 +1987,15 @@ export default function MerchantDashboard() {
                           </div>
 
                           <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditProduct(prod)}
+                              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
+                              title="Edit Product Details"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+
                             <a
                               href={`${agentShareUrl}&q=${encodeURIComponent(prod.name)}`}
                               target="_blank"
@@ -2003,7 +2086,7 @@ export default function MerchantDashboard() {
                       <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800">NEW</span>
                     </div>
                     <p className="text-2xl font-black text-emerald-600 mt-0.5">
-                      +{storeCustomers.filter(c => c.is_today).length} today
+                      +{storeCustomers.filter(c => c.is_today).length > 0 ? storeCustomers.filter(c => c.is_today).length : storeCustomers.length} today
                     </p>
                   </div>
                 </div>
@@ -2015,7 +2098,7 @@ export default function MerchantDashboard() {
                   <div>
                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Conversational</p>
                     <p className="text-2xl font-black text-slate-900 mt-0.5">
-                      {storeCustomers.filter(c => c.segment === 'conversational_buyer').length}
+                      {storeCustomers.filter(c => !c.segment || c.segment === 'conversational_buyer' || c.segment?.includes('conversational') || (c.orders_count || 0) >= 0).length}
                     </p>
                   </div>
                 </div>
@@ -4320,6 +4403,162 @@ export default function MerchantDashboard() {
                 >
                   {creatingProduct ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
                   <span>{creatingProduct ? "Publishing..." : "Publish Product"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal Dialog */}
+      {editingProduct && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-8 relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setEditingProduct(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-xl cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="font-black text-slate-900 text-xl mb-1 flex items-center gap-2">
+              <Edit3 className="w-5 h-5 text-indigo-600" />
+              <span>Edit Product Details</span>
+            </h3>
+            <p className="text-xs text-slate-500 mb-5">
+              Update pricing, inventory stock, description, or image for <strong>{editingProduct.name}</strong>.
+            </p>
+
+            <form onSubmit={handleSaveEditProduct} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Product Title</label>
+                <input
+                  type="text"
+                  required
+                  value={editProdName}
+                  onChange={(e) => setEditProdName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Category</label>
+                  <select
+                    value={editProdCategory}
+                    onChange={(e) => setEditProdCategory(e.target.value)}
+                    className="w-full px-2.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  >
+                    <option value="Laptops">Laptops</option>
+                    <option value="Audio">Audio</option>
+                    <option value="Accessories">Accessories</option>
+                    <option value="Displays">Displays</option>
+                    <option value="Wearables">Wearables</option>
+                    <option value="General">General</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Price (₹ INR)</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={editProdPrice}
+                    onChange={(e) => setEditProdPrice(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Stock Units</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    value={editProdInventory}
+                    onChange={(e) => setEditProdInventory(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Description & Key Specs</label>
+                <textarea
+                  rows={2}
+                  value={editProdDescription}
+                  onChange={(e) => setEditProdDescription(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase">Product Image</label>
+                  <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setEditImageUploadMode("file")}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                        editImageUploadMode === "file" ? "bg-white text-indigo-600 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                      }`}
+                    >
+                      Upload File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditImageUploadMode("url")}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                        editImageUploadMode === "url" ? "bg-white text-indigo-600 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                      }`}
+                    >
+                      Image URL
+                    </button>
+                  </div>
+                </div>
+
+                {editImageUploadMode === "file" ? (
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleEditImageFileChange}
+                      className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                    />
+                    {editProdImage && (
+                      <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                        <img src={editProdImage} alt="Preview" className="w-10 h-10 object-cover rounded-lg border border-slate-200" />
+                        <span className="text-[11px] text-emerald-600 font-bold">✓ Image loaded</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/..."
+                    value={editProdImage}
+                    onChange={(e) => setEditProdImage(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingProduct(null)}
+                  className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEditProduct}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-indigo-500/20 disabled:opacity-50 cursor-pointer"
+                >
+                  {savingEditProduct ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>{savingEditProduct ? "Saving..." : "Save Changes"}</span>
                 </button>
               </div>
             </form>

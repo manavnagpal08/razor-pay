@@ -2,21 +2,34 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ShoppingCart, CheckCircle, ShieldCheck, Loader2, Check, Sparkles, Star, Zap, Truck } from "lucide-react";
+import { ArrowLeft, ShoppingCart, CheckCircle, ShieldCheck, Loader2, Check, Sparkles, Star, Zap, Truck, Edit3, X, Save, Image as ImageIcon } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
+import { Toast } from "@/components/ui/Toast";
 
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, token, refreshCartCount } = useAuth();
+  const { user, token, role, refreshCartCount } = useAuth();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [addingToCart, setAddingToCart] = useState(false);
   const [added, setAdded] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [imgError, setImgError] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const showToast = (message: string, type: "success" | "error" | "info" = "success") => setToast({ message, type });
+
+  // Edit Product Modal States
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editCategory, setEditCategory] = useState("Laptops");
+  const [editPrice, setEditPrice] = useState<number>(0);
+  const [editInventory, setEditInventory] = useState<number>(0);
+  const [editDescription, setEditDescription] = useState("");
+  const [editImage, setEditImage] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -24,7 +37,14 @@ export default function ProductDetailPage() {
         const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/api/products/${params.id}`, { cache: "no-store" });
         if (res.ok) {
-          setProduct(await res.json());
+          const data = await res.json();
+          setProduct(data);
+          setEditName(data.name || "");
+          setEditCategory(data.category || "General");
+          setEditPrice(Number(data.price || 0));
+          setEditInventory(Number(data.inventory || 0));
+          setEditDescription(data.description || "");
+          setEditImage(data.metadata_?.image_url || data.metadata?.image_url || data.image_url || "");
         }
       } catch (err) {
         console.error("Failed to fetch product", err);
@@ -37,7 +57,7 @@ export default function ProductDetailPage() {
 
   const handleAddToCart = async () => {
     if (!token) {
-      alert("Please sign in to add items to your cart.");
+      showToast("Please sign in to add items to your cart.", "info");
       router.push("/login");
       return;
     }
@@ -58,12 +78,55 @@ export default function ProductDetailPage() {
         await refreshCartCount();
         setTimeout(() => setAdded(false), 2500);
       } else {
-        alert("Failed to add to cart. Please verify stock availability.");
+        showToast("Failed to add to cart. Please verify stock availability.", "error");
       }
     } catch (err) {
       console.error(err);
+      showToast("Error adding item to cart.", "error");
     } finally {
       setAddingToCart(false);
+    }
+  };
+
+  const handleSaveProductEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) {
+      showToast("Please sign in as a merchant to edit this product.", "error");
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/products/${product.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: editName.trim(),
+          category: editCategory.trim(),
+          price: Number(editPrice),
+          inventory: Number(editInventory),
+          description: editDescription.trim(),
+          image_url: editImage.trim() || undefined
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to update product");
+      }
+
+      const updated = await res.json();
+      setProduct(updated);
+      setShowEditModal(false);
+      showToast("Product updated successfully!", "success");
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || "Failed to save changes.", "error");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -91,9 +154,23 @@ export default function ProductDetailPage() {
 
   return (
     <div className="max-w-6xl mx-auto pb-12">
-      <Link href="/shop" className="inline-flex items-center text-xs font-bold text-slate-500 hover:text-slate-900 mb-6 transition-colors gap-1.5 uppercase tracking-wider">
-        <ArrowLeft className="w-3.5 h-3.5" /> Back to catalog
-      </Link>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      
+      <div className="flex items-center justify-between mb-6">
+        <Link href="/shop" className="inline-flex items-center text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors gap-1.5 uppercase tracking-wider">
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to catalog
+        </Link>
+
+        {/* Edit Product Action Button for Merchants */}
+        <button
+          type="button"
+          onClick={() => setShowEditModal(true)}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+        >
+          <Edit3 className="w-3.5 h-3.5" />
+          <span>Edit Product</span>
+        </button>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
         {/* High-Res Product Visual */}
@@ -135,7 +212,9 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
-            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 mb-3 tracking-tight">{product.name}</h1>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">{product.name}</h1>
+            </div>
             
             <div className="text-3xl sm:text-4xl font-black text-slate-900 mb-6 pb-6 border-b border-slate-100 flex items-baseline gap-3">
               <span>₹{Number(product.price).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
@@ -241,6 +320,122 @@ export default function ProductDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Edit Product Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 sm:p-8 relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowEditModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-xl cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="font-black text-slate-900 text-xl mb-1 flex items-center gap-2">
+              <Edit3 className="w-5 h-5 text-indigo-600" />
+              <span>Edit Product Details</span>
+            </h3>
+            <p className="text-xs text-slate-500 mb-5">
+              Update pricing, inventory stock, description, or image for <strong>{product.name}</strong>.
+            </p>
+
+            <form onSubmit={handleSaveProductEdit} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Product Title</label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Category</label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="w-full px-2.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  >
+                    <option value="Laptops">Laptops</option>
+                    <option value="Audio">Audio</option>
+                    <option value="Accessories">Accessories</option>
+                    <option value="Displays">Displays</option>
+                    <option value="Wearables">Wearables</option>
+                    <option value="General">General</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Price (₹ INR)</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Stock Units</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    value={editInventory}
+                    onChange={(e) => setEditInventory(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Image URL</label>
+                <input
+                  type="url"
+                  placeholder="https://images.unsplash.com/..."
+                  value={editImage}
+                  onChange={(e) => setEditImage(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Description & Key Specs</label>
+                <textarea
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 leading-relaxed"
+                />
+              </div>
+
+              <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>{savingEdit ? "Saving..." : "Save Changes"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

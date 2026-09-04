@@ -208,6 +208,67 @@ def seed_merchant_products(
     ensure_merchant_starter_catalog(db, clean_id)
     return {"status": "success", "message": f"Starter products seeded for {clean_id}"}
 
+class UpdateProductPayload(schemas.BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    price: Optional[float] = None
+    inventory: Optional[int] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+
+@router.put("/{product_id}", response_model=schemas.ProductResponse)
+def update_merchant_product(
+    product_id: str,
+    req: UpdateProductPayload,
+    db: Session = Depends(get_db),
+    merchant_id: str = Depends(get_current_merchant),
+):
+    """Update an existing product's name, category, price, inventory, image, or description."""
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if product.merchant_id != merchant_id:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this product")
+
+    if req.name is not None:
+        product.name = req.name.strip()
+    if req.category is not None:
+        product.category = req.category.strip()
+    if req.price is not None:
+        product.price = req.price
+    if req.inventory is not None:
+        product.inventory = req.inventory
+    if req.description is not None:
+        product.description = req.description.strip()
+    if req.image_url is not None:
+        meta = dict(product.metadata_ or {}) if isinstance(product.metadata_, dict) else {}
+        meta["image_url"] = req.image_url.strip()
+        product.metadata_ = meta
+
+    from datetime import datetime, timezone
+    product.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(product)
+
+    img = (product.metadata_ or {}).get("image_url") if isinstance(product.metadata_, dict) else None
+    return {
+        "id": product.id,
+        "merchant_id": product.merchant_id,
+        "name": product.name,
+        "category": product.category,
+        "description": product.description,
+        "price": float(product.price),
+        "currency": product.currency,
+        "inventory": product.inventory,
+        "image_url": img or "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80",
+        "features": product.features or {},
+        "use_cases": product.use_cases or [],
+        "metadata_": product.metadata_ or {},
+        "created_at": product.created_at,
+        "updated_at": product.updated_at,
+        "source_relations": []
+    }
+
 @router.delete("/{product_id}")
 def delete_merchant_product(
     product_id: str,
@@ -223,3 +284,4 @@ def delete_merchant_product(
     db.delete(product)
     db.commit()
     return {"status": "deleted", "product_id": product_id}
+
