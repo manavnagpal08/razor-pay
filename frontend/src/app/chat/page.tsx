@@ -1390,18 +1390,108 @@ function ChatContent() {
             )}
 
             {trackingData && (
-              <div className="space-y-2.5 pt-2 border-t border-slate-100">
-                <p className="text-xs text-slate-600 font-bold">Found {trackingData.orders?.length || 0} order(s):</p>
-                {trackingData.orders?.map((ord: any) => (
-                  <div key={ord.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-mono text-blue-600 font-bold">{ord.id}</span>
-                      <span className="text-emerald-600 font-extrabold">₹{ord.amount}</span>
+              <div className="space-y-3.5 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-slate-700 font-bold">
+                    Found {trackingData.orders?.length || 0} order(s) for <span className="text-blue-600">{toDisplayText(trackingData.customer_name || trackingEmail)}</span>:
+                  </p>
+                </div>
+
+                {trackingData.orders?.map((ord: any, ordIdx: number) => {
+                  const ordId = ord.order_id || ord.id || ord.razorpay_order_id || `order_${ordIdx}`;
+                  const courier = ord.courier || ord.shipping?.carrier || "BlueDart Express FastAir";
+                  const awb = ord.tracking_number || ord.shipping?.tracking_number || "BD-AIR-892104";
+                  const status = ord.status || ord.shipping?.status || "IN_TRANSIT";
+                  const amount = Number(ord.amount || 0).toLocaleString("en-IN");
+                  const estDelivery = ord.estimated_delivery || "Today by 7:00 PM";
+                  const stages = Array.isArray(ord.timeline) ? ord.timeline : [
+                    { stage: "Order Confirmed", detail: "Payment verified", completed: true },
+                    { stage: "In Transit", detail: `${courier} (${awb})`, completed: true },
+                    { stage: "Out for Delivery", detail: estDelivery, completed: false }
+                  ];
+
+                  return (
+                    <div key={ordId} className="bg-slate-50/90 border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+                      {/* Top Bar: Order ID, Status, Amount */}
+                      <div className="flex items-start justify-between gap-2 border-b border-slate-200/70 pb-2.5">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Order ID</span>
+                            <span className="font-mono text-blue-600 font-bold text-xs">{ordId}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-0.5 font-medium">
+                            {ord.created_at ? new Date(ord.created_at).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Recent Order"}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-black text-slate-900 block">₹{amount}</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            {status === "IN_TRANSIT" ? "In Transit" : (status === "PAID" ? "Order Confirmed" : status)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Courier & AWB Information */}
+                      <div className="grid grid-cols-2 gap-2 bg-white p-2.5 rounded-xl border border-slate-200/80 text-[11px]">
+                        <div>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Courier Partner</p>
+                          <p className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
+                            <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span className="truncate">{courier}</span>
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">AWB Tracking No.</p>
+                          <p className="font-mono font-bold text-slate-800 mt-0.5 select-all truncate">
+                            {awb}
+                          </p>
+                        </div>
+                        <div className="col-span-2 pt-1 border-t border-slate-100 flex items-center justify-between text-[10px]">
+                          <span className="text-slate-500 font-medium">Est. Delivery:</span>
+                          <span className="font-bold text-indigo-700">{estDelivery}</span>
+                        </div>
+                      </div>
+
+                      {/* Live Shipment Progress Tracker */}
+                      <div className="pt-1">
+                        <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-2">Live Shipment Journey</p>
+                        <div className="space-y-2">
+                          {stages.map((stg: any, sIdx: number) => (
+                            <div key={sIdx} className="flex items-start gap-2.5 text-xs">
+                              <div className="flex flex-col items-center mt-0.5">
+                                <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shadow-2xs ${
+                                  stg.completed 
+                                    ? "bg-emerald-600 text-white" 
+                                    : "bg-slate-200 text-slate-500 border border-slate-300"
+                                }`}>
+                                  {stg.completed ? "✓" : sIdx + 1}
+                                </div>
+                                {sIdx < stages.length - 1 && (
+                                  <div className={`w-0.5 h-4 my-0.5 ${
+                                    stg.completed ? "bg-emerald-500" : "bg-slate-200"
+                                  }`} />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={`font-bold text-[11px] leading-tight ${
+                                  stg.completed ? "text-slate-900" : "text-slate-400"
+                                }`}>
+                                  {stg.stage}
+                                </p>
+                                {stg.detail && (
+                                  <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                                    {stg.detail}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-slate-600">Carrier: {ord.shipping?.carrier} • AWB: {ord.shipping?.tracking_number}</p>
-                    <p className="text-[11px] text-indigo-600 font-semibold">Status: {ord.shipping?.status}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

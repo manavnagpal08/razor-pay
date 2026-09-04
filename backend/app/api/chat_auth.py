@@ -232,15 +232,25 @@ def track_customer_orders(req: TrackOrderRequest, db: Session = Depends(get_db))
 
     results = []
     for o in orders:
+        courier_name = "BlueDart Express FastAir"
+        tracking_no = f"BD-AIR-{abs(hash(o.id)) % 899999 + 100000}"
+        ship_status = "IN_TRANSIT" if o.status == "PAID" else o.status
+        
         results.append({
+            "id": o.id,
             "order_id": o.id,
             "razorpay_order_id": o.razorpay_order_id or f"order_{o.id[:8]}",
             "amount": float(o.amount),
             "currency": o.currency or "INR",
-            "status": "IN_TRANSIT" if o.status == "PAID" else o.status,
-            "courier": "BlueDart Express FastAir",
-            "tracking_number": f"BD-AIR-{abs(hash(o.id)) % 899999 + 100000}",
+            "status": ship_status,
+            "courier": courier_name,
+            "tracking_number": tracking_no,
             "estimated_delivery": "Today by 7:00 PM",
+            "shipping": {
+                "carrier": courier_name,
+                "tracking_number": tracking_no,
+                "status": ship_status
+            },
             "created_at": o.created_at.isoformat() if hasattr(o.created_at, "isoformat") else str(o.created_at),
             "timeline": shipment_stages
         })
