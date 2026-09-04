@@ -46,9 +46,10 @@ def search_products(request: schemas.ProductSearchRequest, db: Session = Depends
     if request.max_price is not None:
         base_query = base_query.filter(models.Product.price <= request.max_price)
 
-    # 1. If both category and query provided
+    # 1. If category provided, try category filter
     if request.category:
-        cat_query = base_query.filter(models.Product.category.ilike(f"%{request.category}%"))
+        clean_cat = request.category.strip()
+        cat_query = base_query.filter(models.Product.category.ilike(f"%{clean_cat}%"))
         
         if request.query:
             tokens = [t.strip().lower() for t in request.query.split() if len(t.strip()) > 2]
@@ -68,6 +69,29 @@ def search_products(request: schemas.ProductSearchRequest, db: Session = Depends
         cat_matches = cat_query.all()
         if cat_matches:
             return cat_matches[:10]
+
+        # 1B. Category synonym search across name & description
+        cat_token = clean_cat.rstrip("s").lower()
+        synonyms = [clean_cat.lower(), cat_token]
+        if any(w in cat_token for w in ["smart", "phone", "mobile"]):
+            synonyms.extend(["phone", "iphone", "mobile", "android", "smartphone"])
+        elif any(w in cat_token for w in ["laptop", "computer", "pc"]):
+            synonyms.extend(["laptop", "macbook", "notebook", "pc", "computer"])
+        elif any(w in cat_token for w in ["audio", "headphone", "sound"]):
+            synonyms.extend(["headphone", "audio", "earbud", "airpod", "speaker", "sound"])
+
+        synonym_filters = [
+            or_(
+                models.Product.name.ilike(f"%{s}%"),
+                models.Product.description.ilike(f"%{s}%"),
+                models.Product.category.ilike(f"%{s}%")
+            )
+            for s in synonyms if len(s) > 2
+        ]
+        if synonym_filters:
+            syn_matches = base_query.filter(or_(*synonym_filters)).all()
+            if syn_matches:
+                return syn_matches[:10]
 
     # 2. If only query without category
     if request.query:

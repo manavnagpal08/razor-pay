@@ -143,26 +143,45 @@ class AICommerceSupervisor:
         }
         
     def _node_search(self, state: CommerceState) -> CommerceState:
-        intent_data = state.get("intent", {})
+        intent_data = state.get("intent") or {}
+        raw_keywords = intent_data.get("keywords") or []
+        
+        # Filter out generic conversation keywords that aren't product features
+        conversational_words = {
+            "deal", "deals", "best", "recommend", "recommended", "recommendation",
+            "product", "products", "item", "items", "option", "options", "offer",
+            "offers", "discount", "discounts", "sale", "cheap", "good", "top",
+            "popular", "available", "store", "catalog", "shop", "buy", "show", "give",
+            "some", "thing", "things", "what", "which", "want", "need"
+        }
+        filtered_keywords = [k for k in raw_keywords if k.lower().strip() not in conversational_words]
+
         search_req = ProductSearchRequest(
             category=intent_data.get("category"),
             max_price=intent_data.get("max_price"),
             min_price=intent_data.get("min_price")
         )
-        if intent_data.get("keywords"):
-            search_req.query = " ".join(intent_data["keywords"])
+        if filtered_keywords:
+            search_req.query = " ".join(filtered_keywords)
             
         merchant_id = state.get("merchant_id")
         try:
             raw_products = search_products(search_req, self.db, merchant_id=merchant_id)
-        except TypeError:
-            raw_products = search_products(search_req, self.db)
+        except Exception:
+            try:
+                raw_products = search_products(search_req, self.db)
+            except Exception:
+                raw_products = []
         return {"raw_products": raw_products}
 
     def _node_recommend(self, state: CommerceState) -> CommerceState:
         from app.schemas import ShoppingIntent
-        intent = ShoppingIntent(**state["intent"])
-        ranked_products = self.recommendation_engine.rank_products(state["raw_products"], intent)
+        intent_dict = state.get("intent") or {}
+        try:
+            intent = ShoppingIntent(**intent_dict) if isinstance(intent_dict, dict) else ShoppingIntent()
+            ranked_products = self.recommendation_engine.rank_products(state.get("raw_products") or [], intent)
+        except Exception:
+            ranked_products = []
         best_match = ranked_products[0]["product"] if ranked_products else None
         return {"ranked_products": ranked_products, "best_match": best_match}
 
@@ -171,24 +190,31 @@ class AICommerceSupervisor:
         upsell_data = None
         cross_sell_data = None
         
-        if best_match:
-            upsell = self.recommendation_engine.find_upsell(best_match)
-            if upsell:
-                upsell_data = upsell.model_dump()
-                
-            cross_sell = self.recommendation_engine.find_cross_sell(best_match)
-            if cross_sell:
-                cross_sell_data = cross_sell.model_dump()
+        try:
+            if best_match:
+                upsell = self.recommendation_engine.find_upsell(best_match)
+                if upsell:
+                    upsell_data = upsell.model_dump()
+                    
+                cross_sell = self.recommendation_engine.find_cross_sell(best_match)
+                if cross_sell:
+                    cross_sell_data = cross_sell.model_dump()
+        except Exception as e_rel:
+            logger.warning(f"Could not compute upsell/cross-sell: {e_rel}")
         return {"upsell": upsell_data, "cross_sell": cross_sell_data}
 
     def _node_evaluate_offers(self, state: CommerceState) -> CommerceState:
-        from app.models import MerchantPolicy, AgentAction
+        from app.models import MerchantPolicy, AgentAction, Merchant
         import uuid
         
         merchant_id = state.get("merchant_id") or "demo_merchant"
-        policy = self.db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
-        if not policy:
-            policy = self.db.query(MerchantPolicy).first()
+        policy = None
+        try:
+            policy = self.db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+            if not policy:
+                policy = self.db.query(MerchantPolicy).first()
+        except Exception:
+            pass
             
         rules = dict(policy.approval_rules) if (policy and isinstance(policy.approval_rules, dict)) else {}
         max_discount = float(getattr(policy, "max_discount_percent", 15.0) or 15.0)
@@ -210,24 +236,27 @@ class AICommerceSupervisor:
             disc = float(best_promo.get("discount", 10))
             code = best_promo.get("code", "SAVE10")
             
-            # Log Policy Evaluation in AgentAction
-            action_id = str(uuid.uuid4())
-            action = AgentAction(
-                id=action_id,
-                merchant_id=merchant_id,
-                agent_name="OfferAgent",
-                action_type="AI_DISCOUNT_PROPOSAL",
-                input={"requested_intent": input_text, "promo_candidate": code, "discount_percent": disc},
-                decision={"proposed_code": code, "discount_percent": disc, "auto_apply": True},
-                reason=f"Offer Agent validated promo code {code} ({disc}% off) against merchant safety ceiling of {max_discount}%.",
-                policy_result={"allowed": True, "discount_percent": disc, "max_allowed": max_discount},
-                execution_status="PROPOSED"
-            )
-            self.db.add(action)
+            # Log Policy Evaluation in AgentAction safely
             try:
-                self.db.commit()
-            except Exception:
+                m_record = self.db.query(Merchant).filter(Merchant.id == merchant_id).first()
+                if m_record:
+                    action_id = str(uuid.uuid4())
+                    action = AgentAction(
+                        id=action_id,
+                        merchant_id=merchant_id,
+                        agent_name="OfferAgent",
+                        action_type="AI_DISCOUNT_PROPOSAL",
+                        input={"requested_intent": input_text, "promo_candidate": code, "discount_percent": disc},
+                        decision={"proposed_code": code, "discount_percent": disc, "auto_apply": True},
+                        reason=f"Offer Agent validated promo code {code} ({disc}% off) against merchant safety ceiling of {max_discount}%.",
+                        policy_result={"allowed": True, "discount_percent": disc, "max_allowed": max_discount},
+                        execution_status="PROPOSED"
+                    )
+                    self.db.add(action)
+                    self.db.commit()
+            except Exception as e_action:
                 self.db.rollback()
+                logger.warning(f"Could not persist Offer AgentAction: {e_action}")
                 
             offer_data = {
                 "code": code,
