@@ -178,15 +178,21 @@ class AICommerceSupervisor:
         count = len(results)
         offer = final_state.get("offer")
         
+        has_direct_match = any(r.get("is_direct_match", False) or r.get("match_type") in ["BEST_MATCH", "TOP PICK"] for r in results)
+        searched_term = cat or kw or text
+
         if count > 0:
-            if cat and kw:
-                summary = f"I found {count} top-rated {cat} tailored for '{kw}'. Here are the best options ranked by specs and compatibility:"
-            elif cat:
-                summary = f"Here are the {count} top recommended {cat} available in our verified catalog:"
+            if has_direct_match:
+                if cat and kw:
+                    summary = f"I found {count} top-rated {cat} tailored for '{kw}'. Here are the best options ranked by specs and compatibility:"
+                elif cat:
+                    summary = f"Here are the top recommended {cat} available in our verified catalog:"
+                else:
+                    summary = f"I found {count} relevant products matching your request:"
             else:
-                summary = f"I found {count} relevant products matching your criteria:"
+                summary = f"We don't currently have '{searched_term}' in stock in this store's catalog. Here are the items currently available in our inventory:"
         else:
-            summary = "I couldn't find exact matches for those criteria, but here are our top featured items:"
+            summary = f"We couldn't find items matching '{searched_term}' in our catalog. Please ask about our other store products!"
 
         # Append offer highlight if shopper inquired about deals/promos/coupons
         if offer and any(w in text.lower() for w in ["discount", "coupon", "promo", "offer", "code", "deal", "cheap", "bargain", "percent", "%"]):

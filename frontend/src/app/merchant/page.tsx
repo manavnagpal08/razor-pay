@@ -83,7 +83,7 @@ export default function MerchantDashboard() {
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 3>(1);
   const [onboardingStoreName, setOnboardingStoreName] = useState("");
-  const [onboardingCategory, setOnboardingCategory] = useState("Fashion & Apparel");
+  const [onboardingCategory, setOnboardingCategory] = useState("Electronics & Tech");
   const [onboardingAddress, setOnboardingAddress] = useState("");
   const [onboardingPhone, setOnboardingPhone] = useState("");
   const [onboardingDescription, setOnboardingDescription] = useState("");
@@ -102,9 +102,9 @@ export default function MerchantDashboard() {
     {
       id: "prod_draft_1",
       name: "",
-      category: "Fashion & Apparel",
-      price: 1999,
-      inventory: 25,
+      category: "Electronics & Tech",
+      price: 49999,
+      inventory: 20,
       description: "",
       image_url: ""
     }
@@ -3836,8 +3836,10 @@ export default function MerchantDashboard() {
                       }}
                       className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
                     >
-                      <option value="Fashion & Apparel">Fashion & Apparel</option>
                       <option value="Electronics & Tech">Electronics & Tech</option>
+                      <option value="Laptops & Computers">Laptops & Computers</option>
+                      <option value="Smartphones & Gadgets">Smartphones & Gadgets</option>
+                      <option value="Fashion & Apparel">Fashion & Apparel</option>
                       <option value="Beauty & Personal Care">Beauty & Personal Care</option>
                       <option value="Home & Kitchen">Home & Kitchen</option>
                       <option value="Health & Wellness">Health & Wellness</option>
@@ -3879,7 +3881,7 @@ export default function MerchantDashboard() {
                   </label>
                   <textarea
                     rows={2}
-                    placeholder="e.g. Handcrafted designer garments, custom stitching, and premium express delivery across India."
+                    placeholder="e.g. Premium laptops, smartphones, high-performance audio, and tech gear with express delivery."
                     value={onboardingDescription}
                     onChange={(e) => setOnboardingDescription(e.target.value)}
                     className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
@@ -3956,7 +3958,7 @@ export default function MerchantDashboard() {
                           </label>
                           <input
                             type="text"
-                            placeholder="e.g. Silk Floral Maxi Dress, Wireless ANC Headphones..."
+                            placeholder="e.g. Apple MacBook Pro M3, iPhone 16 Pro Max, Sony WH-1000XM5..."
                             value={prod.name}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -4014,7 +4016,7 @@ export default function MerchantDashboard() {
                           <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">Description (Optional)</label>
                           <textarea
                             rows={1}
-                            placeholder="Short description of fabric, specs, or features..."
+                            placeholder="Short description of technical specs, key features, or warranty..."
                             value={prod.description}
                             onChange={(e) => {
                               const val = e.target.value;
