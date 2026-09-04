@@ -126,11 +126,17 @@ class EmailService:
                         err_msg = parsed_err.get("message") or parsed_err.get("code") or err_body
                     except Exception:
                         err_msg = err_body
+                    
+                    if "unrecognised IP" in str(err_msg) or "authorised_ips" in str(err_msg):
+                        action_msg = f"Brevo IP Security Block: Brevo blocked delivery because IP restriction is active on your Brevo account. Please open https://app.brevo.com/security/authorised_ips and disable IP restriction (or add your server IP) to enable email dispatch."
+                    else:
+                        action_msg = f"Brevo API error ({e_brevo_http.code}): {err_msg}. Note: In your Brevo account, ensure '{sender_email_brevo}' is verified under 'Senders & IPs' (https://app.brevo.com/senders) and IP restriction is disabled at https://app.brevo.com/security/authorised_ips."
+
                     return {
                         "sent": False,
                         "mode": "BREVO_HTTP_ERROR",
                         "code": e_brevo_http.code,
-                        "message": f"Brevo API error ({e_brevo_http.code}): {err_msg}. Note: In your Brevo account, ensure '{sender_email_brevo}' is verified under 'Senders & IPs' (https://app.brevo.com/senders) and your API key starts with 'xkeysib-...'."
+                        "message": action_msg
                     }
                 except Exception as e_brevo_api:
                     logger.error(f"Brevo HTTPS connection error: {e_brevo_api}")

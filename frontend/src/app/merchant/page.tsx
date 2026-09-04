@@ -3422,8 +3422,18 @@ export default function MerchantDashboard() {
                     onChange={(e) => setBrevoSenderEmail(e.target.value.trim())}
                     className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">Must match your verified Brevo account email</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Must match your verified Brevo sender</p>
                 </div>
+              </div>
+
+              <div className="p-3 bg-emerald-100/50 border border-emerald-200/80 rounded-xl flex items-center justify-between text-[11px] text-emerald-900">
+                <span className="font-medium">
+                  🔒 <strong>Brevo Security Note</strong>: If your Brevo account has IP restrictions enabled, open <a href="https://app.brevo.com/security/authorised_ips" target="_blank" rel="noopener noreferrer" className="underline font-bold text-emerald-800">Brevo Authorized IPs</a> and turn off IP restriction so cloud servers can dispatch emails.
+                </span>
+                <a href="https://app.brevo.com/security/authorised_ips" target="_blank" rel="noopener noreferrer" className="shrink-0 text-emerald-800 hover:text-emerald-950 font-bold underline flex items-center gap-0.5 ml-2">
+                  <span>Open Security Tab</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
             </div>
           )}
