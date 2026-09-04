@@ -671,12 +671,24 @@ def get_public_merchant_store(merchant_id: str, db: Session = Depends(get_db)):
     if product_count == 0:
         product_count = db.query(Product).count()
 
+    rules = dict(policy.approval_rules) if (policy and isinstance(policy.approval_rules, dict)) else {}
+    custom_promos = rules.get("promo_codes", [])
+    default_promos = [
+        {"code": "WELCOME10", "discount": 10, "type": "percentage", "active": True},
+        {"code": "SAVE15", "discount": 15, "type": "percentage", "active": True},
+    ]
+    promos = custom_promos if (custom_promos and isinstance(custom_promos, list) and len(custom_promos) > 0) else default_promos
+    top_promo = promos[0] if promos else {"code": "WELCOME10", "discount": 10}
+
     return {
         "merchant_id": merchant.id,
         "name": merchant.name,
         "currency": merchant.currency or "INR",
         "product_count": product_count,
         "max_discount_allowed": float(policy.max_discount_percent) if policy else 20.0,
+        "default_promo_code": top_promo.get("code", "WELCOME10"),
+        "default_discount_percent": float(top_promo.get("discount", 10)),
+        "promo_codes": promos,
         "verified": True,
         "agent_name": f"{merchant.name} AI Agent",
         "welcome_message": f"Welcome to {merchant.name}! I am your autonomous AI shopping assistant. Ask me anything about our products, setups, or deals."

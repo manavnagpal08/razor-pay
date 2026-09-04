@@ -69,7 +69,7 @@ function ChatContent() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [appliedPromo, setAppliedPromo] = useState<any>(null);
-  const { user, token, refreshCartCount } = useAuth();
+  const { user, token, role, refreshCartCount } = useAuth();
   const resolvedMerchantId = merchantInfo?.merchant_id || merchantParam;
 
   // In-Chat OTP Authentication & Frictionless Guest Checkout States
@@ -140,6 +140,14 @@ function ChatContent() {
           setMerchantInfo(data);
           if (data?.merchant_id && data.merchant_id !== activeMerchantId) {
             setActiveMerchantId(data.merchant_id);
+          }
+          if (data?.default_promo_code) {
+            setAppliedPromo({
+              title: data.default_promo_code,
+              code: data.default_promo_code,
+              discount_percent: Number(data.default_discount_percent || 10),
+              description: `${data.default_discount_percent || 10}% store discount applied automatically`
+            });
           }
         }
       } catch (err) {
@@ -277,8 +285,12 @@ function ChatContent() {
     }
   };
 
-  // Effective authenticated token (User Login OR Verified Guest Session)
-  const effectiveToken = token || guestVerifiedToken;
+  // Effective authenticated token (Prioritize Verified In-Chat Guest Session over merchant admin login)
+  const effectiveToken = guestVerifiedToken || (role === "customer" ? token : null) || token;
+
+  // Effective active customer identity
+  const activeCustomerEmail = otpEmail || guestCustomer?.email || (role === "customer" ? user?.email : "") || (role !== "merchant" ? user?.email : "") || "";
+  const activeCustomerName = otpName || guestCustomer?.name || (role === "customer" ? user?.displayName : "") || (role !== "merchant" ? user?.displayName : "") || "";
 
   // Send OTP for In-Chat Verification
   const handleSendOtp = async () => {
@@ -420,13 +432,24 @@ function ChatContent() {
     }
   };
 
-  // Order Tracking Handler
-  const handleTrackOrders = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!trackingEmail.trim()) {
-      setTrackingError("Please enter the email address used for your order.");
+  // 0-Click In-Chat Order Tracking Handler
+  const triggerOrderTracking = async (overrideEmail?: string) => {
+    const targetEmail = (
+      overrideEmail || 
+      trackingEmail || 
+      otpEmail || 
+      guestCustomer?.email || 
+      (role === "customer" ? user?.email : "") || 
+      (typeof window !== "undefined" ? localStorage.getItem("buyflow_customer_email") : "") || 
+      ""
+    ).trim();
+
+    setShowTrackingModal(true);
+    if (!targetEmail) {
+      setTrackingError("");
       return;
     }
+    setTrackingEmail(targetEmail);
     setTrackingLoading(true);
     setTrackingError("");
     try {
@@ -434,19 +457,24 @@ function ChatContent() {
       const res = await fetch(`${apiUrl}/api/chat/orders/track`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trackingEmail.trim() })
+        body: JSON.stringify({ email: targetEmail })
       });
       const data = await res.json();
       if (res.ok && data.found) {
         setTrackingData(data);
       } else {
-        setTrackingError(data.message || "No orders found matching this email.");
+        setTrackingError(data.message || `No active orders found for ${targetEmail}.`);
       }
     } catch (e) {
       setTrackingError("Failed to retrieve order tracking.");
     } finally {
       setTrackingLoading(false);
     }
+  };
+
+  const handleTrackOrders = async (e: React.FormEvent) => {
+    e.preventDefault();
+    triggerOrderTracking(trackingEmail);
   };
 
   // 1-Click Conversational In-App Razorpay Checkout
@@ -504,7 +532,8 @@ function ChatContent() {
       }
 
       // 2.5 Auto-apply active promo code if available
-      if (appliedPromo?.code) {
+      const promoToApply = appliedPromo?.code || merchantInfo?.default_promo_code;
+      if (promoToApply) {
         try {
           await fetch(`${apiUrl}/api/cart/${cartData.id}/apply-promo`, {
             method: "POST",
@@ -512,7 +541,7 @@ function ChatContent() {
               "Authorization": `Bearer ${activeToken}`,
               "Content-Type": "application/json"
             },
-            body: JSON.stringify({ code: appliedPromo.code })
+            body: JSON.stringify({ code: promoToApply })
           });
         } catch (e) {
           console.warn("Auto-applied promo note:", e);
@@ -535,8 +564,8 @@ function ChatContent() {
       const orderData = await orderRes.json();
 
       // 4. Launch Razorpay Checkout Modal directly in the chat!
-      const customerEmail = user?.email || guestCustomer?.email || otpEmail || "shopper@example.com";
-      const customerName = user?.displayName || guestCustomer?.name || otpName || "Valued Customer";
+      const customerEmail = activeCustomerEmail || user?.email || "shopper@example.com";
+      const customerName = activeCustomerName || user?.displayName || "Valued Shopper";
       const prodName = product.title || product.name || "Product";
 
       const options = {
@@ -652,6 +681,9 @@ function ChatContent() {
 
       const prods = asArray(data.results).length > 0 ? asArray(data.results) : asArray(data.products);
       const safeOffer = normalizeOffer(data.offer);
+      if (safeOffer) {
+        setAppliedPromo(safeOffer);
+      }
 
       const newMsg = { 
         role: "assistant", 
@@ -760,10 +792,7 @@ function ChatContent() {
           {/* Track Orders Button */}
           <button
             type="button"
-            onClick={() => {
-              setTrackingError("");
-              setShowTrackingModal(true);
-            }}
+            onClick={() => triggerOrderTracking()}
             className="p-1.5 sm:p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all cursor-pointer"
             title="Track Orders"
           >
@@ -828,53 +857,67 @@ function ChatContent() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {catalogProducts.map((prod) => (
-                <div key={prod.id} className="bg-white border border-slate-200/90 rounded-2xl p-3 flex flex-col justify-between group hover:border-blue-400 transition-all shadow-xs">
-                  <div>
-                    <div className="w-full h-32 bg-slate-100 rounded-xl mb-2.5 overflow-hidden flex items-center justify-center relative border border-slate-100">
-                      {(prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url) ? (
-                        <img 
-                          src={prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url} 
-                          alt={prod.title || prod.name} 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                        />
-                      ) : (
-                        <Package className="w-8 h-8 text-slate-400" />
-                      )}
-                      <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-blue-700 border border-blue-100 shadow-xs">
-                        {prod.category}
-                      </span>
-                    </div>
-                    <h5 className="font-bold text-slate-900 text-xs mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors">{prod.title || prod.name}</h5>
-                    <p className="text-[11px] text-slate-500 line-clamp-2 mb-2 leading-relaxed">{prod.description || "High-performance tech item."}</p>
-                  </div>
+              {catalogProducts.map((prod) => {
+                const catalogPrice = Number(prod.price || 0);
+                const discountPercent = appliedPromo?.discount_percent ? Number(appliedPromo.discount_percent) : 0;
+                const hasDiscount = discountPercent > 0;
+                const discountedPrice = hasDiscount ? Math.round(catalogPrice * (1 - discountPercent / 100)) : catalogPrice;
 
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                return (
+                  <div key={prod.id} className="bg-white border border-slate-200/90 rounded-2xl p-3 flex flex-col justify-between group hover:border-blue-400 transition-all shadow-xs">
                     <div>
-                      <p className="text-xs font-black text-slate-900">₹{Number(prod.price).toLocaleString("en-IN")}</p>
+                      <div className="w-full h-32 bg-slate-100 rounded-xl mb-2.5 overflow-hidden flex items-center justify-center relative border border-slate-100">
+                        {(prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url) ? (
+                          <img 
+                            src={prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url} 
+                            alt={prod.title || prod.name} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                          />
+                        ) : (
+                          <Package className="w-8 h-8 text-slate-400" />
+                        )}
+                        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-blue-700 border border-blue-100 shadow-xs">
+                          {prod.category}
+                        </span>
+                      </div>
+                      <h5 className="font-bold text-slate-900 text-xs mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors">{prod.title || prod.name}</h5>
+                      <p className="text-[11px] text-slate-500 line-clamp-2 mb-2 leading-relaxed">{prod.description || "High-performance tech item."}</p>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => {
-                          setViewMode("chat");
-                          handleSend(`Tell me more about the ${prod.title || prod.name} and why I should buy it.`);
-                        }}
-                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors"
-                      >
-                        Ask AI
-                      </button>
-                      <button
-                        onClick={() => handleInstantBuy(prod)}
-                        disabled={instantBuyingId === prod.id}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold transition-all shadow-xs flex items-center gap-1"
-                      >
-                        {instantBuyingId === prod.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-white" />}
-                        <span>Buy</span>
-                      </button>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <div>
+                        {hasDiscount ? (
+                          <div className="flex items-baseline gap-1 flex-wrap">
+                            <span className="text-xs font-black text-emerald-600">₹{discountedPrice.toLocaleString("en-IN")}</span>
+                            <span className="text-[10px] text-slate-400 line-through">₹{catalogPrice.toLocaleString("en-IN")}</span>
+                          </div>
+                        ) : (
+                          <p className="text-xs font-black text-slate-900">₹{catalogPrice.toLocaleString("en-IN")}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setViewMode("chat");
+                            handleSend(`Tell me more about the ${prod.title || prod.name} and why I should buy it.`);
+                          }}
+                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors"
+                        >
+                          Ask AI
+                        </button>
+                        <button
+                          onClick={() => handleInstantBuy(prod)}
+                          disabled={instantBuyingId === prod.id}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold transition-all shadow-xs flex items-center gap-1"
+                        >
+                          {instantBuyingId === prod.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-white" />}
+                          <span>Buy</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -924,10 +967,7 @@ function ChatContent() {
                     <span>Active discounts & offers</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setTrackingError("");
-                      setShowTrackingModal(true);
-                    }}
+                    onClick={() => triggerOrderTracking()}
                     className="px-3.5 py-2 rounded-xl bg-white hover:bg-indigo-50 border border-slate-200/90 hover:border-indigo-300 text-xs font-semibold text-slate-700 hover:text-indigo-600 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
                   >
                     <Truck className="w-3.5 h-3.5 text-indigo-600" />
@@ -1039,6 +1079,9 @@ function ChatContent() {
                             const prodReason = toDisplayText(rawRecord.reasons?.[0] || prod.description || "");
                             const formattedPrice = isNaN(prodPrice) ? "0" : prodPrice.toLocaleString("en-IN");
                             const matchBadge = rawRecord.match_type === "BEST_MATCH" ? "Best Match" : (rawRecord.match_type === "ALTERNATIVE" ? "Top Pick" : null);
+                            const discountPercent = appliedPromo?.discount_percent ? Number(appliedPromo.discount_percent) : 0;
+                            const hasDiscount = discountPercent > 0;
+                            const discountedPrice = hasDiscount ? Math.round(prodPrice * (1 - discountPercent / 100)) : prodPrice;
 
                             return (
                               <div 
@@ -1069,10 +1112,24 @@ function ChatContent() {
                                         {prodReason}
                                       </p>
                                     )}
-                                    <div className="flex items-center gap-2 mt-0.5 sm:mt-1">
-                                      <p className="text-xs sm:text-sm font-black text-blue-600">
-                                        ₹{formattedPrice}
-                                      </p>
+                                    <div className="flex items-center gap-2 mt-0.5 sm:mt-1 flex-wrap">
+                                      {hasDiscount ? (
+                                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                                          <span className="text-xs sm:text-sm font-black text-emerald-600">
+                                            ₹{discountedPrice.toLocaleString("en-IN")}
+                                          </span>
+                                          <span className="text-[10px] sm:text-xs text-slate-400 line-through">
+                                            ₹{formattedPrice}
+                                          </span>
+                                          <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold rounded-md">
+                                            {discountPercent}% OFF ({appliedPromo.code})
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs sm:text-sm font-black text-blue-600">
+                                          ₹{formattedPrice}
+                                        </p>
+                                      )}
                                       {prod.category && (
                                         <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[9px] sm:text-[10px] font-semibold rounded-md uppercase tracking-wider truncate max-w-[100px]">
                                           {toDisplayText(prod.category)}

@@ -222,14 +222,17 @@ class AICommerceSupervisor:
         input_text = state.get("input_text", "").lower()
         
         # Determine best available promo code
-        promo_codes = rules.get("promo_codes", [
-            {"code": "WELCOME10", "discount": 10, "type": "percentage", "active": True},
-            {"code": "SAVE15", "discount": 15, "type": "percentage", "active": True},
+        custom_promos = rules.get("promo_codes", [])
+        default_promos = [
+            {"code": "WELCOME10", "discount": min(10, max_discount), "type": "percentage", "active": True},
+            {"code": "SAVE10", "discount": min(10, max_discount), "type": "percentage", "active": True},
+            {"code": "SAVE15", "discount": min(15, max_discount), "type": "percentage", "active": True},
             {"code": "FLASH20", "discount": min(20, max_discount), "type": "percentage", "active": True},
-        ])
+        ]
+        promo_codes = custom_promos if (custom_promos and isinstance(custom_promos, list) and len(custom_promos) > 0) else default_promos
         
         active_promos = [p for p in promo_codes if p.get("active", True) and float(p.get("discount", 0)) <= max_discount]
-        best_promo = max(active_promos, key=lambda x: float(x.get("discount", 0)), default=None) if active_promos else None
+        best_promo = max(active_promos, key=lambda x: float(x.get("discount", 0)), default=None) if active_promos else (default_promos[0] if default_promos else None)
         
         offer_data = None
         if best_promo:

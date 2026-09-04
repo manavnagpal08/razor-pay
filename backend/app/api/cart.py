@@ -111,14 +111,19 @@ def apply_promo_code(cart_id: str, req: ApplyPromoRequest, db: Session = Depends
         policy = db.query(MerchantPolicy).first()
 
     rules = dict(policy.approval_rules) if (policy and isinstance(policy.approval_rules, dict)) else {}
-    promo_codes = rules.get("promo_codes", [
+    custom_promos = rules.get("promo_codes", [])
+    default_promos = [
         {"code": "WELCOME10", "discount": 10, "type": "percentage", "active": True},
+        {"code": "SAVE10", "discount": 10, "type": "percentage", "active": True},
         {"code": "SAVE15", "discount": 15, "type": "percentage", "active": True},
         {"code": "FLASH20", "discount": 20, "type": "percentage", "active": True},
+        {"code": "BUYFLOW500", "discount": 500, "type": "flat", "active": True},
+        {"code": "FESTIVE15", "discount": 15, "type": "percent", "active": True},
         {"code": "FLAT500", "discount": 500, "type": "fixed", "active": True},
-    ])
+    ]
+    promo_codes = custom_promos + [p for p in default_promos if not any(c.get("code") == p["code"] for c in custom_promos)]
 
-    matched_promo = next((p for p in promo_codes if p.get("code") == code_str and p.get("active", True)), None)
+    matched_promo = next((p for p in promo_codes if str(p.get("code", "")).upper() == code_str and p.get("active", True)), None)
     if not matched_promo:
         raise HTTPException(status_code=400, detail=f"Coupon '{code_str}' is invalid or expired.")
 
