@@ -361,13 +361,26 @@ class MerchantOnboardRequest(BaseModel):
     welcome_message: str | None = None
 
 @router.post("/onboard")
-def onboard_merchant(req: MerchantOnboardRequest, db: Session = Depends(get_db)):
-    import re, uuid
+def onboard_merchant(req: MerchantOnboardRequest, db: Session = Depends(get_db), authorization: str | None = Header(None)):
+    import re, uuid, jwt
     from app.models import Merchant, MerchantPolicy, Product
+    from app.core.config import settings
     
+    user_id = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+        try:
+            payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+            user_id = payload.get("sub")
+        except Exception:
+            pass
+
     clean_name = req.store_name.strip()
     slug = re.sub(r'[^a-zA-Z0-9]', '_', clean_name.lower())[:15]
-    merchant_id = f"store_{slug}_{str(uuid.uuid4())[:6]}"
+    if user_id:
+        merchant_id = f"{user_id}_{slug}_{str(uuid.uuid4())[:6]}"
+    else:
+        merchant_id = f"store_{slug}_{str(uuid.uuid4())[:6]}"
     
     merchant = Merchant(
         id=merchant_id,
@@ -402,6 +415,27 @@ def onboard_merchant(req: MerchantOnboardRequest, db: Session = Depends(get_db))
         "welcome_message": req.welcome_message or f"Welcome to {merchant.name}! Ask me anything to discover matching products."
     }
 
+class RenameStorePayload(BaseModel):
+    name: str
+
+@router.patch("/store-name")
+def rename_merchant_store(
+    req: RenameStorePayload,
+    db: Session = Depends(get_db),
+    merchant_id: str = Depends(get_current_merchant)
+):
+    from app.models import Merchant
+    clean_name = req.name.strip()
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Store name cannot be empty")
+    merchant = db.query(Merchant).filter(Merchant.id == merchant_id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Store not found")
+    merchant.name = clean_name
+    db.commit()
+    db.refresh(merchant)
+    return {"success": True, "id": merchant.id, "name": merchant.name}
+
 @router.get("/stores")
 def list_stores(db: Session = Depends(get_db), authorization: str | None = Header(None)):
     from app.models import Merchant, Product, MerchantPolicy, User
@@ -433,7 +467,7 @@ def list_stores(db: Session = Depends(get_db), authorization: str | None = Heade
 
     if target_merchant_ids:
         merchants = db.query(Merchant).filter(Merchant.id.in_(target_merchant_ids)).all()
-        # If no store found, ensure primary user merchant exists
+        # If no store found, ensure primary user merchant exists with user's name
         if not merchants and user_id:
             user_rec = db.query(User).filter(User.id == user_id).first()
             store_title = user_rec.name if user_rec and user_rec.name else "My Store"

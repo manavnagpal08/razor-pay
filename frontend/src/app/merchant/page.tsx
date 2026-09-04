@@ -78,6 +78,9 @@ export default function MerchantDashboard() {
   const [creatingStore, setCreatingStore] = useState(false);
   const [createdStoreResult, setCreatedStoreResult] = useState<any>(null);
   const [showStoreDropdown, setShowStoreDropdown] = useState(false);
+  const [editingStoreName, setEditingStoreName] = useState(false);
+  const [storeNameInput, setStoreNameInput] = useState("");
+  const [savingStoreName, setSavingStoreName] = useState(false);
 
   // Onboarding Wizard States
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
@@ -530,6 +533,39 @@ export default function MerchantDashboard() {
       showToast("Connection error when creating store.", "error");
     } finally {
       setCreatingStore(false);
+    }
+  };
+
+  const handleRenameStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!storeNameInput.trim()) return;
+    setSavingStoreName(true);
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/merchant/store-name`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: storeNameInput.trim() })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStores(prev => prev.map(s => s.id === merchantId ? { ...s, name: data.name } : s));
+        if (selectedStore && selectedStore.id === merchantId) {
+          setSelectedStore({ ...selectedStore, name: data.name });
+        }
+        showToast(`Store renamed to "${data.name}"!`, "success");
+        setEditingStoreName(false);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || "Failed to rename store", "error");
+      }
+    } catch (e) {
+      showToast("Connection error renaming store", "error");
+    } finally {
+      setSavingStoreName(false);
     }
   };
 
@@ -1152,51 +1188,84 @@ export default function MerchantDashboard() {
             <span className="text-slate-500 text-sm">Storefront:</span>
             
             {/* Store Dropdown Switcher */}
-            <div className="relative">
+            <div className="relative flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setShowStoreDropdown(!showStoreDropdown)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition-colors cursor-pointer"
+                title="Switch active store"
               >
                 <Store className="w-3.5 h-3.5" />
                 <span>{currentStoreName}</span>
                 <ChevronDown className="w-3 h-3 ml-0.5" />
               </button>
 
+              <button
+                type="button"
+                onClick={() => {
+                  setStoreNameInput(currentStoreName);
+                  setEditingStoreName(true);
+                }}
+                className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                title="Rename Store"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+              </button>
+
               {showStoreDropdown && (
-                <div className="absolute left-0 top-full mt-1.5 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50">
-                  <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Your Active Stores
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedStore(null);
-                      setShowStoreDropdown(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between hover:bg-slate-50 ${
-                      !selectedStore ? "text-indigo-600 bg-indigo-50/50" : "text-slate-700"
-                    }`}
-                  >
-                    <span>Razorpay Demo Store</span>
-                    {!selectedStore && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />}
-                  </button>
-                  {stores.map((s) => (
+                <div className="absolute left-0 top-full mt-1.5 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in duration-100">
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                    <span>Your Active Stores</span>
                     <button
-                      key={s.id}
                       type="button"
                       onClick={() => {
-                        setSelectedStore(s);
+                        setShowStoreDropdown(false);
+                        setShowNewStoreModal(true);
+                      }}
+                      className="text-indigo-600 hover:text-indigo-800 font-extrabold text-[10px] hover:underline cursor-pointer"
+                    >
+                      + New Store
+                    </button>
+                  </div>
+
+                  {stores && stores.length > 0 ? (
+                    stores.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedStore(s);
+                          setShowStoreDropdown(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer ${
+                          selectedStore?.id === s.id ? "text-indigo-600 bg-indigo-50/50 font-bold" : "text-slate-700"
+                        }`}
+                      >
+                        <span className="truncate">{s.name}</span>
+                        {selectedStore?.id === s.id && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-xs text-slate-600 font-medium">
+                      <span>{currentStoreName}</span>
+                    </div>
+                  )}
+
+                  {merchantId === "demo_merchant" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedStore(null);
                         setShowStoreDropdown(false);
                       }}
-                      className={`w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between hover:bg-slate-50 ${
-                        selectedStore?.id === s.id ? "text-indigo-600 bg-indigo-50/50" : "text-slate-700"
+                      className={`w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between hover:bg-slate-50 border-t border-slate-100 transition-colors cursor-pointer ${
+                        !selectedStore ? "text-indigo-600 bg-indigo-50/50 font-bold" : "text-slate-700"
                       }`}
                     >
-                      <span className="truncate">{s.name}</span>
-                      {selectedStore?.id === s.id && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />}
+                      <span>Razorpay Demo Store</span>
+                      {!selectedStore && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
                     </button>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
@@ -3188,7 +3257,7 @@ export default function MerchantDashboard() {
                 <h3 className="font-extrabold text-slate-900 text-sm">Production Email Delivery</h3>
                 {activeEmailProvider === "brevo" && brevoApiKey && (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    ● ACTIVE PROVIDER: BREVO (100% FREE 300 EMAILS/DAY)
+                    ● ACTIVE PROVIDER: BREVO CLOUD HTTPS (300 EMAILS/DAY)
                   </span>
                 )}
                 {activeEmailProvider === "resend" && resendApiKey && (
@@ -3339,7 +3408,7 @@ export default function MerchantDashboard() {
                   />
                   {brevoApiKey.startsWith("xsmtpsib-") && (
                     <p className="text-[10px] text-amber-700 font-medium mt-1">
-                      ⚠️ You pasted an SMTP password (<code className="font-mono">xsmtpsib-...</code>). Please generate an <strong>API Key</strong> (<code className="font-mono text-emerald-800">xkeysib-...</code>) from the <a href="https://app.brevo.com/settings/keys/api" target="_blank" rel="noopener noreferrer" className="underline font-bold">API Keys tab</a> for 100% free delivery.
+                      ⚠️ You pasted an SMTP password (<code className="font-mono">xsmtpsib-...</code>). Please generate an <strong>API Key</strong> (<code className="font-mono text-emerald-800">xkeysib-...</code>) from the <a href="https://app.brevo.com/settings/keys/api" target="_blank" rel="noopener noreferrer" className="underline font-bold">API Keys tab</a> for guaranteed cloud delivery.
                     </p>
                   )}
                 </div>
@@ -3815,7 +3884,7 @@ export default function MerchantDashboard() {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Kaaysha Luxury Apparel, Apex Tech Store..."
+                    placeholder="e.g. My Premium Tech Store, NextGen Gadgets..."
                     value={onboardingStoreName}
                     onChange={(e) => setOnboardingStoreName(e.target.value)}
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500"
@@ -4561,6 +4630,61 @@ export default function MerchantDashboard() {
                 >
                   {savingEditProduct ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   <span>{savingEditProduct ? "Saving..." : "Save Changes"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Rename Store Modal Dialog */}
+      {editingStoreName && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-sm w-full p-6 sm:p-7 relative">
+            <button
+              type="button"
+              onClick={() => setEditingStoreName(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-xl cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="font-black text-slate-900 text-lg mb-1 flex items-center gap-2">
+              <Store className="w-5 h-5 text-indigo-600" />
+              <span>Rename Storefront</span>
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              Update the display name of this store across customer chat, receipts, and order emails.
+            </p>
+
+            <form onSubmit={handleRenameStore} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Store / Business Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. My Premium Tech Store"
+                  value={storeNameInput}
+                  onChange={(e) => setStoreNameInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold text-slate-900"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditingStoreName(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingStoreName}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-indigo-500/20 disabled:opacity-50 cursor-pointer"
+                >
+                  {savingStoreName ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>{savingStoreName ? "Saving..." : "Update Store Name"}</span>
                 </button>
               </div>
             </form>

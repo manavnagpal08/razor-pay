@@ -93,7 +93,7 @@ export default function Register() {
                   type="text" 
                   value={name} 
                   onChange={e => setName(e.target.value)} 
-                  placeholder="e.g. Apex Electronics Store" 
+                  placeholder="e.g. My Online Store" 
                   className="w-full border border-slate-200 pl-10 pr-4 py-3 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm text-slate-800 font-medium" 
                   required 
                 />

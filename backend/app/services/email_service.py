@@ -85,8 +85,8 @@ class EmailService:
                     import urllib.error
                     import json
                     payload = json.dumps({
-                        "sender": {"name": sender_name, "email": sender_email_brevo},
-                        "to": [{"email": to_email}],
+                        "sender": {"name": sender_name, "email": sender_email_brevo.strip()},
+                        "to": [{"email": to_email.strip()}],
                         "subject": subject,
                         "htmlContent": html_body
                     }).encode("utf-8")
@@ -96,35 +96,49 @@ class EmailService:
                         headers={
                             "api-key": brevo_key.strip(),
                             "accept": "application/json",
-                            "content-type": "application/json"
+                            "content-type": "application/json",
+                            "User-Agent": "BuyFlow-Platform/1.0"
                         }
                     )
-                    with urllib.request.urlopen(req_obj, timeout=10) as resp:
-                        if resp.status in (200, 201, 202):
-                            logger.info(f"[EMAIL DELIVERED] Successfully sent email to {to_email} via Brevo HTTPS")
-                            return {
-                                "sent": True,
-                                "mode": "BREVO_HTTPS",
-                                "message": f"Free live email delivered successfully to {to_email} via Brevo!",
-                                "to": to_email
-                            }
+                    with urllib.request.urlopen(req_obj, timeout=12) as resp:
+                        resp_content = resp.read().decode('utf-8', errors='ignore')
+                        logger.info(f"[BREVO HTTPS DELIVERED] Status={resp.status} Body={resp_content}")
+                        msg_id = ""
+                        try:
+                            resp_json = json.loads(resp_content)
+                            msg_id = resp_json.get("messageId") or ""
+                        except Exception:
+                            pass
+                        id_label = f" (Brevo Message ID: {msg_id})" if msg_id else ""
+                        return {
+                            "sent": True,
+                            "mode": "BREVO_HTTPS",
+                            "message": f"Live email dispatched successfully to {to_email} via Brevo{id_label}! Please check your Inbox and Spam/Junk folder.",
+                            "to": to_email,
+                            "message_id": msg_id
+                        }
                 except urllib.error.HTTPError as e_brevo_http:
                     err_body = e_brevo_http.read().decode('utf-8', errors='ignore')
                     logger.error(f"[BREVO HTTPS HTTP ERROR {e_brevo_http.code}] {err_body}")
                     try:
                         import json
                         parsed_err = json.loads(err_body)
-                        err_msg = parsed_err.get("message") or err_body
+                        err_msg = parsed_err.get("message") or parsed_err.get("code") or err_body
                     except Exception:
                         err_msg = err_body
                     return {
                         "sent": False,
                         "mode": "BREVO_HTTP_ERROR",
                         "code": e_brevo_http.code,
-                        "message": f"Brevo API error ({e_brevo_http.code}): {err_msg}. Note: API Key must start with 'xkeysib-...' from the 'API Keys' tab at https://app.brevo.com/settings/keys/api."
+                        "message": f"Brevo API error ({e_brevo_http.code}): {err_msg}. Note: In your Brevo account, ensure '{sender_email_brevo}' is verified under 'Senders & IPs' (https://app.brevo.com/senders) and your API key starts with 'xkeysib-...'."
                     }
                 except Exception as e_brevo_api:
-                    logger.warning(f"Brevo HTTPS attempt returned: {e_brevo_api}")
+                    logger.error(f"Brevo HTTPS connection error: {e_brevo_api}")
+                    return {
+                        "sent": False,
+                        "mode": "BREVO_CONNECTION_ERROR",
+                        "message": f"Brevo connection error: {e_brevo_api}. Please check your Brevo API key and network connection."
+                    }
 
             # Method 1B: Brevo SMTP Relay on smtp-relay.brevo.com (Port 587 or 465) for xsmtpsib- keys
             smtp_err = ""
@@ -151,7 +165,7 @@ class EmailService:
                     return {
                         "sent": True,
                         "mode": "BREVO_SMTP_RELAY",
-                        "message": f"Free live email delivered successfully to {to_email} via Brevo SMTP Relay (Port {port})!",
+                        "message": f"Live email delivered successfully to {to_email} via Brevo SMTP Relay (Port {port})!",
                         "to": to_email
                     }
                 except Exception as e_relay:
@@ -162,7 +176,7 @@ class EmailService:
                 return {
                     "sent": False,
                     "mode": "BREVO_SMTP_KEY_NOTICE",
-                    "message": f"You entered a Brevo SMTP key (xsmtpsib-...), but Brevo rejected authentication ({smtp_err}). For 100% guaranteed delivery on cloud hosts, please generate a REST API key (starts with 'xkeysib-...') from Brevo ➔ 'API Keys' tab at https://app.brevo.com/settings/keys/api"
+                    "message": f"You entered a Brevo SMTP key (xsmtpsib-...), but Brevo rejected authentication ({smtp_err}). For guaranteed delivery on cloud hosts, generate a REST API key (starts with 'xkeysib-...') from Brevo ➔ 'API Keys' tab at https://app.brevo.com/settings/keys/api"
                 }
 
             return {
