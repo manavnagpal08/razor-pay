@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 .next/
 .venv/
 __pycache__/
@@ -11,3 +11,4 @@ serviceAccountKey.json
 .system_generated/
 dist/
 build/
+.vercel/
