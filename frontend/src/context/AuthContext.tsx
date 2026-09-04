@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { getApiUrl } from "@/utils/api";
 
 interface UserProfile {
   uid?: string;
@@ -52,10 +53,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [cartCount, setCartCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const getApiUrl = () => {
-    return (process.env.NEXT_PUBLIC_API_URL || "https://razorpay-commerce-backend.onrender.com").replace(/\/$/, "");
-  };
-
   const fetchCartCount = async (jwtToken: string) => {
     try {
       const apiUrl = getApiUrl();
@@ -77,6 +74,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    // Proactively pre-warm backend in background
+    try {
+      const apiUrl = getApiUrl();
+      fetch(`${apiUrl}/api/health`).catch(() => {});
+    } catch (_) {}
+
     if (typeof window !== "undefined") {
       const savedToken = localStorage.getItem("token");
       const savedEmail = localStorage.getItem("user_email");
@@ -100,15 +103,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, pass: string) => {
     const apiUrl = getApiUrl();
-    let res: Response;
-    try {
-      res = await fetch(`${apiUrl}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password: pass })
-      });
-    } catch (netErr: any) {
-      throw new Error("Server is waking up from sleep mode. Please wait 15 seconds and try again.");
+    let res: Response | null = null;
+    
+    // Attempt with automatic retry if cold starting
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        res = await fetch(`${apiUrl}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password: pass })
+        });
+        break;
+      } catch (netErr: any) {
+        if (attempt === 0) {
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
+        }
+        throw new Error("Server is waking up from sleep mode. Please wait 10 seconds and try again.");
+      }
+    }
+
+    if (!res) {
+      throw new Error("Server is waking up from sleep mode. Please wait 10 seconds and try again.");
     }
 
     const data = await res.json();
@@ -138,20 +154,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (email: string, pass: string, userRole: string, name: string) => {
     const apiUrl = getApiUrl();
-    let res: Response;
-    try {
-      res = await fetch(`${apiUrl}/api/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password: pass,
-          role: userRole,
-          name: name || email.split("@")[0]
-        })
-      });
-    } catch (netErr: any) {
-      throw new Error("Server is waking up from sleep mode. Please wait 15 seconds and try again.");
+    let res: Response | null = null;
+
+    // Attempt with automatic retry if cold starting
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        res = await fetch(`${apiUrl}/api/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            password: pass,
+            role: userRole,
+            name: name || email.split("@")[0]
+          })
+        });
+        break;
+      } catch (netErr: any) {
+        if (attempt === 0) {
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
+        }
+        throw new Error("Server is waking up from sleep mode. Please wait 10 seconds and try again.");
+      }
+    }
+
+    if (!res) {
+      throw new Error("Server is waking up from sleep mode. Please wait 10 seconds and try again.");
     }
 
     const data = await res.json();
