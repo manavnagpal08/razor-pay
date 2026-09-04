@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Optional
 from app.schemas import IntentRequest, IntentResponse, ProductSearchRequest
 from app.services.intent_service import IntentService
 from app.api.products import search_products
@@ -38,6 +38,92 @@ def _resolve_public_merchant_id(db: Session, raw_merchant_id: Optional[str]) -> 
     if db.query(Merchant).filter(Merchant.id == "demo_merchant").first():
         return "demo_merchant"
     return merchant_id
+
+
+def _serialize_chat_product(product: Any) -> dict:
+    metadata = getattr(product, "metadata_", None) if not isinstance(product, dict) else product.get("metadata") or product.get("metadata_")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    if isinstance(product, dict):
+        return {
+            "id": product.get("id"),
+            "merchant_id": product.get("merchant_id"),
+            "name": product.get("name"),
+            "category": product.get("category") or "General",
+            "description": product.get("description") or "",
+            "price": float(product.get("price") or 0),
+            "currency": product.get("currency") or "INR",
+            "inventory": product.get("inventory") or 0,
+            "image_url": product.get("image_url") or metadata.get("image_url"),
+            "features": product.get("features") if isinstance(product.get("features"), dict) else {},
+            "use_cases": product.get("use_cases") if isinstance(product.get("use_cases"), list) else [],
+            "metadata": metadata,
+        }
+    return {
+        "id": getattr(product, "id", None),
+        "merchant_id": getattr(product, "merchant_id", None),
+        "name": getattr(product, "name", None),
+        "category": getattr(product, "category", None) or "General",
+        "description": getattr(product, "description", None) or "",
+        "price": float(getattr(product, "price", 0) or 0),
+        "currency": getattr(product, "currency", None) or "INR",
+        "inventory": getattr(product, "inventory", 0) or 0,
+        "image_url": metadata.get("image_url"),
+        "features": getattr(product, "features", None) if isinstance(getattr(product, "features", None), dict) else {},
+        "use_cases": getattr(product, "use_cases", None) if isinstance(getattr(product, "use_cases", None), list) else [],
+        "metadata": metadata,
+    }
+
+
+def _build_chat_fallback_response(db: Session, request: ChatRequest, merchant_id: str, reason: str) -> dict:
+    from app.models import Product
+
+    products = db.query(Product).filter(Product.merchant_id == merchant_id, Product.inventory > 0).limit(6).all()
+    if not products and merchant_id != "demo_merchant":
+        products = db.query(Product).filter(Product.merchant_id == "demo_merchant", Product.inventory > 0).limit(6).all()
+
+    results = [
+        {
+            "product": _serialize_chat_product(product),
+            "score": 1.0,
+            "reasons": ["Available in this storefront catalog"],
+            "match_type": "CATALOG_FALLBACK",
+        }
+        for product in products
+    ]
+
+    return {
+        "summary": "I found these available catalog items for you. Live AI reasoning had a temporary issue, but storefront browsing and checkout are still available.",
+        "intent": {
+            "category": None,
+            "subcategory": None,
+            "max_price": None,
+            "min_price": None,
+            "currency": "INR",
+            "use_cases": [],
+            "required_features": [],
+            "preferred_features": [],
+            "keywords": [request.text.strip()] if request.text and request.text.strip() else [],
+        },
+        "results": results,
+        "alternatives": [],
+        "upsell": None,
+        "cross_sell": None,
+        "offer": None,
+        "ai_provider": {"provider": "catalog_fallback", "model": None, "fallback_reason": reason},
+        "reasoning": {
+            "intent_extracted": {
+                "category": "General",
+                "budget": "Flexible",
+                "use_cases": ["Everyday"],
+                "keywords": [request.text.strip()] if request.text and request.text.strip() else [],
+            },
+            "policy_verification": "No money action executed",
+            "catalog_scanned": f"{len(results)} items returned",
+            "direct_catalog_match": False,
+            "offer_applied": None,
+            "ai_provider": {"provider": "catalog_fallback", "model": None, "fallback_reason": reason},
+        },
+    }
 
 @router.post("/intent", response_model=IntentResponse)
 def parse_intent(request: IntentRequest):
@@ -76,11 +162,21 @@ def chat_search(request: ChatRequest, db: Session = Depends(get_db)):
     resolved_merchant_id = _resolve_public_merchant_id(db, request.merchant_id)
     
     try:
-        response_data = supervisor.process_chat_message(
-            request.text, 
-            request.thread_id, 
-            merchant_id=resolved_merchant_id
-        )
+        try:
+            response_data = supervisor.process_chat_message(
+                request.text,
+                request.thread_id,
+                merchant_id=resolved_merchant_id
+            )
+        except Exception as supervisor_error:
+            import logging
+            logging.exception("AI supervisor failed; returning catalog fallback")
+            response_data = _build_chat_fallback_response(
+                db,
+                request,
+                resolved_merchant_id,
+                supervisor_error.__class__.__name__,
+            )
         
         # Log conversational chat event for merchant audit trail
         try:
