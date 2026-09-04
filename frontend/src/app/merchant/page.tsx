@@ -1437,7 +1437,14 @@ export default function MerchantDashboard() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleCopyLink}
+                  onClick={() => {
+                    if (typeof navigator !== "undefined" && navigator.clipboard) {
+                      navigator.clipboard.writeText(agentShareUrl);
+                      setCopiedLink(true);
+                      showToast("Copied storefront link to clipboard.", "success");
+                      setTimeout(() => setCopiedLink(false), 2500);
+                    }
+                  }}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer"
                 >
                   {copiedLink ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
