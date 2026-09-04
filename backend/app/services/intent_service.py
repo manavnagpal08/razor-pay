@@ -18,6 +18,8 @@ class IntentService:
             # Additional deterministic validation could go here
             if structured_intent.max_price and structured_intent.max_price <= 0:
                 structured_intent.max_price = None
+            if "usd" not in text.lower() and "$" not in text:
+                structured_intent.currency = "INR"
                 
             return IntentResponse(
                 intent=structured_intent,
