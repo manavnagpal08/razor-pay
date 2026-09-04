@@ -20,6 +20,7 @@ class CommerceState(TypedDict):
     best_match: Optional[Any]
     upsell: Optional[Dict[str, Any]]
     cross_sell: Optional[Dict[str, Any]]
+    offer: Optional[Dict[str, Any]]
 
 class AICommerceSupervisor:
     def __init__(self, db: Session):
@@ -33,12 +34,14 @@ class AICommerceSupervisor:
         workflow.add_node("search", self._node_search)
         workflow.add_node("recommend", self._node_recommend)
         workflow.add_node("upsell_cross_sell", self._node_upsell_cross_sell)
+        workflow.add_node("evaluate_offers", self._node_evaluate_offers)
         
         workflow.add_edge(START, "parse_intent")
         workflow.add_edge("parse_intent", "search")
         workflow.add_edge("search", "recommend")
         workflow.add_edge("recommend", "upsell_cross_sell")
-        workflow.add_edge("upsell_cross_sell", END)
+        workflow.add_edge("upsell_cross_sell", "evaluate_offers")
+        workflow.add_edge("evaluate_offers", END)
         
         self.graph = workflow.compile()
         
@@ -85,6 +88,65 @@ class AICommerceSupervisor:
                 cross_sell_data = cross_sell.model_dump()
         return {"upsell": upsell_data, "cross_sell": cross_sell_data}
 
+    def _node_evaluate_offers(self, state: CommerceState) -> CommerceState:
+        from app.models import MerchantPolicy, AgentAction
+        import uuid
+        
+        merchant_id = state.get("merchant_id") or "demo_merchant"
+        policy = self.db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+        if not policy:
+            policy = self.db.query(MerchantPolicy).first()
+            
+        rules = dict(policy.approval_rules) if (policy and isinstance(policy.approval_rules, dict)) else {}
+        max_discount = float(getattr(policy, "max_discount_percent", 15.0) or 15.0)
+        
+        input_text = state.get("input_text", "").lower()
+        
+        # Determine best available promo code
+        promo_codes = rules.get("promo_codes", [
+            {"code": "WELCOME10", "discount": 10, "type": "percentage", "active": True},
+            {"code": "SAVE15", "discount": 15, "type": "percentage", "active": True},
+            {"code": "FLASH20", "discount": min(20, max_discount), "type": "percentage", "active": True},
+        ])
+        
+        active_promos = [p for p in promo_codes if p.get("active", True) and float(p.get("discount", 0)) <= max_discount]
+        best_promo = max(active_promos, key=lambda x: float(x.get("discount", 0)), default=None) if active_promos else None
+        
+        offer_data = None
+        if best_promo:
+            disc = float(best_promo.get("discount", 10))
+            code = best_promo.get("code", "SAVE10")
+            
+            # Log Policy Evaluation in AgentAction
+            action_id = str(uuid.uuid4())
+            action = AgentAction(
+                id=action_id,
+                merchant_id=merchant_id,
+                agent_name="OfferAgent",
+                action_type="AI_DISCOUNT_PROPOSAL",
+                input={"requested_intent": input_text, "promo_candidate": code, "discount_percent": disc},
+                decision={"proposed_code": code, "discount_percent": disc, "auto_apply": True},
+                reason=f"Offer Agent validated promo code {code} ({disc}% off) against merchant safety ceiling of {max_discount}%.",
+                policy_result={"allowed": True, "discount_percent": disc, "max_allowed": max_discount},
+                execution_status="PROPOSED"
+            )
+            self.db.add(action)
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                
+            offer_data = {
+                "code": code,
+                "discount_percent": disc,
+                "title": f"{int(disc)}% Store Discount",
+                "description": f"Use code {code} to get {int(disc)}% off your order!",
+                "is_active": True,
+                "reason": f"Authorized by Store Policy ({disc}% <= {max_discount}% max cap)"
+            }
+            
+        return {"offer": offer_data}
+
     def process_chat_message(self, text: str, thread_id: str = "default_thread", merchant_id: Optional[str] = "demo_merchant") -> Dict[str, Any]:
         initial_state = CommerceState(
             input_text=text,
@@ -94,7 +156,8 @@ class AICommerceSupervisor:
             ranked_products=[],
             best_match=None,
             upsell=None,
-            cross_sell=None
+            cross_sell=None,
+            offer=None
         )
         
         config = {"configurable": {"thread_id": thread_id}}
@@ -113,6 +176,7 @@ class AICommerceSupervisor:
         cat = intent_data.get("category")
         kw = ", ".join(intent_data.get("keywords") or [])
         count = len(results)
+        offer = final_state.get("offer")
         
         if count > 0:
             if cat and kw:
@@ -124,6 +188,10 @@ class AICommerceSupervisor:
         else:
             summary = "I couldn't find exact matches for those criteria, but here are our top featured items:"
 
+        # Append offer highlight if shopper inquired about deals/promos/coupons
+        if offer and any(w in text.lower() for w in ["discount", "coupon", "promo", "offer", "code", "deal", "cheap", "bargain", "percent", "%"]):
+            summary = f"🎉 Great news! Active store coupon **{offer['code']}** ({int(offer['discount_percent'])}% off) is available for your order!\n\n" + summary
+
         reasoning = {
             "intent_extracted": {
                 "category": cat or "General",
@@ -132,7 +200,8 @@ class AICommerceSupervisor:
                 "keywords": intent_data.get("keywords") or []
             },
             "policy_verification": "Verified • 0 violations • Max discount 20%",
-            "catalog_scanned": f"{count} items ranked"
+            "catalog_scanned": f"{count} items ranked",
+            "offer_applied": offer["code"] if offer else None
         }
 
         return {
@@ -141,5 +210,6 @@ class AICommerceSupervisor:
             "results": results,
             "upsell": final_state.get("upsell"),
             "cross_sell": final_state.get("cross_sell"),
+            "offer": offer,
             "reasoning": reasoning
         }

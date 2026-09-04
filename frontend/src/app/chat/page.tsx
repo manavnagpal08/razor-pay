@@ -53,6 +53,7 @@ function ChatContent() {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
+  const [appliedPromo, setAppliedPromo] = useState<any>(null);
   const { user, token, refreshCartCount } = useAuth();
 
   // In-Chat OTP Authentication & Frictionless Guest Checkout States
@@ -483,6 +484,22 @@ function ChatContent() {
         throw new Error(errJson.detail || "Failed to add item to checkout cart");
       }
 
+      // 2.5 Auto-apply active promo code if available
+      if (appliedPromo?.code) {
+        try {
+          await fetch(`${apiUrl}/api/cart/${cartData.id}/apply-promo`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${activeToken}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ code: appliedPromo.code })
+          });
+        } catch (e) {
+          console.warn("Auto-applied promo note:", e);
+        }
+      }
+
       // 3. Create Razorpay order
       const orderRes = await fetch(`${apiUrl}/api/orders/`, {
         method: "POST",
@@ -615,8 +632,13 @@ function ChatContent() {
         intent: data.intent,
         upsell: data.upsell,
         cross_sell: data.cross_sell,
+        offer: data.offer,
         reasoning: data.reasoning
       };
+
+      if (data.offer) {
+        setAppliedPromo(data.offer);
+      }
 
       setMessages(prev => [...prev, newMsg]);
 
@@ -923,6 +945,38 @@ function ChatContent() {
                         : "bg-white border border-slate-200/90 text-slate-800 rounded-tl-xs"
                     }`}>
                       <p className="whitespace-pre-wrap">{msg.text}</p>
+                      
+                      {/* Autonomous Offer / Discount Badge */}
+                      {msg.offer && (
+                        <div className="mt-3 p-2.5 px-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 shadow-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-base shrink-0">🏷️</span>
+                            <div className="min-w-0">
+                              <p className="font-black text-emerald-900 text-xs truncate">
+                                {msg.offer.title} ({msg.offer.code})
+                              </p>
+                              <p className="text-[10px] text-emerald-700 font-medium">
+                                {msg.offer.description || `${msg.offer.discount_percent}% discount automatically verified`}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAppliedPromo(msg.offer);
+                              showToast(`Applied coupon ${msg.offer.code} (${msg.offer.discount_percent}% off)!`, "success");
+                            }}
+                            className={`px-3 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all cursor-pointer shadow-xs ${
+                              appliedPromo?.code === msg.offer.code
+                                ? "bg-emerald-700 text-white"
+                                : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                            }`}
+                          >
+                            {appliedPromo?.code === msg.offer.code ? "✓ Active" : "Apply Code"}
+                          </button>
+                        </div>
+                      )}
+
                       <span className={`text-[9px] block text-right mt-1 font-mono ${
                         msg.role === "user" ? "text-blue-200" : "text-slate-400"
                       }`}>
@@ -1013,6 +1067,26 @@ function ChatContent() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Active Promo Notification Bar */}
+      {appliedPromo && (
+        <div className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-between text-xs font-bold shadow-xs animate-in slide-in-from-bottom-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span>🏷️</span>
+            <span className="truncate">Promo Active: <span className="font-mono bg-white/20 px-1.5 py-0.5 rounded text-[11px]">{appliedPromo.code}</span> ({appliedPromo.discount_percent}% off applied at checkout)</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setAppliedPromo(null);
+              showToast("Promo code removed.", "info");
+            }}
+            className="text-[11px] text-white/80 hover:text-white underline cursor-pointer shrink-0 ml-2"
+          >
+            Remove
+          </button>
         </div>
       )}
 
