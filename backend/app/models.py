@@ -7,7 +7,7 @@ from app.database import Base
 JSONType = JSON().with_variant(JSONB, "postgresql")
 try:
     from pgvector.sqlalchemy import Vector
-    VectorType = JSON().with_variant(Vector(768), "postgresql")
+    VectorType = JSON().with_variant(Vector(1536), "postgresql")
 except Exception:
     VectorType = JSON
 

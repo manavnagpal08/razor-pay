@@ -20,6 +20,20 @@ class PolicyUpdateRequest(BaseModel):
     ai_upsell_sensitivity: Optional[str] = "BALANCED"
     promo_codes: Optional[List[Dict[str, Any]]] = None
 
+class CampaignProposalRequest(BaseModel):
+    name: str
+    objective: str = "revenue_growth"
+    audience: str = "all_customers"
+    budget: float
+    discount_percent: float = 0.0
+    message: Optional[str] = None
+
+class CampaignStatusResponse(BaseModel):
+    id: str
+    name: str
+    status: str
+    policy_result: Dict[str, Any]
+
 @router.get("/dashboard")
 def get_dashboard(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
     service = AnalyticsService(db)
@@ -54,6 +68,167 @@ def update_policy(req: PolicyUpdateRequest, db: Session = Depends(get_db), merch
 def get_logs(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
     service = AnalyticsService(db)
     return service.get_system_logs(merchant_id)
+
+@router.get("/campaigns")
+def list_campaigns(db: Session = Depends(get_db), merchant_id: str = Depends(get_current_merchant)):
+    from app.models import Campaign
+
+    campaigns = db.query(Campaign).filter(Campaign.merchant_id == merchant_id).all()
+    return [
+        {
+            "id": c.id,
+            "name": c.name,
+            "objective": c.objective,
+            "audience": c.audience,
+            "budget": float(c.budget or 0),
+            "proposal": c.proposal or {},
+            "status": c.status,
+            "approved_by": c.approved_by,
+            "created_at": c.created_at,
+        }
+        for c in campaigns
+    ]
+
+@router.post("/campaigns/propose", response_model=CampaignStatusResponse)
+def propose_campaign(
+    req: CampaignProposalRequest,
+    db: Session = Depends(get_db),
+    merchant_id: str = Depends(get_current_merchant),
+):
+    from app.models import Campaign, MerchantPolicy, AgentAction
+    import uuid
+
+    policy = db.query(MerchantPolicy).filter(MerchantPolicy.merchant_id == merchant_id).first()
+    max_discount = float(policy.max_discount_percent or 0) if policy else 0.0
+    max_budget = float(policy.campaign_budget_limit or 0) if policy and policy.campaign_budget_limit else 0.0
+
+    violations = []
+    if req.budget <= 0:
+        violations.append("Campaign budget must be greater than zero.")
+    if req.discount_percent < 0:
+        violations.append("Campaign discount cannot be negative.")
+    if max_discount and req.discount_percent > max_discount:
+        violations.append(f"Discount exceeds merchant limit of {max_discount}%.")
+    if max_budget and req.budget > max_budget:
+        violations.append(f"Budget exceeds merchant campaign limit of ₹{max_budget:,.2f}.")
+
+    allowed = not violations
+    campaign = Campaign(
+        id=str(uuid.uuid4()),
+        merchant_id=merchant_id,
+        name=req.name.strip(),
+        objective=req.objective,
+        audience=req.audience,
+        budget=req.budget,
+        proposal={
+            "discount_percent": req.discount_percent,
+            "message": req.message or "",
+            "requires_approval": True,
+        },
+        status="PENDING_APPROVAL" if allowed else "POLICY_BLOCKED",
+    )
+    db.add(campaign)
+
+    policy_result = {
+        "allowed": allowed,
+        "violations": violations,
+        "max_discount_percent": max_discount,
+        "campaign_budget_limit": max_budget,
+    }
+    action = AgentAction(
+        id=str(uuid.uuid4()),
+        merchant_id=merchant_id,
+        agent_name="CampaignAgent",
+        action_type="CAMPAIGN_PROPOSED",
+        input=req.model_dump(),
+        decision={"campaign_id": campaign.id, "status": campaign.status},
+        reason="Campaign proposal evaluated against merchant discount and budget policy.",
+        policy_result=policy_result,
+        approval_status=campaign.status,
+        execution_status="PROPOSED" if allowed else "BLOCKED",
+        entity_type="campaign",
+        entity_id=campaign.id,
+    )
+    db.add(action)
+    db.commit()
+
+    return {
+        "id": campaign.id,
+        "name": campaign.name,
+        "status": campaign.status,
+        "policy_result": policy_result,
+    }
+
+@router.post("/campaigns/{campaign_id}/approve", response_model=CampaignStatusResponse)
+def approve_campaign(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    merchant_id: str = Depends(get_current_merchant),
+):
+    from app.models import Campaign, AgentAction
+    import uuid
+
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.merchant_id == merchant_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign.status != "PENDING_APPROVAL":
+        raise HTTPException(status_code=400, detail=f"Campaign cannot be approved from status {campaign.status}")
+
+    campaign.status = "APPROVED"
+    campaign.approved_by = merchant_id
+    policy_result = {"allowed": True, "approval": "merchant_approved"}
+    action = AgentAction(
+        id=str(uuid.uuid4()),
+        merchant_id=merchant_id,
+        agent_name="CampaignAgent",
+        action_type="CAMPAIGN_APPROVED",
+        input={"campaign_id": campaign.id},
+        decision={"status": campaign.status, "approved_by": merchant_id},
+        reason="Merchant approved the policy-valid campaign proposal.",
+        policy_result=policy_result,
+        approval_status="APPROVED",
+        execution_status="APPROVED",
+        entity_type="campaign",
+        entity_id=campaign.id,
+    )
+    db.add(action)
+    db.commit()
+
+    return {"id": campaign.id, "name": campaign.name, "status": campaign.status, "policy_result": policy_result}
+
+@router.post("/campaigns/{campaign_id}/reject", response_model=CampaignStatusResponse)
+def reject_campaign(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    merchant_id: str = Depends(get_current_merchant),
+):
+    from app.models import Campaign, AgentAction
+    import uuid
+
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id, Campaign.merchant_id == merchant_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    campaign.status = "REJECTED"
+    policy_result = {"allowed": True, "approval": "merchant_rejected"}
+    action = AgentAction(
+        id=str(uuid.uuid4()),
+        merchant_id=merchant_id,
+        agent_name="CampaignAgent",
+        action_type="CAMPAIGN_REJECTED",
+        input={"campaign_id": campaign.id},
+        decision={"status": campaign.status},
+        reason="Merchant rejected the campaign proposal.",
+        policy_result=policy_result,
+        approval_status="REJECTED",
+        execution_status="REJECTED",
+        entity_type="campaign",
+        entity_id=campaign.id,
+    )
+    db.add(action)
+    db.commit()
+
+    return {"id": campaign.id, "name": campaign.name, "status": campaign.status, "policy_result": policy_result}
 
 class FirstProductPayload(BaseModel):
     name: str

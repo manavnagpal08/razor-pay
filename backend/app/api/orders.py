@@ -1,13 +1,15 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-import os
 import json
 import logging
+import hashlib
 from app.database import get_db
+from app.core.config import settings
 from app.services.order import OrderService
 from app.api.dependencies import get_current_customer
-from app.models import Order, Cart
+from app.models import Order, Cart, Payment, CustomerEvent, AgentAction
+import uuid
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -69,13 +71,42 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
         
     from app.services.razorpay_service import RazorpayService
     rzp = RazorpayService()
-    webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "mock_webhook_secret")
+    webhook_secret = settings.razorpay_webhook_secret
+    if not webhook_secret and not rzp.is_mock:
+        raise HTTPException(status_code=500, detail="Webhook secret is not configured")
     
     if not rzp.verify_webhook_signature(payload_body.decode("utf-8"), webhook_signature, webhook_secret):
         raise HTTPException(status_code=400, detail="Invalid signature")
         
     payload = json.loads(payload_body)
     event = payload.get("event")
+    event_id = (
+        request.headers.get("X-Razorpay-Event-Id")
+        or payload.get("id")
+        or hashlib.sha256(payload_body).hexdigest()
+    )
+
+    existing_webhook = db.query(AgentAction).filter(
+        AgentAction.action_type == "RAZORPAY_WEBHOOK_RECEIVED",
+        AgentAction.entity_id == event_id,
+    ).first()
+    if existing_webhook:
+        return {"status": "ok", "duplicate": True}
+
+    received_action = AgentAction(
+        id=str(uuid.uuid4()),
+        merchant_id=None,
+        agent_name="RazorpayWebhook",
+        action_type="RAZORPAY_WEBHOOK_RECEIVED",
+        input={"event": event, "event_id": event_id},
+        decision={"accepted": True},
+        reason="Webhook signature verified and event accepted for idempotent processing.",
+        policy_result={"allowed": True, "event_id": event_id},
+        execution_status="RECEIVED",
+        entity_type="webhook_event",
+        entity_id=event_id,
+    )
+    db.add(received_action)
     
     if event in ["payment.captured", "payment.authorized"]:
         payment_entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
@@ -84,8 +115,45 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
         
         if rzp_order_id:
             order = db.query(Order).filter(Order.razorpay_order_id == rzp_order_id).first()
-            if order and order.status != "COMPLETED":
-                order.status = "COMPLETED"
+            if order and received_action.merchant_id is None:
+                received_action.merchant_id = order.merchant_id
+            if order and order.status != "PAID":
+                order.status = "PAID"
+                payment = db.query(Payment).filter(Payment.razorpay_payment_id == rzp_payment_id).first()
+                if not payment and rzp_payment_id:
+                    payment = Payment(
+                        id=str(uuid.uuid4()),
+                        merchant_id=order.merchant_id,
+                        order_id=order.id,
+                        razorpay_payment_id=rzp_payment_id,
+                        status="CAPTURED",
+                        amount=order.amount,
+                    )
+                    db.add(payment)
+
+                event = CustomerEvent(
+                    id=str(uuid.uuid4()),
+                    merchant_id=order.merchant_id,
+                    customer_id=order.customer_id,
+                    event_type="ORDER_PAID_WEBHOOK",
+                    metadata_={"order_id": order.id, "razorpay_payment_id": rzp_payment_id},
+                )
+                action = AgentAction(
+                    id=str(uuid.uuid4()),
+                    merchant_id=order.merchant_id,
+                    agent_name="CheckoutAgent",
+                    action_type="PAYMENT_WEBHOOK_RECONCILED",
+                    input={"razorpay_order_id": rzp_order_id, "razorpay_payment_id": rzp_payment_id},
+                    decision={"order_status": "PAID", "payment_status": "CAPTURED"},
+                    reason="Razorpay webhook signature was verified and reconciled to the internal order.",
+                    policy_result={"allowed": True, "verification": "webhook_signature_valid"},
+                    execution_status="SUCCESS",
+                    entity_type="order",
+                    entity_id=order.id,
+                )
+                db.add_all([event, action])
                 db.commit()
+
+    db.commit()
                 
     return {"status": "ok"}

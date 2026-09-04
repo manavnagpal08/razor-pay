@@ -8,6 +8,7 @@ from app.services.order import OrderService
 from app.services.policy import PolicyEngine
 from app.core.config import settings
 import uuid
+import secrets
 
 router = APIRouter(prefix="/api/agent", tags=["agent-to-agent protocol"])
 
@@ -57,7 +58,11 @@ def get_agent_protocol_manifest():
     }
 
 @router.post("/transact")
-def agent_transact(req: AgentTransactRequest, db: Session = Depends(get_db)):
+def agent_transact(
+    req: AgentTransactRequest,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
     """
     Autonomous Agent-to-Agent Transaction Endpoint:
     Allows an external AI buyer to transact directly:
@@ -66,6 +71,13 @@ def agent_transact(req: AgentTransactRequest, db: Session = Depends(get_db)):
     3. Creates authoritative Cart & Razorpay Order
     4. Returns Razorpay Order ID for cryptographic completion
     """
+    if settings.environment.lower() in {"production", "prod"}:
+        token = ""
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization.removeprefix("Bearer ").strip()
+        if not token or not any(secrets.compare_digest(token, key) for key in settings.agent_api_keys):
+            raise HTTPException(status_code=401, detail="Invalid agent API key")
+
     product = db.query(Product).filter(Product.id == req.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found in merchant catalog")

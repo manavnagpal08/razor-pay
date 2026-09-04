@@ -6,6 +6,7 @@ import logging
 from app.database import get_db
 from app import models, schemas
 from app.core.config import settings
+from app.api.dependencies import get_current_merchant
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 logger = logging.getLogger(__name__)
@@ -141,19 +142,14 @@ def get_merchant_products(merchant_id: str, db: Session = Depends(get_db)):
     return results
 
 @router.post("/", response_model=schemas.ProductResponse)
-def create_merchant_product(req: CreateProductPayload, db: Session = Depends(get_db)):
+def create_merchant_product(
+    req: CreateProductPayload,
+    db: Session = Depends(get_db),
+    merchant_id: str = Depends(get_current_merchant),
+):
     """Add a new product to the merchant catalog."""
     import uuid
-    clean_merchant_id = (req.merchant_id or "demo_merchant").strip()
-    if clean_merchant_id.startswith("ey"):
-        try:
-            import jwt
-            from app.core.config import settings
-            decoded = jwt.decode(clean_merchant_id, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-            if decoded.get("sub"):
-                clean_merchant_id = decoded["sub"]
-        except Exception:
-            pass
+    clean_merchant_id = merchant_id
 
     merchant = db.query(models.Merchant).filter(models.Merchant.id == clean_merchant_id).first()
     if not merchant:
@@ -199,29 +195,32 @@ def create_merchant_product(req: CreateProductPayload, db: Session = Depends(get
     }
 
 @router.post("/merchant/{merchant_id}/seed")
-def seed_merchant_products(merchant_id: str, db: Session = Depends(get_db)):
+def seed_merchant_products(
+    merchant_id: str,
+    db: Session = Depends(get_db),
+    current_merchant_id: str = Depends(get_current_merchant),
+):
     """Explicitly seed or reset sample products for a merchant."""
     clean_id = merchant_id.strip()
-    if clean_id.startswith("ey"):
-        try:
-            import jwt
-            from app.core.config import settings
-            decoded = jwt.decode(clean_id, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-            if decoded.get("sub"):
-                clean_id = decoded["sub"]
-        except Exception:
-            pass
+    if clean_id != current_merchant_id:
+        raise HTTPException(status_code=403, detail="Not authorized to seed this merchant catalog")
 
     from app.api.auth import ensure_merchant_starter_catalog
     ensure_merchant_starter_catalog(db, clean_id)
     return {"status": "success", "message": f"Starter products seeded for {clean_id}"}
 
 @router.delete("/{product_id}")
-def delete_merchant_product(product_id: str, db: Session = Depends(get_db)):
+def delete_merchant_product(
+    product_id: str,
+    db: Session = Depends(get_db),
+    merchant_id: str = Depends(get_current_merchant),
+):
     """Remove a product from the catalog."""
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    if product.merchant_id != merchant_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this product")
     db.delete(product)
     db.commit()
     return {"status": "deleted", "product_id": product_id}

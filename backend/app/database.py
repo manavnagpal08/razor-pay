@@ -25,6 +25,16 @@ else:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+
+def init_dev_database():
+    if "sqlite" not in DATABASE_URL:
+        return
+    import app.models  # noqa: F401
+    Base.metadata.create_all(bind=engine)
+
+
+init_dev_database()
+
 def get_db():
     db = SessionLocal()
     try:

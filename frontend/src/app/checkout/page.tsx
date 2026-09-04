@@ -165,9 +165,9 @@ export default function CheckoutPage() {
         }
       };
 
-      // @ts-ignore
+      // @ts-expect-error Razorpay injects this constructor at runtime from checkout.js.
       if (typeof window !== "undefined" && window.Razorpay) {
-        // @ts-ignore
+        // @ts-expect-error Razorpay injects this constructor at runtime from checkout.js.
         const rzp = new window.Razorpay(options);
         rzp.on('payment.failed', function (response: any) {
           router.push(`/order-failed?reason=${encodeURIComponent(response.error?.description || "Payment failed")}`);

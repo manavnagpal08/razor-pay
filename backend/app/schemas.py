@@ -83,6 +83,8 @@ class CartValidationSchema(BaseModel):
 
 class CartResponse(BaseModel):
     id: str
+    customer_id: Optional[str] = None
+    merchant_id: Optional[str] = None
     items: List[CartItemSchema]
     subtotal: float
     discount: float
@@ -93,10 +95,10 @@ class CartResponse(BaseModel):
     
 class AddItemRequest(BaseModel):
     product_id: str
-    quantity: int = 1
+    quantity: int = Field(default=1, gt=0, le=99)
 
 class UpdateItemRequest(BaseModel):
-    quantity: int
+    quantity: int = Field(ge=0, le=99)
 
 class ApplyOfferRequest(BaseModel):
     offer_id: str

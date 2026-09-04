@@ -54,5 +54,9 @@ def get_llm_provider() -> LLMProvider:
             from app.services.gemini_provider import GeminiLLMProvider
             return GeminiLLMProvider()
         except (ImportError, ModuleNotFoundError):
+            if settings.environment.lower() in {"production", "prod"} and settings.require_live_ai:
+                raise RuntimeError("Live AI provider is required but Gemini dependencies are unavailable.")
             pass
+    elif settings.environment.lower() in {"production", "prod"} and settings.require_live_ai:
+        raise RuntimeError("Live AI provider is required but GEMINI_API_KEY is not configured.")
     return MockLLMProvider()

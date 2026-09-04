@@ -31,8 +31,8 @@ def get_current_user(
         except Exception:
             pass
 
-        # 2. Try Supabase JWT decode without secret verification (or with secret)
-        if not user_id:
+        # 2. Development-only convenience for locally decoded external tokens.
+        if not user_id and settings.environment.lower() not in {"production", "prod"}:
             try:
                 unverified = jwt.decode(token, options={"verify_signature": False})
                 user_id = unverified.get("sub")

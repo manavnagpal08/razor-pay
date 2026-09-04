@@ -70,6 +70,8 @@ class CartService:
         
         return CartResponse(
             id=cart.id,
+            customer_id=cart.customer_id,
+            merchant_id=cart.merchant_id,
             items=schema_items,
             subtotal=float(cart.subtotal),
             discount=float(cart.discount),

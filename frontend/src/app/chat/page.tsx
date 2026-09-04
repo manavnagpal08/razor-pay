@@ -12,7 +12,21 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { getApiUrl } from "@/utils/api";
 import { Toast } from "@/components/ui/Toast";
-import { FormattedChatMessage } from "@/components/FormattedChatMessage";
+import { FormattedChatMessage, toDisplayText } from "@/components/FormattedChatMessage";
+
+const asArray = (value: unknown): any[] => Array.isArray(value) ? value : [];
+
+const normalizeOffer = (value: unknown) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const offer = value as Record<string, any>;
+  return {
+    ...offer,
+    title: toDisplayText(offer.title || "Verified Store Offer"),
+    code: toDisplayText(offer.code || "STOREOFFER"),
+    description: toDisplayText(offer.description || ""),
+    discount_percent: Number(offer.discount_percent ?? offer.discount ?? 0),
+  };
+};
 
 function ChatContent() {
   const searchParams = useSearchParams();
@@ -614,31 +628,32 @@ function ChatContent() {
           merchant_id: merchantParam
         })
       });
-      
-      if (!res.ok) throw new Error("Failed to process intent");
-      
-      const data = await res.json();
-      
-      const responseText = data.summary || (data.intent?.category 
-        ? `I analyzed your intent for ${data.intent.category}${data.intent?.max_price ? ` under ₹${data.intent.max_price.toLocaleString()}` : ""}. Here are the best matched options:`
-        : "Here are the most relevant items I found for your request:");
 
-      const prods = data.results || data.products || [];
+      if (!res.ok) throw new Error("Failed to process intent");
+
+      const data = await res.json();
+
+      const responseText = toDisplayText(data.summary || data.message || data.response || (data.intent?.category
+        ? `I analyzed your intent for ${data.intent.category}${data.intent?.max_price ? ` under ₹${data.intent.max_price.toLocaleString()}` : ""}. Here are the best matched options:`
+        : "Here are the most relevant items I found for your request:"));
+
+      const prods = asArray(data.results).length > 0 ? asArray(data.results) : asArray(data.products);
+      const safeOffer = normalizeOffer(data.offer);
 
       const newMsg = { 
         role: "assistant", 
         text: responseText, 
         products: prods,
         results: prods,
-        intent: data.intent,
-        upsell: data.upsell,
-        cross_sell: data.cross_sell,
-        offer: data.offer,
-        reasoning: data.reasoning
+        intent: data.intent && typeof data.intent === "object" ? data.intent : null,
+        upsell: data.upsell && typeof data.upsell === "object" ? data.upsell : null,
+        cross_sell: data.cross_sell && typeof data.cross_sell === "object" ? data.cross_sell : null,
+        offer: safeOffer,
+        reasoning: data.reasoning && typeof data.reasoning === "object" ? data.reasoning : null
       };
 
-      if (data.offer) {
-        setAppliedPromo(data.offer);
+      if (safeOffer) {
+        setAppliedPromo(safeOffer);
       }
 
       setMessages(prev => [...prev, newMsg]);
@@ -932,8 +947,8 @@ function ChatContent() {
                         </button>
                         {expandedReasoning[idx] && (
                           <div className="mt-1 p-2.5 bg-slate-900 text-slate-200 text-[10px] rounded-xl font-mono border border-slate-800 space-y-0.5">
-                            <p className="text-emerald-400">✓ Category: {msg.reasoning.intent_extracted?.category || "general"}</p>
-                            <p className="text-blue-400">✓ Policy: {msg.reasoning.policy_verification || "Server boundary verified"}</p>
+                            <p className="text-emerald-400">✓ Category: {toDisplayText(msg.reasoning.intent_extracted?.category || "general")}</p>
+                            <p className="text-blue-400">✓ Policy: {toDisplayText(msg.reasoning.policy_verification || "Server boundary verified")}</p>
                           </div>
                         )}
                       </div>
@@ -954,10 +969,10 @@ function ChatContent() {
                             <span className="text-base shrink-0">🏷️</span>
                             <div className="min-w-0">
                               <p className="font-black text-emerald-900 text-xs truncate">
-                                {msg.offer.title} ({msg.offer.code})
+                                {toDisplayText(msg.offer.title)} ({toDisplayText(msg.offer.code)})
                               </p>
                               <p className="text-[10px] text-emerald-700 font-medium">
-                                {msg.offer.description || `${msg.offer.discount_percent}% discount automatically verified`}
+                                {toDisplayText(msg.offer.description || `${msg.offer.discount_percent}% discount automatically verified`)}
                               </p>
                             </div>
                           </div>
@@ -965,7 +980,7 @@ function ChatContent() {
                             type="button"
                             onClick={() => {
                               setAppliedPromo(msg.offer);
-                              showToast(`Applied coupon ${msg.offer.code} (${msg.offer.discount_percent}% off)!`, "success");
+                              showToast(`Applied coupon ${toDisplayText(msg.offer.code)} (${Number(msg.offer.discount_percent || 0)}% off)!`, "success");
                             }}
                             className={`px-3 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all cursor-pointer shadow-xs ${
                               appliedPromo?.code === msg.offer.code
@@ -988,13 +1003,14 @@ function ChatContent() {
                     {/* Product Recommendations */}
                     {((msg.products && msg.products.length > 0) || (msg.results && msg.results.length > 0)) && (
                       <div className="mt-2.5 grid grid-cols-1 gap-2.5 w-full">
-                        {(msg.products || msg.results).map((rawProd: any, idx: number) => {
-                          const prod = rawProd.product || rawProd;
-                          const prodId = prod.id || rawProd.id || `prod_${idx}`;
-                          const prodImg = prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url || rawProd.image_url;
-                          const prodName = prod.name || prod.title || rawProd.name || rawProd.title || "Recommended Product";
-                          const prodPrice = Number(prod.price ?? rawProd.price ?? 0);
-                          const prodReason = rawProd.reasons?.[0] || prod.description || rawProd.match_type;
+                        {asArray(msg.products || msg.results).map((rawProd: any, idx: number) => {
+                          const rawRecord = rawProd && typeof rawProd === "object" ? rawProd : {};
+                          const prod = rawRecord.product && typeof rawRecord.product === "object" ? rawRecord.product : rawRecord;
+                          const prodId = toDisplayText(prod.id || rawRecord.id || `prod_${idx}`);
+                          const prodImg = toDisplayText(prod.image_url || prod.metadata_?.image_url || prod.metadata?.image_url || rawRecord.image_url);
+                          const prodName = toDisplayText(prod.name || prod.title || rawRecord.name || rawRecord.title || "Recommended Product");
+                          const prodPrice = Number(prod.price ?? rawRecord.price ?? 0);
+                          const prodReason = toDisplayText(rawRecord.reasons?.[0] || prod.description || rawRecord.match_type || "");
                           const formattedPrice = isNaN(prodPrice) ? "99,999" : prodPrice.toLocaleString("en-IN");
 
                           return (
@@ -1025,7 +1041,7 @@ function ChatContent() {
                                     </p>
                                     {prod.category && (
                                       <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[9px] sm:text-[10px] font-semibold rounded-md uppercase tracking-wider truncate max-w-[100px]">
-                                        {prod.category}
+                                        {toDisplayText(prod.category)}
                                       </span>
                                     )}
                                   </div>

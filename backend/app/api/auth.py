@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 import uuid
 import logging
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from app.database import get_db
 from app.models import User, Customer, Merchant
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 class SyncRequest(BaseModel):
     firebase_token: str
-    role: str = "customer"
+    role: Literal["customer", "merchant"] = "customer"
     name: str = "User"
 
 class Token(BaseModel):
@@ -38,7 +38,7 @@ class UserCreate(BaseModel):
     email: str
     password: str
     name: str
-    role: str = "merchant"
+    role: Literal["customer", "merchant"] = "merchant"
 
 class LoginRequest(BaseModel):
     email: Optional[str] = None
@@ -193,6 +193,9 @@ def sync_user(req: SyncRequest, db: Session = Depends(get_db)):
                 user_id = decoded_fb.get("uid")
                 email = decoded_fb.get("email", "")
             except Exception:
+                from app.core.config import settings
+                if settings.environment.lower() in {"production", "prod"}:
+                    raise HTTPException(status_code=401, detail="Invalid auth token")
                 user_id = str(uuid.uuid4())
 
     if not user_id:
@@ -227,7 +230,8 @@ def sync_user(req: SyncRequest, db: Session = Depends(get_db)):
 class GoogleAuthPayload(BaseModel):
     email: str
     name: Optional[str] = None
-    role: str = "merchant"
+    role: Literal["customer", "merchant"] = "merchant"
+    id_token: Optional[str] = None
 
 @router.post("/google", response_model=Token)
 def google_auth_login(req: GoogleAuthPayload, db: Session = Depends(get_db)):
@@ -235,6 +239,21 @@ def google_auth_login(req: GoogleAuthPayload, db: Session = Depends(get_db)):
     1-Click Google Sign-In & Sign-Up: Authenticates user and issues signed JWT.
     """
     clean_email = req.email.strip().lower()
+    from app.core.config import settings
+    if settings.environment.lower() in {"production", "prod"}:
+        if not req.id_token:
+            raise HTTPException(status_code=401, detail="Google ID token is required in production.")
+        try:
+            import firebase_admin
+            from firebase_admin import auth as firebase_auth
+            decoded = firebase_auth.verify_id_token(req.id_token)
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid Google ID token.")
+
+        token_email = (decoded.get("email") or "").strip().lower()
+        if not token_email or token_email != clean_email:
+            raise HTTPException(status_code=401, detail="Google token email does not match request email.")
+
     user = db.query(User).filter(User.email == clean_email).first()
     
     if not user:

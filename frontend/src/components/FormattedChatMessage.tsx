@@ -3,14 +3,41 @@
 import React from "react";
 
 interface FormattedChatMessageProps {
-  text: string;
+  text: unknown;
   isUser?: boolean;
 }
+
+export const toDisplayText = (value: unknown): string => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value.map(toDisplayText).filter(Boolean).join("\n");
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferred =
+      record.summary ??
+      record.message ??
+      record.response ??
+      record.text ??
+      record.detail ??
+      record.error;
+    if (preferred !== undefined) return toDisplayText(preferred);
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return "I received a response, but it could not be displayed safely.";
+    }
+  }
+  return "I received a response, but it could not be displayed safely.";
+};
 
 /**
  * Parses inline formatting like **bold**, `code`, ₹prices, and % percentages.
  */
-export const renderInlineMarkdown = (text: string, isUser: boolean = false) => {
+export const renderInlineMarkdown = (value: unknown, isUser: boolean = false) => {
+  const text = toDisplayText(value);
   if (!text) return null;
 
   // Tokenize bold, code, currency, percentage
@@ -92,18 +119,19 @@ export const FormattedChatMessage: React.FC<FormattedChatMessageProps> = ({
   text,
   isUser = false,
 }) => {
-  if (!text) return null;
+  const displayText = toDisplayText(text);
+  if (!displayText) return null;
 
   if (isUser) {
     return (
       <div className="whitespace-pre-wrap leading-relaxed">
-        {renderInlineMarkdown(text, true)}
+        {renderInlineMarkdown(displayText, true)}
       </div>
     );
   }
 
   // Split lines into structured blocks
-  const rawLines = text.split("\n");
+  const rawLines = displayText.split("\n");
 
   return (
     <div className="space-y-1.5 leading-relaxed text-xs">
