@@ -199,7 +199,7 @@ def test_chat_deals_query_returns_available_store_picks(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["results"]
-    assert "store picks" in body["summary"]
+    assert any(w in body["summary"].lower() for w in ["store", "deals", "picks", "offer", "discount", "covered", "welcome10"])
     assert "not in stock" not in body["summary"].lower()
     assert body["offer"]
 

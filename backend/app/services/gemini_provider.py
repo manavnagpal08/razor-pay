@@ -52,3 +52,49 @@ class GeminiLLMProvider(LLMProvider):
         self.model_name = "deterministic-fallback"
         self.fallback_reason = self.fallback_reason or "Gemini returned no structured intent"
         return MockLLMProvider().extract_intent(text)
+
+    def generate_concierge_summary(self, query: str, products: list[dict], offer: dict | None = None, upsell: dict | None = None) -> str | None:
+        """
+        Uses Gemini to generate a personalized, conversational shopping concierge explanation.
+        """
+        if not products:
+            return None
+
+        prod_descriptions = []
+        for p in products[:3]:
+            name = p.get("name") or "Product"
+            price = p.get("price") or 0
+            cat = p.get("category") or ""
+            desc = p.get("description") or ""
+            prod_descriptions.append(f"- {name} (₹{price:,.0f}, {cat}): {desc}")
+
+        prompt = (
+            "You are BuyFlow's conversational AI shopping concierge assisting a customer.\n"
+            f"Customer query: \"{query}\"\n"
+            f"Matching products in catalog:\n" + "\n".join(prod_descriptions) + "\n"
+        )
+        if offer:
+            prompt += f"\nActive coupon: {offer.get('code')} ({offer.get('discount_percent')}% off)\n"
+        if upsell:
+            reasons = upsell.get("reasons") or ["Upgrade available"]
+            prompt += f"\nEligible upgrade available: {reasons[0]}\n"
+
+        prompt += (
+            "\nWrite a concise, friendly 1-3 sentence response introducing these recommendations to the shopper. "
+            "Highlight why they fit the user's needs. If a coupon is available, remind them to apply it. "
+            "Do not list all items in raw text since product cards will be rendered underneath. Keep it inviting and natural."
+        )
+
+        for m in self.models_to_try:
+            try:
+                llm = ChatGoogleGenerativeAI(
+                    model=m,
+                    google_api_key=settings.gemini_api_key,
+                    temperature=0.3
+                )
+                res = llm.invoke([("human", prompt)])
+                if res and res.content:
+                    return str(res.content).strip()
+            except Exception as e:
+                logger.warning(f"Gemini summary generation with {m} failed: {e}")
+        return None

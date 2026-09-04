@@ -350,6 +350,22 @@ class AICommerceSupervisor:
         if exposed_offer and is_offer_query:
             summary = f"🎉 Great news! Active store coupon **{exposed_offer['code']}** ({int(exposed_offer['discount_percent'])}% off) is available for your order!\n\n" + summary
 
+        # If Gemini is active and we have product recommendations, generate a dynamic conversational summary
+        if display_results and not referenced_product:
+            try:
+                from app.services.gemini_provider import GeminiLLMProvider
+                if isinstance(self.intent_service.provider, GeminiLLMProvider):
+                    gemini_summary = self.intent_service.provider.generate_concierge_summary(
+                        query=text,
+                        products=[r["product"] for r in display_results],
+                        offer=exposed_offer,
+                        upsell=final_state.get("upsell")
+                    )
+                    if gemini_summary:
+                        summary = gemini_summary
+            except Exception as e_gem:
+                logger.warning(f"Could not generate Gemini dynamic summary: {e_gem}")
+
         ai_provider = final_state.get("ai_provider") or {}
         reasoning = {
             "intent_extracted": {
