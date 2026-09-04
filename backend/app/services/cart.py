@@ -93,10 +93,22 @@ class CartService:
         if not product:
             raise ValueError("Product not found")
             
+        if quantity <= 0:
+            raise ValueError("Quantity must be greater than zero")
+
         if product.inventory < quantity:
             raise ValueError("Not enough inventory")
-            
-        if product.merchant_id:
+
+        existing_items_count = self.db.query(CartItem).filter(CartItem.cart_id == cart_id).count()
+        if (
+            existing_items_count > 0
+            and cart.merchant_id
+            and product.merchant_id
+            and cart.merchant_id != product.merchant_id
+        ):
+            raise ValueError("Cart can only contain products from one merchant")
+
+        if product.merchant_id and (not cart.merchant_id or existing_items_count == 0):
             cart.merchant_id = product.merchant_id
 
         item = self.db.query(CartItem).filter(CartItem.cart_id == cart_id, CartItem.product_id == product_id).first()
@@ -127,6 +139,11 @@ class CartService:
             self.db.delete(item)
         else:
             product = self.db.query(Product).filter(Product.id == item.product_id).first()
+            cart = self.db.query(Cart).filter(Cart.id == cart_id).first()
+            if not product:
+                raise ValueError("Product not found")
+            if cart and cart.merchant_id and product.merchant_id and cart.merchant_id != product.merchant_id:
+                raise ValueError("Cart item does not belong to this merchant")
             if product.inventory < quantity:
                 raise ValueError("Not enough inventory")
             item.quantity = quantity

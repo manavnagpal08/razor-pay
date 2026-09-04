@@ -34,11 +34,10 @@ def search_products(request: schemas.ProductSearchRequest, db: Session = Depends
     """
     base_query = db.query(models.Product)
     
-    # Multi-tenant scoping
+    # Multi-tenant scoping. If a merchant is specified, never fall back to
+    # another tenant's products just to keep search results non-empty.
     if merchant_id:
-        merchant_prods_count = base_query.filter(models.Product.merchant_id == merchant_id).count()
-        if merchant_prods_count > 0:
-            base_query = base_query.filter(models.Product.merchant_id == merchant_id)
+        base_query = base_query.filter(models.Product.merchant_id == merchant_id)
 
     if request.in_stock:
         base_query = base_query.filter(models.Product.inventory > 0)
