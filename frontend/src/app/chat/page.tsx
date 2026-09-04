@@ -70,6 +70,7 @@ function ChatContent() {
   const [speechSupported, setSpeechSupported] = useState(false);
   const [appliedPromo, setAppliedPromo] = useState<any>(null);
   const { user, token, refreshCartCount } = useAuth();
+  const resolvedMerchantId = merchantInfo?.merchant_id || merchantParam;
 
   // In-Chat OTP Authentication & Frictionless Guest Checkout States
   const [guestVerifiedToken, setGuestVerifiedToken] = useState<string | null>(null);
@@ -137,6 +138,9 @@ function ChatContent() {
         if (res.ok) {
           const data = await res.json();
           setMerchantInfo(data);
+          if (data?.merchant_id && data.merchant_id !== activeMerchantId) {
+            setActiveMerchantId(data.merchant_id);
+          }
         }
       } catch (err) {
         console.warn("Failed to fetch merchant profile:", err);
@@ -297,7 +301,7 @@ function ChatContent() {
           email: otpEmail.trim(),
           phone: otpPhone.trim() || undefined,
           purpose: "CHECKOUT",
-          merchant_id: merchantParam
+          merchant_id: resolvedMerchantId
         })
       });
       const data = await res.json();
@@ -375,7 +379,7 @@ function ChatContent() {
           otp: otpCode.trim(),
           name: otpName.trim() || "Valued Shopper",
           phone: otpPhone.trim() || undefined,
-          merchant_id: merchantParam
+          merchant_id: resolvedMerchantId
         })
       });
       const data = await res.json();
@@ -573,7 +577,7 @@ function ChatContent() {
               if (typeof window !== "undefined" && window.parent && window.parent !== window) {
                 window.parent.postMessage({
                   type: "RAZORPAY_AI_ORDER_COMPLETED",
-                  merchant_id: merchantParam,
+                  merchant_id: resolvedMerchantId,
                   order_id: response.razorpay_order_id,
                   payment_id: response.razorpay_payment_id,
                   amount: orderData.amount_paise / 100,
@@ -625,11 +629,20 @@ function ChatContent() {
         body: JSON.stringify({ 
           text,
           thread_id: user?.uid || "guest_session",
-          merchant_id: merchantParam
+          merchant_id: resolvedMerchantId
         })
       });
 
-      if (!res.ok) throw new Error("Failed to process intent");
+      if (!res.ok) {
+        let detail = "Failed to process intent";
+        try {
+          const errorData = await res.json();
+          detail = toDisplayText(errorData.detail || errorData.message || detail);
+        } catch {
+          detail = `${detail} (${res.status})`;
+        }
+        throw new Error(detail);
+      }
 
       const data = await res.json();
 
@@ -659,7 +672,17 @@ function ChatContent() {
         speakText(responseText);
       }
     } catch (err) {
-      setMessages(prev => [...prev, { role: "assistant", text: "Sorry, I encountered an error processing your request. Please ensure the backend is active.", isError: true }]);
+      const fallbackProducts = catalogProducts.slice(0, 3);
+      const detail = err instanceof Error ? err.message : "Please ensure the backend is active.";
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        text: fallbackProducts.length > 0
+          ? `I could not complete live AI reasoning just now: ${detail}\n\nHere are available items from this storefront while I reconnect.`
+          : `Sorry, I encountered an error processing your request. ${detail}`,
+        products: fallbackProducts,
+        results: fallbackProducts,
+        isError: true
+      }]);
     } finally {
       setLoading(false);
     }

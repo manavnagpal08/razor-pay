@@ -15,6 +15,30 @@ class ChatRequest(BaseModel):
     thread_id: Optional[str] = "default_thread"
     merchant_id: Optional[str] = "demo_merchant"
 
+
+def _decode_merchant_id(raw_merchant_id: Optional[str]) -> str:
+    merchant_id = (raw_merchant_id or "demo_merchant").strip() or "demo_merchant"
+    if merchant_id.startswith("ey"):
+        try:
+            import jwt
+
+            decoded = jwt.decode(merchant_id, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+            return decoded.get("sub") or merchant_id
+        except Exception:
+            return merchant_id
+    return merchant_id
+
+
+def _resolve_public_merchant_id(db: Session, raw_merchant_id: Optional[str]) -> str:
+    from app.models import Merchant
+
+    merchant_id = _decode_merchant_id(raw_merchant_id)
+    if db.query(Merchant).filter(Merchant.id == merchant_id).first():
+        return merchant_id
+    if db.query(Merchant).filter(Merchant.id == "demo_merchant").first():
+        return "demo_merchant"
+    return merchant_id
+
 @router.post("/intent", response_model=IntentResponse)
 def parse_intent(request: IntentRequest):
     service = IntentService()
@@ -49,27 +73,36 @@ def chat_search(request: ChatRequest, db: Session = Depends(get_db)):
     """
     from app.services.ai_supervisor import AICommerceSupervisor
     supervisor = AICommerceSupervisor(db)
+    resolved_merchant_id = _resolve_public_merchant_id(db, request.merchant_id)
     
     try:
         response_data = supervisor.process_chat_message(
             request.text, 
             request.thread_id, 
-            merchant_id=request.merchant_id
+            merchant_id=resolved_merchant_id
         )
         
         # Log conversational chat event for merchant audit trail
         try:
             import uuid
-            from app.models import CustomerEvent
+            from app.models import Customer, CustomerEvent
             shown_products = []
             for item in (response_data.get("results") or response_data.get("alternatives") or [])[:5]:
                 if isinstance(item, dict):
                     product = item.get("product") if isinstance(item.get("product"), dict) else item
                     shown_products.append(product)
+            customer_id = None
+            if request.thread_id:
+                customer = db.query(Customer).filter(
+                    Customer.merchant_id == resolved_merchant_id,
+                    Customer.id == request.thread_id,
+                ).first()
+                if customer:
+                    customer_id = customer.id
             event = CustomerEvent(
                 id=str(uuid.uuid4()),
-                merchant_id=request.merchant_id or "demo_merchant",
-                customer_id=request.thread_id or "shopper",
+                merchant_id=resolved_merchant_id,
+                customer_id=customer_id,
                 event_type="AI_CONCIERGE_CHAT",
                 metadata_={
                     "query": request.text,
@@ -77,6 +110,8 @@ def chat_search(request: ChatRequest, db: Session = Depends(get_db)):
                     "offer": response_data.get("offer"),
                     "intent": response_data.get("intent"),
                     "shown_products": shown_products,
+                    "session_id": request.thread_id or "guest_session",
+                    "requested_merchant_id": request.merchant_id,
                 }
             )
             db.add(event)
